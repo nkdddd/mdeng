@@ -48,9 +48,10 @@ let koVoice = null;
 function voiceScore(v) {
   const n = v.name;
   let s = 0;
+  /* 브라우저마다 가진 목소리가 달라서 사실상 Edge→Natural, 크롬→Google, 사파리→Yuna가 돼요 */
   if (/natural|online|neural/i.test(n)) s += 60;          /* Edge: SunHi Online (Natural) */
+  if (/google/i.test(n)) s += 55;                         /* Chrome: Google 한국의 */
   if (/premium|프리미엄|enhanced|향상/i.test(n)) s += 50;   /* iPad·Mac: Yuna 프리미엄 */
-  if (/google/i.test(n)) s += 30;                         /* Chrome: Google 한국의 */
   if (/yuna|유나|sunhi|injoon|heami|sora|minsu/i.test(n)) s += 5;
   if (!v.localService) s += 3;
   return s;
