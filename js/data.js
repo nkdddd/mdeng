@@ -329,8 +329,9 @@ const POKEMON = [
   ['레쿠쟈', '🐉', '드래곤', 384, '천공포켓몬'], ['토게피', '🥚', '페어리', 175, '바늘알포켓몬'],
   ['루카리오', '🥋', '격투', 448, '파동포켓몬'],
 ];
-/* 그림·울음소리 주소 (PokeAPI가 GitHub에 올려 둔 공식 그림). 못 불러오면 이모지로 보여요 */
-const POKE_ART = (id, shiny) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${shiny ? 'shiny/' : ''}${id}.png`;
+/* 그림·울음소리 주소 (PokeAPI가 GitHub에 올려 둔 공식 그림). 못 불러오면 이모지로 보여요
+ * 그림은 요즘 게임·도감 앱과 같은 포켓몬 HOME 3D 모습이에요 */
+const POKE_ART = (id, shiny) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/${shiny ? 'shiny/' : ''}${id}.png`;
 const POKE_CRY = (id) => `https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/${id}.ogg`;
 const SHINY_CHANCE = 0.1;
 
