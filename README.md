@@ -14,7 +14,27 @@ python3 -m http.server 8000
 ```
 
 - 소리는 브라우저의 한국어 음성으로 나옵니다. 한국어 목소리가 없는 기기에서는 받아쓰기 화면의 **👀 어른용** 버튼을 눌러 어른이 읽어 주세요.
-- 별과 스티커는 그 기기의 브라우저에 저장됩니다.
+- 첫 화면에서 **누가 공부할까?**를 골라요. 아이마다 별·도감·점수가 따로 저장돼요.
+- 기록은 그 기기의 브라우저에 저장되고, **가족 계정**을 켜면 여러 기기에서 이어서 공부할 수 있어요.
+
+## 👨‍👩‍👧 가족 계정 만들기 (Firebase, 무료 · 10분)
+
+부모님이 Google 계정으로 로그인하면 아이들 기록이 클라우드에 저장돼서 태블릿·컴퓨터 어디서든 이어서 공부해요. ⚙️ 설정에서 아이별 기록(모은 별, 도감, 배지, 평균 점수)도 한눈에 볼 수 있어요.
+
+1. [Firebase 콘솔](https://console.firebase.google.com)에서 **프로젝트 추가** (이름 예: `ttobak`, 애널리틱스는 꺼도 돼요)
+2. **빌드 → Authentication → 시작하기 → 로그인 방법**에서 **Google**을 사용 설정하고 저장
+3. **Authentication → 설정 → 승인된 도메인**에 `nkdddd.github.io` 추가
+4. **빌드 → Firestore Database → 데이터베이스 만들기** (위치: `asia-northeast3 (서울)`, 프로덕션 모드)
+5. Firestore의 **규칙** 탭에 이 저장소의 [`firestore.rules`](firestore.rules) 내용을 붙여 넣고 **게시**
+   (부모님 계정은 자기 아이들 기록만 읽고 쓸 수 있어요)
+6. **프로젝트 설정(⚙️) → 일반 → 내 앱 → 웹 앱(</>) 추가** → 나오는 `firebaseConfig` 값을
+   [`js/firebase-config.js`](js/firebase-config.js)의 `window.FIREBASE_CONFIG = { ... }`에 붙여 넣고 커밋
+
+그다음 앱의 ⚙️ 설정 → **Google로 로그인**을 누르면 돼요. 이 기기에 있던 아이들 기록은 자동으로 올라가고, 다른 기기에서 로그인하면 그대로 받아와요. 두 기기에서 바뀐 기록은 더 나중에 바뀐 쪽을 써요.
+
+- 무료 요금제(Spark)로 충분해요.
+- `firebaseConfig` 값은 비밀번호가 아니라서 공개 저장소에 있어도 괜찮아요. 기록은 5번의 보안 규칙이 지켜요.
+- 로그인은 GitHub Pages 주소나 `http://localhost` 서버에서 돼요. 파일을 바로 열었을 때(`file://`)나 claude.ai 페이지에서는 이 기기에만 저장돼요.
 
 ## 🎙️ 자연스러운 목소리
 
@@ -72,6 +92,9 @@ npm run audio -- --voice ko-KR-InJoonNeural     # 남자 목소리
 ```
 index.html      화면 틀
 css/style.css   공책(밝은 화면) · 칠판(어두운 화면) 디자인
+js/store.js     아이 프로필 저장 + 가족 계정(Firebase) 동기화
+js/firebase-config.js  가족 계정 설정 (비워 두면 이 기기에만 저장)
+firestore.rules Firestore 보안 규칙
 js/data.js      문제와 설명 데이터, 또박이가 하는 말(LINES)
 js/voice.js     말 조각 이름표 (앱과 녹음 스크립트가 함께 씀)
 js/clips.js     녹음 파일 목록 (npm run audio가 만듦)

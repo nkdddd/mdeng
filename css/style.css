@@ -700,3 +700,38 @@ h1:focus, h2:focus { outline: none; }
   .bet-stars { font-size: 24px; }
   .bet-btn { width: 52px; }
 }
+
+/* 👤 누가 공부할까? */
+.who-chip {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 45vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  background: var(--card); border: 3px solid var(--ink); border-radius: 999px; padding: 2px 14px 2px 8px; color: var(--ink); box-shadow: var(--shadow);
+}
+.who-chip #whoAvatar { font-size: 24px; }
+.who-q { font-family: var(--display); font-size: 24px !important; }
+.who-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.who-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; width: 120px; padding: 12px 6px;
+  background: var(--card); border: 3px solid var(--ink); border-radius: 22px; box-shadow: var(--shadow);
+}
+.who-btn b { font-family: var(--display); font-weight: 400; font-size: 20px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who-btn small { font-size: 13px; color: var(--ink-soft); }
+.who-btn.add { border-style: dashed; box-shadow: none; }
+.who-av { font-size: 48px; line-height: 1.1; }
+.who-av.small { font-size: 34px; flex: none; }
+.kid-form { display: flex; flex-direction: column; gap: 10px; width: min(100%, 360px); text-align: left; }
+.kid-form label { font-family: var(--display); font-size: 18px; }
+.av-pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.av-pick button { font-size: 28px; aspect-ratio: 1; border: 3px solid transparent; border-radius: 14px; background: var(--card); }
+.av-pick button[aria-checked="true"] { border-color: var(--red); background: var(--red-soft); }
+
+/* 👨‍👩‍👧 가족 계정 */
+.family .acct { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.family .acct b { font-family: var(--display); font-weight: 400; word-break: break-all; }
+.kids { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.kid-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-top: 2px dashed var(--grid); }
+.kid-info { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; }
+.kid-info b { font-family: var(--display); font-weight: 400; font-size: 20px; }
+.kid-info small { font-size: 14px; color: var(--ink-soft); line-height: 1.5; }
+.kid-act { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rename { display: flex; gap: 6px; }
+.typed.small { font-size: 20px; padding: 6px 10px; width: 10em; max-width: 100%; }

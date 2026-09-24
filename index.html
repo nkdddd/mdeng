@@ -12,7 +12,7 @@
 <body>
 <header class="bar">
   <button class="bar-btn" id="homeBtn" aria-label="지도로 돌아가기" hidden>🗺️ 지도</button>
-  <span class="brand">또박또박</span>
+  <button class="brand who-chip" id="whoBtn" aria-label="공부하는 친구 바꾸기"><span id="whoAvatar">🐻</span> <span id="whoName">또박또박</span></button>
   <button class="bar-btn icon" id="voiceBtn" aria-label="목소리 설정">⚙️</button>
   <span class="stars" id="starPill" aria-label="모은 별">⭐ <b id="starCount">0</b></span>
 </header>
@@ -26,11 +26,14 @@
     <div class="splash-bear" aria-hidden="true">🐻✏️</div>
     <h1 class="title">또박또박 <span>받아쓰기</span></h1>
     <p>소리를 듣고, 글자의 비밀을 찾는 놀이</p>
-    <button class="btn primary big" id="startBtn">▶ 시작!</button>
+    <p class="who-q">누가 공부할까?</p>
+    <div class="who-list" id="whoList"></div>
     <p class="splash-note">소리가 나와요. 스피커를 켜 주세요 🔈</p>
   </div>
 </div>
 
+<script src="js/firebase-config.js"></script>
+<script src="js/store.js"></script>
 <script src="js/data.js"></script>
 <script src="js/voice.js"></script>
 <script src="js/clips.js"></script>

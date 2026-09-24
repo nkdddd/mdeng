@@ -1,0 +1,9 @@
+rules_version = '2';
+// 또박또박 받아쓰기: 부모님 계정은 자기 아이들 기록만 읽고 쓸 수 있어요.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/kids/{kidId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

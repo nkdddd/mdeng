@@ -28,13 +28,15 @@ const swapVowel = (ch) => {
   return join({ ...p, jung: VSWAP[p.jung] });
 };
 
-/* ---------- 저장 ---------- */
-const KEY = 'ttobak-v1';
-let S = { stars: 0, best: {} };
-try { S = Object.assign(S, JSON.parse(localStorage.getItem(KEY)) || {}); } catch (e) { /* 저장소를 못 쓰면 이번만 기억 */ }
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 무시 */ } };
-/* stars = 쓸 수 있는 별(포획 타임에 걸어요), earned = 지금까지 모은 별 전체(스티커 기준) */
-if (S.earned == null) S.earned = S.stars;
+/* ---------- 저장: 지금 공부하는 아이의 기록 (js/store.js) ---------- */
+let S;
+function loadState() {
+  S = Object.assign({ stars: 0, best: {} }, STORE.load());
+  /* stars = 쓸 수 있는 별(포획 타임에 걸어요), earned = 지금까지 모은 별 전체(스티커 기준) */
+  if (S.earned == null) S.earned = S.stars;
+}
+loadState();
+const save = () => STORE.save(S);
 const stickerCount = () => Math.min(STICKERS.length, Math.floor(S.earned / 10));
 
 /* ---------- 소리 ----------
@@ -1228,7 +1230,9 @@ SCREENS.voice = () => {
   }[device];
   const rate = S.rate || 'normal';
   app.innerHTML = `
-    <h2 class="h">⚙️ 목소리 설정 <small class="h-note">어른용</small></h2>
+    <h2 class="h">⚙️ 설정 <small class="h-note">어른용</small></h2>
+    ${familyBox()}
+    <h3 class="h3">🔊 목소리</h3>
     ${CLIPS.size ? `
       <label class="opt"><input type="checkbox" id="useClips" ${S.useClips !== false ? 'checked' : ''}>
         <span><b>🎙️ 녹음된 목소리 쓰기</b><br><small>미리 만든 자연스러운 목소리 (${window.AUDIO_CLIPS.voice || '녹음'}, ${CLIPS.size}개)</small></span></label>` : ''}
@@ -1249,6 +1253,7 @@ SCREENS.voice = () => {
       <p class="tipbox">💡 ${tips}</p>
     </section>
     <p class="small-note">가장 자연스러운 목소리는 부모님 컴퓨터에서 녹음 파일을 한 번 만들어 두는 방법이에요. 방법은 README의 "자연스러운 목소리" 부분에 있어요.</p>`;
+  wireFamily();
   $('#useCries').addEventListener('change', (e) => { S.cries = e.target.checked; save(); if (S.cries) playCry(25); });
   $('#useClips')?.addEventListener('change', (e) => { S.useClips = e.target.checked; save(); speak(LINES.voiceTest); });
   $$('[data-rate]', app).forEach((b) => b.addEventListener('click', () => {
@@ -1265,12 +1270,146 @@ SCREENS.voice = () => {
 };
 $('#voiceBtn').addEventListener('click', () => { sfx('pop'); go('voice'); });
 
-/* ---------- 시작 ---------- */
-paintStars();
-go('home');
-$('#startBtn').addEventListener('click', () => {
-  $('#splash').hidden = true;
-  sfx('star');
-  go('home');
+/* ---------- 👨‍👩‍👧 아이 프로필 · 가족 계정 ---------- */
+function paintWho() {
+  const me = STORE.current();
+  $('#whoAvatar').textContent = me.avatar;
+  $('#whoName').textContent = me.name;
+}
+function switchTo(id) {
+  STORE.use(id);
+  loadState();
+  pickVoice();
+  paintStars();
+  paintWho();
+}
+/* 누가 공부할까? (첫 화면과 👤 버튼) */
+function whoButtons() {
+  return STORE.profiles().map((p) => {
+    const st = STORE.load(p.id);
+    return `<button class="who-btn" data-id="${p.id}"><span class="who-av">${p.avatar}</span><b>${esc(p.name)}</b>
+      <small>⭐ ${st.earned ?? st.stars ?? 0} · 📖 ${(st.dex || []).length}</small></button>`;
+  }).join('') + '<button class="who-btn add" data-add="1"><span class="who-av">＋</span><b>새 친구</b><small>&nbsp;</small></button>';
+}
+function wireWho(box, after) {
+  $$('.who-btn[data-id]', box).forEach((b) => b.addEventListener('click', () => { sfx('star'); switchTo(b.dataset.id); after(); }));
+  $('.who-btn[data-add]', box).addEventListener('click', () => { sfx('pop'); addKidForm(box, after); });
+}
+function addKidForm(box, after) {
+  let avatar = STORE.AVATARS.find((a) => !STORE.profiles().some((p) => p.avatar === a)) || STORE.AVATARS[0];
+  box.innerHTML = `
+    <form class="kid-form" id="kidForm">
+      <label for="kidName">이름</label>
+      <input id="kidName" class="typed" maxlength="8" autocomplete="off" placeholder="이름을 써요" required>
+      <div class="av-pick" role="radiogroup" aria-label="얼굴 고르기">${STORE.AVATARS.map((a) =>
+        `<button type="button" role="radio" aria-checked="${a === avatar}" data-av="${a}">${a}</button>`).join('')}</div>
+      <div class="row"><button class="btn primary" type="submit">만들기</button><button class="btn" type="button" id="kidCancel">취소</button></div>
+    </form>`;
+  $$('[data-av]', box).forEach((b) => b.addEventListener('click', () => {
+    avatar = b.dataset.av;
+    $$('[data-av]', box).forEach((x) => x.setAttribute('aria-checked', x === b));
+  }));
+  $('#kidCancel').onclick = () => after(true);
+  $('#kidForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('#kidName').value.trim();
+    if (!name) return;
+    switchTo(STORE.add(name, avatar));
+    after();
+  });
+  $('#kidName').focus();
+}
+SCREENS.who = () => {
+  app.innerHTML = `<h2 class="h">👤 누가 공부할까?</h2><div class="who-list" id="whoScreen">${whoButtons()}</div>`;
+  const box = $('#whoScreen');
+  const after = (cancel) => { if (cancel) { box.innerHTML = whoButtons(); wireWho(box, after); } else go('home'); };
+  wireWho(box, after);
+};
+$('#whoBtn').addEventListener('click', () => { sfx('pop'); go('who'); });
+
+const CLOUD_TEXT = {
+  off: '', loading: '연결하는 중…', ready: '로그인하면 여러 기기에서 이어서 공부해요.',
+  syncing: '☁️ 저장하는 중…', dirty: '☁️ 곧 저장해요', synced: '☁️ 모두 저장됐어요', error: '⚠️ 클라우드에 연결하지 못했어요. 이 기기에는 저장돼요.',
+};
+/* 설정 화면: 가족 계정 + 아이별 기록 */
+function familyBox() {
+  const c = STORE.cloud;
+  const account = !c.enabled
+    ? '<p class="small-note">가족 계정을 쓰려면 js/firebase-config.js 설정이 필요해요 (README "가족 계정 만들기"). 지금은 이 기기에만 저장돼요.</p>'
+    : c.user
+      ? `<div class="acct"><span>👤 <b>${esc(c.user.email || c.user.displayName || '로그인됨')}</b></span><button class="btn small" id="signOut">로그아웃</button></div>
+         <p class="small-note" id="cloudStatus">${CLOUD_TEXT[c.status] || ''}</p>`
+      : `<button class="btn primary" id="signIn" ${c.ready ? '' : 'disabled'}>Google로 로그인</button>
+         <p class="small-note" id="cloudStatus">${CLOUD_TEXT[c.status] || ''}</p>`;
+  const me = STORE.current().id;
+  const kids = STORE.profiles().map((p) => {
+    const st = STORE.load(p.id);
+    const bests = Object.values(st.best || {});
+    const avg = bests.length ? Math.round(bests.reduce((a, b) => a + b, 0) / bests.length) : null;
+    return `<li class="kid-row" data-id="${p.id}">
+      <span class="who-av small">${p.avatar}</span>
+      <div class="kid-info"><span><b>${esc(p.name)}</b>${p.id === me ? ' <em class="rec">지금</em>' : ''}</span>
+        <small>⭐ 모은 별 ${st.earned ?? st.stars ?? 0} · 📖 도감 ${(st.dex || []).length}/${POKEMON.length} · 🏅 배지 ${st.badges || 0} · 평균 최고 점수 ${avg == null ? '—' : avg + '점'}</small></div>
+      <div class="kid-act"><button class="btn small" data-rename="${p.id}">이름</button>${STORE.profiles().length > 1 ? `<button class="btn small" data-del="${p.id}">지우기</button>` : ''}</div>
+    </li>`;
+  }).join('');
+  return `<section class="setbox family">
+    <h3 class="h3">👨‍👩‍👧 가족 계정</h3>
+    ${account}
+    <ul class="kids">${kids}</ul>
+  </section>`;
+}
+function wireFamily() {
+  $('#signIn')?.addEventListener('click', async () => {
+    try { await STORE.signIn(); } catch (e) { toast('로그인하지 못했어요. 다시 해 볼까요?'); }
+  });
+  $('#signOut')?.addEventListener('click', () => STORE.signOut());
+  $$('[data-rename]', app).forEach((b) => b.addEventListener('click', () => {
+    const row = b.closest('.kid-row');
+    const p = STORE.profiles().find((x) => x.id === b.dataset.rename);
+    $('.kid-info', row).innerHTML = `<form class="rename"><label class="sr" for="rn-${p.id}">새 이름</label>
+      <input id="rn-${p.id}" class="typed small" maxlength="8" value="${esc(p.name)}"><button class="btn small primary">저장</button></form>`;
+    $('.kid-act', row).hidden = true;
+    const f = $('form', row);
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = $('input', f).value.trim();
+      if (name) STORE.update(p.id, { name });
+      paintWho();
+      SCREENS.voice();
+    });
+    $('input', f).focus();
+  }));
+  $$('[data-del]', app).forEach((b) => b.addEventListener('click', () => {
+    const act = b.parentElement;
+    const id = b.dataset.del;
+    act.innerHTML = '<span class="small-note">기록이 모두 지워져요.</span><button class="btn small primary" data-yes="1">지우기</button><button class="btn small" data-no="1">취소</button>';
+    $('[data-yes]', act).onclick = async () => { await STORE.remove(id); switchTo(STORE.current().id); SCREENS.voice(); };
+    $('[data-no]', act).onclick = () => SCREENS.voice();
+  }));
+}
+/* 다른 기기에서 바뀐 기록이 오면 다시 그려요 */
+STORE.on((what) => {
+  if (what === 'status') { const el = $('#cloudStatus'); if (el) el.textContent = CLOUD_TEXT[STORE.cloud.status] || ''; return; }
+  if (what === 'current') { loadState(); pickVoice(); paintStars(); }
+  paintWho();
+  const list = $('#whoList');
+  if (list && !$('#splash').hidden && !$('#kidForm')) { list.innerHTML = whoButtons(); wireWho(list, startAfterWho); }
+  if (app.className === 'screen-voice' && !$('form', app)) SCREENS.voice();
+  if (what === 'current' && app.className === 'screen-home') go('home');
 });
+
+/* ---------- 시작 ---------- */
+function startAfterWho(cancel) {
+  const list = $('#whoList');
+  if (cancel) { list.innerHTML = whoButtons(); wireWho(list, startAfterWho); return; }
+  $('#splash').hidden = true;
+  go('home');
+}
+paintStars();
+paintWho();
+go('home');
+$('#whoList').innerHTML = whoButtons();
+wireWho($('#whoList'), startAfterWho);
+STORE.init();
 })();
