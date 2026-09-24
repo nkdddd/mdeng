@@ -205,6 +205,7 @@ document.addEventListener('click', (e) => {
 
 /* ---------- 화면 이동 ---------- */
 const ISLANDS = [
+  { id: 'poke',  icon: '⚡', name: '포켓몬 잡기', sub: '야생의 포켓몬이 나타났다!', tone: 'poke' },
   { id: 'dict',  icon: '🎧', name: '받아쓰기 섬', sub: '듣고 쓰기',          tone: 't1' },
   { id: 'josa',  icon: '🧩', name: '조사 마을',   sub: '이·가, 을·를',       tone: 't2' },
   { id: 'vowel', icon: '🦀', name: 'ㅐㅔ 바닷가', sub: '개 🐶 게 🦀',         tone: 't3' },
@@ -293,6 +294,23 @@ function wireChoices(box, answer, onPick) {
   }));
 }
 
+/* 조사 설명: 마지막 글자를 조각내서 받침 보여 주기 */
+const josaPick = (w, j) => (hasBatchim(w) ? j[0] : j[1]);
+function josaExplain(noun, ans) {
+  const last = lastChar(noun);
+  const p = split(last);
+  const bat = p.jong > 0;
+  return `
+    <div class="jamo-box" aria-label="${last} 글자 조각">
+      <span class="big-syl">${last}</span><span class="eq">=</span>
+      <span class="jm">${CHO[p.cho]}</span><span class="jm">${JUNG[p.jung]}</span>
+      <span class="jm ${bat ? 'bat' : 'nobat'}">${bat ? JONG[p.jong] : '없음'}</span>
+    </div>
+    <p>${bat
+      ? `'${last}'에 받침 <b class="hl">${JONG[p.jong]}</b>이 있어요. 그래서 <b class="hl">${ans}</b>!`
+      : `'${last}'에는 받침이 없어요. 그래서 <b class="hl">${ans}</b>!`}</p>`;
+}
+
 /* ---------- 🧩 조사 마을 ---------- */
 SCREENS.josa = (skipIntro) => {
   if (!skipIntro) return josaIntro();
@@ -302,7 +320,7 @@ SCREENS.josa = (skipIntro) => {
     return { noun: n[0], e: n[1], j, other };
   });
   runQuiz('josa', shuffle(items), (q, i, n, mark, next) => {
-    const ans = hasBatchim(q.noun) ? q.j[0] : q.j[1];
+    const ans = josaPick(q.noun, q.j);
     const rest = q.j[2] ?? ' ' + q.other[0];
     const pic = q.j[2] ? q.e : q.e + ' ' + q.other[1];
     app.innerHTML = `
@@ -317,18 +335,8 @@ SCREENS.josa = (skipIntro) => {
       $('.blank', app).textContent = ans;
       $('.blank', app).classList.add('filled');
       if (ok) maru($('.qcard', app));
-      const p = split(lastChar(q.noun));
-      const bat = p.jong > 0;
       const ex = $('.explain', app);
-      ex.innerHTML = `
-        <div class="jamo-box" aria-label="${lastChar(q.noun)} 글자 조각">
-          <span class="big-syl">${lastChar(q.noun)}</span><span class="eq">=</span>
-          <span class="jm">${CHO[p.cho]}</span><span class="jm">${JUNG[p.jung]}</span>
-          <span class="jm ${bat ? 'bat' : 'nobat'}">${bat ? JONG[p.jong] : '없음'}</span>
-        </div>
-        <p>${bat
-          ? `'${lastChar(q.noun)}'에 받침 <b class="hl">${JONG[p.jong]}</b>이 있어요. 그래서 <b class="hl">${ans}</b>!`
-          : `'${lastChar(q.noun)}'에는 받침이 없어요. 그래서 <b class="hl">${ans}</b>!`}</p>
+      ex.innerHTML = `${josaExplain(q.noun, ans)}
         <button class="btn primary next">다음 ➜</button>`;
       ex.hidden = false;
       speak([ok ? LINES.ding : LINES.oops, ...(q.j[2] ? [q.noun + ans + q.j[2]] : [q.noun + ans, q.other[0]])]);
@@ -368,6 +376,17 @@ const vowelSvg = (kind) => {
     ye: '<line x1="12" y1="40" x2="34" y2="40" class="arm"/><line x1="12" y1="62" x2="34" y2="62" class="arm"/>' }[kind];
   return `<svg class="vsvg" viewBox="0 0 80 100" aria-hidden="true"><line x1="34" y1="12" x2="34" y2="88" class="bar"/><line x1="62" y1="12" x2="62" y2="88" class="bar"/>${arms}</svg>`;
 };
+/* ㅐ·ㅔ·ㅖ 설명 한 줄 */
+function vowelExplain(ch) {
+  const v = split(ch).jung;
+  const kind = v === 1 || v === 3 ? 'ae' : v === 5 ? 'e' : 'ye';
+  const line = {
+    ae: `<b class="hl">${JUNG[v]}</b> — 짧은 팔이 <b>안</b>에 있어요. 개 🐶는 집 <b>안</b>에!`,
+    e: `<b class="hl">ㅔ</b> — 짧은 팔이 <b>밖</b>에 있어요. 게 🦀는 집게를 <b>밖</b>으로!`,
+    ye: `<b class="hl">ㅖ</b> — [ㅔ]처럼 들려도 팔이 두 개인 ㅖ예요!`,
+  }[kind];
+  return `<div class="vrow">${vowelSvg(kind)}<p>${line}</p></div>`;
+}
 SCREENS.vowel = (skipIntro) => {
   if (!skipIntro) return vowelIntro();
   const items = shuffle(VOWELS).slice(0, QUIZ_SIZE.vowel);
@@ -387,15 +406,8 @@ SCREENS.vowel = (skipIntro) => {
       mark(ok);
       $('.wordcells', app).innerHTML = cells(q.w, { [q.i]: 'good' });
       if (ok) maru($('.qcard', app));
-      const v = split(ans).jung;
-      const kind = v === 1 || v === 3 ? 'ae' : v === 5 ? 'e' : 'ye';
-      const line = {
-        ae: `<b class="hl">${JUNG[v]}</b> — 짧은 팔이 <b>안</b>에 있어요. 개 🐶는 집 <b>안</b>에!`,
-        e: `<b class="hl">ㅔ</b> — 짧은 팔이 <b>밖</b>에 있어요. 게 🦀는 집게를 <b>밖</b>으로!`,
-        ye: `<b class="hl">ㅖ</b> — [ㅔ]처럼 들려도 팔이 두 개인 ㅖ예요!`,
-      }[kind];
       const ex = $('.explain', app);
-      ex.innerHTML = `<div class="vrow">${vowelSvg(kind)}<p>${line}</p></div><button class="btn primary next">다음 ➜</button>`;
+      ex.innerHTML = `${vowelExplain(ans)}<button class="btn primary next">다음 ➜</button>`;
       ex.hidden = false;
       speak([ok ? LINES.ding : LINES.oops, q.w]);
       $('.next', ex).onclick = next;
@@ -587,6 +599,145 @@ function soundIntro() {
   speak([LINES.soundBubble, LINES.pressButton]);
   $('#start').onclick = () => go('sound', true);
 }
+
+/* ---------- ⚡ 포켓몬 잡기 ---------- */
+const TYPE_TONE = { 전기: 't3', 불꽃: 't1', 물: 't2', 풀: 't4', 에스퍼: 't6', 고스트: 't5', 벌레: 't4', 드래곤: 't5' };
+const dexHas = (name) => (S.dex || []).includes(name);
+function addDex(name) {
+  S.dex = S.dex || [];
+  if (dexHas(name)) return false;
+  S.dex.push(name);
+  save();
+  return true;
+}
+/* 헷갈리는 가짜 이름: 비슷한 소리 하나만 바꿔요 (ㄱ↔ㅋ↔ㄲ, ㅠ↔ㅜ, ㅐ↔ㅔ …) */
+const CHO_NEAR = { 0: [15, 1], 15: [0, 1], 1: [0, 15], 3: [16, 4], 16: [3, 4], 4: [3, 16], 7: [17, 8], 17: [7, 8], 8: [7, 17], 12: [14, 13], 14: [12, 13], 13: [12, 14], 9: [10], 10: [9] };
+const JUNG_NEAR = { 1: [5], 5: [1], 3: [1], 7: [5], 17: [13], 13: [17], 12: [8], 8: [12], 6: [4], 4: [6] };
+function fakeNames(name, n = 2) {
+  const real = new Set(POKEMON.map((m) => m[0]));
+  const out = new Set();
+  [...name].forEach((ch, k) => {
+    if (!isHangul(ch)) return;
+    const p = split(ch);
+    (CHO_NEAR[p.cho] || []).forEach((c) => out.add(name.slice(0, k) + join({ ...p, cho: c }) + name.slice(k + 1)));
+    (JUNG_NEAR[p.jung] || []).forEach((v) => out.add(name.slice(0, k) + join({ ...p, jung: v }) + name.slice(k + 1)));
+  });
+  return shuffle([...out].filter((f) => !real.has(f))).slice(0, n);
+}
+const aeIndex = (w) => [...w].findIndex((ch) => isHangul(ch) && [1, 3, 5, 7].includes(split(ch).jung));
+const ballSvg = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" class="b-bot"/><path d="M4 50 A46 46 0 0 1 96 50 Z" class="b-top"/><path d="M4 50 H96" class="b-line"/><circle cx="50" cy="50" r="13" class="b-btn"/><circle cx="50" cy="50" r="6" class="b-dot"/></svg>';
+
+SCREENS.poke = (skipIntro) => {
+  if (!skipIntro) return pokeIntro();
+  const fresh = shuffle(POKEMON.filter((m) => !dexHas(m[0])));
+  const seen = shuffle(POKEMON.filter((m) => dexHas(m[0])));
+  const picks = [...fresh, ...seen].slice(0, QUIZ_SIZE.poke).map((m) => {
+    const kinds = ['josa', ...(fakeNames(m[0]).length === 2 ? ['name'] : []), ...(aeIndex(m[0]) >= 0 ? ['vowel', 'vowel'] : [])];
+    /* '피카츄와 피카츄'가 되지 않게 */
+    const j = pick(POKE_JOSA.filter((t) => t[2] !== m[0]));
+    return { name: m[0], e: m[1], type: m[2], kind: pick(kinds), j };
+  });
+  runQuiz('poke', picks, (q, i, n, mark, next) => {
+    const N = q.name;
+    let ans, opts, ask, stage;
+    if (q.kind === 'josa') {
+      ans = josaPick(N, q.j);
+      opts = shuffle([q.j[0], q.j[1]]);
+      ask = LINES.josaAsk;
+      stage = `<p class="sentence">${esc(q.j[2])}<b>${N}</b><span class="blank">?</span>${esc(q.j[3])}</p>`;
+    } else if (q.kind === 'vowel') {
+      const k = aeIndex(N);
+      ans = N[k];
+      opts = shuffle([ans, swapVowel(ans)]);
+      ask = LINES.vowelAsk;
+      stage = `<div class="wordcells">${cells(N.slice(0, k) + '?' + N.slice(k + 1), { [k]: 'q' })}</div>`;
+    } else {
+      ans = N;
+      opts = shuffle([N, ...fakeNames(N)]);
+      ask = LINES.pokeName;
+      stage = `<button class="btn small" data-say="${esc(N)}">🔊 이름 다시 듣기</button>`;
+    }
+    app.innerHTML = `
+      ${dots(i, n)}
+      ${bubble(ask)}
+      <div class="encounter ${TYPE_TONE[q.type] || 'tn'}">
+        <div class="mon" aria-hidden="true"><span>${q.e}</span></div>
+        <div class="ball" aria-hidden="true">${ballSvg}</div>
+        <p class="mon-name">${q.kind === 'name' ? '???' : N}<small>${q.type} 타입</small></p>
+        ${stage}
+      </div>
+      <div class="choices ${q.kind === 'name' ? 'names' : ''}">${opts.map((v) => `<button class="choice" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>
+      <div class="explain" hidden></div>`;
+    wireChoices(app, ans, (ok, chosen) => {
+      mark(ok);
+      const enc = $('.encounter', app);
+      $('.mon-name', app).innerHTML = `${N}<small>${q.type} 타입</small>`;
+      if (q.kind === 'josa') { $('.blank', app).textContent = ans; $('.blank', app).classList.add('filled'); }
+      if (q.kind === 'vowel') $('.wordcells', app).innerHTML = cells(N, { [aeIndex(N)]: 'good' });
+      const isNew = ok && addDex(N);
+      enc.classList.add(ok ? 'catching' : 'fleeing');
+      const obj = josaPick(N, ['을', '를']), subj = josaPick(N, ['이', '가']);
+      const headline = ok ? LINES.caught(N, obj) : LINES.fled(N, subj);
+      let body;
+      if (q.kind === 'josa') body = josaExplain(N, ans);
+      else if (q.kind === 'vowel') body = vowelExplain(ans);
+      else {
+        const fake = ok ? opts.find((o) => o !== N) : chosen;
+        const diff = {};
+        [...N].forEach((ch, k) => { if (fake[k] !== ch) diff[k] = 'hot'; });
+        body = `<div class="twoline"><div class="tl"><span class="tl-lab">진짜 이름</span>${cells(N, diff)}</div>
+          <div class="tl"><span class="tl-lab">가짜 이름</span>${cells(fake, diff)}</div></div>
+          <p>비슷하게 들려도 한 글자가 달라요. 소리를 잘 들으면 가짜를 찾을 수 있어요!</p>`;
+      }
+      const ex = $('.explain', app);
+      ex.innerHTML = `<p class="catch-line ${ok ? 'yay' : ''}">${ok ? '🔴 ' : '💨 '}${headline}</p>
+        ${isNew ? `<p class="small-note">📖 새 포켓몬! 도감에 ${N}${josaPick(N, ['이', '가'])} 등록됐어요. (${S.dex.length}/${POKEMON.length})</p>` : ''}
+        ${body}<button class="btn primary next">다음 ➜</button>`;
+      ex.hidden = false;
+      if (ok) confetti();
+      const said = q.kind === 'josa' ? [q.j[2] + N + ans + q.j[3]] : [];
+      speak([ok ? LINES.ding : LINES.oops, ...said, headline]);
+      $('.next', ex).onclick = next;
+    });
+    speak(q.kind === 'name' ? [LINES.appear('포켓몬', '이'), LINES.pokeName, N] : [LINES.appear('포켓몬', '이'), ask]);
+  });
+};
+function pokeIntro() {
+  const have = (S.dex || []).length;
+  app.innerHTML = `
+    <h2 class="h">⚡ 포켓몬 잡기</h2>
+    ${bubble(LINES.pokeBubble)}
+    <div class="poke-hero">
+      <div class="ball big" aria-hidden="true">${ballSvg}</div>
+      <ul class="poke-rules">
+        <li>🧩 <b>조사</b> — 피카츄<b class="hl">가</b>? 이상해꽃<b class="hl">이</b>?</li>
+        <li>🦀 <b>ㅐ·ㅔ</b> — 메타몽, 팬텀, 캐터피</li>
+        <li>👂 <b>진짜 이름</b> — 피카츄? 피가츄?</li>
+      </ul>
+      <p>맞히면 몬스터볼로 <b>잡고</b>, 틀리면 포켓몬이 <b>도망가요</b>!</p>
+    </div>
+    <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${POKEMON.length}" aria-valuenow="${have}">
+      <span style="width:${(have / POKEMON.length) * 100}%"></span><b>📖 도감 ${have} / ${POKEMON.length}</b></div>
+    <div class="row">
+      <button class="btn primary big" id="start">모험 시작! ▶</button>
+      <button class="btn big" id="dexBtn">📖 도감</button>
+    </div>`;
+  speak(LINES.pokeBubble);
+  $('#start').onclick = () => go('poke', true);
+  $('#dexBtn').onclick = () => go('dex');
+}
+SCREENS.dex = () => {
+  const have = (S.dex || []).length;
+  app.innerHTML = `
+    <h2 class="h">📖 포켓몬 도감 <small class="h-note">${have} / ${POKEMON.length}</small></h2>
+    ${bubble(LINES.pokeDex)}
+    <div class="dex">${POKEMON.map(([name, e, type]) => dexHas(name)
+      ? `<button class="dexcard ${TYPE_TONE[type] || 'tn'}" data-say="${esc(name)}"><span class="dex-e">${e}</span><b>${name}</b><small>${type}</small></button>`
+      : `<div class="dexcard empty"><span class="dex-e">?</span><b>???</b><small>&nbsp;</small></div>`).join('')}</div>
+    <button class="btn primary big" id="start">포켓몬 잡으러 가기 ▶</button>`;
+  speak(LINES.pokeDex);
+  $('#start').onclick = () => go('poke', true);
+};
 
 /* ---------- 🎧 받아쓰기 섬 ---------- */
 SCREENS.dict = () => {

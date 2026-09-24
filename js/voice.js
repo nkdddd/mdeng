@@ -31,6 +31,13 @@ const VOICE = (() => {
     VOWELS.forEach((q) => add(q.w));
     SPACING.forEach((q) => add(q.t));
     FUNNY.forEach((f) => { add(f.a[0]); add(f.a[2]); add(f.b[0]); add(f.b[2]); });
+    add(LINES.appear('포켓몬', '이'));
+    POKEMON.forEach(([n]) => {
+      add(n);
+      add(LINES.caught(n, batchim(n) ? '을' : '를'));
+      add(LINES.fled(n, batchim(n) ? '이' : '가'));
+      POKE_JOSA.forEach((j) => { if (j[2] !== n) add(j[2] + n + (batchim(n) ? j[0] : j[1]) + j[3]); });
+    });
     NOUNS.forEach(([noun]) => {
       add(noun);
       JOSA.forEach((j) => {
