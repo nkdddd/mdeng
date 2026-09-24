@@ -25,18 +25,22 @@ const VOICE = (() => {
     Object.values(TYPES).forEach((t) => add(LINES.typeCard(t)));
     for (let n = 1; n <= 10; n++) add(LINES.bookLeft(n));
     const totals = new Set([...Object.values(QUIZ_SIZE), ...DICTATION.map((d) => d.items.length)]);
+    for (let t = 1; t <= QUIZ_SIZE.poke * 2; t++) totals.add(t); /* 포켓몬은 도망친 포켓몬이 다시 나와서 문제 수가 늘어요 */
     totals.forEach((t) => { for (let s = 0; s <= t; s++) add(LINES.score(t, s)); });
+    BADGES.forEach(([b]) => add(LINES.badge(b)));
     DICTATION.forEach((d) => d.items.forEach((q) => add(q.t)));
     SOUNDS.forEach((q) => { add(q.w); add(LINES.soundAnswer(q.s, q.w)); add(q.tip); });
     VOWELS.forEach((q) => add(q.w));
     SPACING.forEach((q) => add(q.t));
     FUNNY.forEach((f) => { add(f.a[0]); add(f.a[2]); add(f.b[0]); add(f.b[2]); });
     add(LINES.appear('포켓몬', '이'));
-    POKEMON.forEach(([n]) => {
+    POKEMON.forEach(([n, , , , genus]) => {
       add(n);
+      add(genus);
       add(LINES.caught(n, batchim(n) ? '을' : '를'));
       add(LINES.fled(n, batchim(n) ? '이' : '가'));
-      POKE_JOSA.forEach((j) => { if (j[2] !== n) add(j[2] + n + (batchim(n) ? j[0] : j[1]) + j[3]); });
+      add(LINES.reappear(n, batchim(n) ? '이' : '가'));
+      POKE_JOSA.forEach((j) => { if (!j[2].startsWith(n)) add(j[2] + n + (batchim(n) ? j[0] : j[1]) + j[3]); });
     });
     NOUNS.forEach(([noun]) => {
       add(noun);

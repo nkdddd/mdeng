@@ -71,6 +71,7 @@ function hush() {
   playToken++;
   if (hasTTS) speechSynthesis.cancel();
   if (clip) { clip.pause(); clip = null; }
+  if (typeof cry !== 'undefined' && cry) cry.pause();
 }
 function ttsSpeak(text, slow, voice) {
   if (!hasTTS || !text) return;
@@ -245,36 +246,56 @@ SCREENS.home = () => {
 };
 
 /* ---------- 결과 ---------- */
-function finish(key, score, total, again) {
+function finish(key, score, total, again, extra) {
   const pct = Math.round((score / total) * 100);
   setBest(key, pct);
   const great = pct >= 70;
+  /* 포켓몬이 아닌 섬에서 잘하면 보너스 포켓몬 */
+  const bonus = great && key !== 'poke' && key !== 'bonus';
   app.innerHTML = `
     <div class="finish">
       <div class="stamp ${great ? '' : 'soft'}">${great ? '참<br>잘했어요' : '잘<br>했어요'}</div>
       <h2>${total}문제 중에 <b>${score}</b>개 맞혔어요!</h2>
       <p class="finish-stars" aria-label="별 ${score}개">${'⭐'.repeat(score) || '🌱'}</p>
+      ${extra && extra.badge ? `<div class="badge-won"><span class="badge got big" style="--bc:${extra.badge[2]}"><i>${extra.badge[1]}</i></span><p><b>${extra.badge[0]}</b>를 받았어요!</p></div>` : ''}
+      ${extra && extra.caught && extra.caught.length ? `<div class="caught-row" aria-label="이번에 잡은 포켓몬">${extra.caught.map((q) => `<span class="mini">${artImg(q.m, q.shiny)}<small>${q.name}</small></span>`).join('')}</div>` : ''}
       ${bubble(great ? LINES.great : LINES.soso)}
+      ${bonus ? `<button class="bonus-card" id="bonus"><span class="ball">${ballSvg}</span><span><b>🎁 보너스 포켓몬!</b><small>잘했으니까 야생의 포켓몬을 만나러 가요</small></span></button>` : ''}
       <div class="row">
-        <button class="btn primary" id="again">🔁 한 번 더</button>
+        ${key === 'bonus' ? '<button class="btn primary" id="again">⚡ 포켓몬 모험</button>' : '<button class="btn primary" id="again">🔁 한 번 더</button>'}
         <button class="btn" id="toMap">🗺️ 지도로</button>
       </div>
     </div>`;
   if (great) { confetti(); sfx('star'); }
-  speak([LINES.score(total, score), great ? LINES.finishGreat : LINES.finishSoso]);
-  $('#again').onclick = again;
+  speak([LINES.score(total, score), great ? LINES.finishGreat : LINES.finishSoso,
+    ...(extra && extra.badge ? [LINES.badge(extra.badge[0])] : []), ...(bonus ? [LINES.bonus] : [])]);
+  $('#again').onclick = key === 'bonus' ? () => go('poke') : again;
   $('#toMap').onclick = () => go('home');
+  $('#bonus')?.addEventListener('click', () => { sfx('pop'); go('bonus'); });
 }
 
 /* 문제 풀이 틀: items를 하나씩 render로 넘기고 끝나면 결과 화면 */
-function runQuiz(key, items, render) {
-  let i = 0, score = 0;
+function runQuiz(key, items, render, onDone) {
+  let i = 0, score = 0, streak = 0;
   const next = () => {
-    if (i >= items.length) return finish(key, score, items.length, () => go(key, true));
+    if (i >= items.length) return finish(key, score, items.length, () => go(key, true), onDone ? onDone(score) : null);
     app.innerHTML = '';
-    render(items[i], i, items.length, (ok) => { if (ok) { score++; addStar(); } }, () => { i++; next(); });
+    render(items[i], i, items.length, (ok) => {
+      if (!ok) { streak = 0; return; }
+      score++; streak++; addStar();
+      if (streak >= 3) showCombo(streak);
+    }, () => { i++; next(); });
   };
   next();
+}
+/* 🔥 연속 정답 */
+function showCombo(n) {
+  const el = document.createElement('div');
+  el.className = 'combo' + (n >= 5 ? ' mega' : '');
+  el.innerHTML = `<b>${n >= 5 ? '⚡' : '🔥'} ${n}연속!</b>${n >= 5 ? '<small>대단해!</small>' : ''}`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1600);
+  setTimeout(() => sfx('star'), 250);
 }
 
 /* 고르기 버튼 공통 처리 */
@@ -627,18 +648,51 @@ function fakeNames(name, n = 2) {
 const aeIndex = (w) => [...w].findIndex((ch) => isHangul(ch) && [1, 3, 5, 7].includes(split(ch).jung));
 const ballSvg = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" class="b-bot"/><path d="M4 50 A46 46 0 0 1 96 50 Z" class="b-top"/><path d="M4 50 H96" class="b-line"/><circle cx="50" cy="50" r="13" class="b-btn"/><circle cx="50" cy="50" r="6" class="b-dot"/></svg>';
 
-SCREENS.poke = (skipIntro) => {
-  if (!skipIntro) return pokeIntro();
+/* 공식 그림을 불러올 수 있는지 한 번 확인 (못 쓰면 이모지 + 실루엣 문제 빼기) */
+let artOK = false;
+{ const t = new Image(); t.onload = () => { artOK = true; }; t.src = POKE_ART(25); }
+/* 그림을 못 불러오면 이모지로 바꿔요 */
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.classList.contains('art')) return;
+  const span = document.createElement('span');
+  span.className = 'art-fallback';
+  span.textContent = img.dataset.e || '?';
+  img.replaceWith(span);
+}, true);
+const artImg = (m, shiny, cls = '') => `<img class="art ${cls}" src="${POKE_ART(m[3], shiny)}" data-e="${m[1]}" alt="" draggable="false">`;
+const dexNo = (id) => 'No.' + String(id).padStart(3, '0');
+const hasShiny = (name) => (S.shinies || []).includes(name);
+
+let cry = null;
+function playCry(id) {
+  if (S.cries === false) return false;
+  try {
+    if (cry) cry.pause();
+    cry = new Audio(POKE_CRY(id));
+    cry.volume = 0.4;
+    cry.play().catch(() => {});
+    return true;
+  } catch (e) { return false; }
+}
+
+/* 포켓몬 한 마리 만나기: 문제 종류 정하기 */
+function makeEncounter(m, again, prevKind) {
+  let kinds = ['josa', ...(fakeNames(m[0]).length === 2 ? ['name'] : []), ...(aeIndex(m[0]) >= 0 ? ['vowel', 'vowel'] : []), ...(artOK ? ['who'] : [])];
+  if (again && kinds.length > 1) kinds = kinds.filter((k) => k !== prevKind);
+  /* '피카츄와 피카츄'가 되지 않게. 다시 나올 땐 '다시 나타났다'가 답을 알려 주지 않게 '이/가' 문장은 빼요 */
+  const j = pick(POKE_JOSA.filter((t) => !t[2].startsWith(m[0]) && !(again && t[0] === '이')));
+  return { m, name: m[0], e: m[1], type: m[2], id: m[3], genus: m[4], kind: pick(kinds), j, again, shiny: Math.random() < SHINY_CHANCE };
+}
+
+function pokeRound(count, key) {
   const fresh = shuffle(POKEMON.filter((m) => !dexHas(m[0])));
   const seen = shuffle(POKEMON.filter((m) => dexHas(m[0])));
-  const picks = [...fresh, ...seen].slice(0, QUIZ_SIZE.poke).map((m) => {
-    const kinds = ['josa', ...(fakeNames(m[0]).length === 2 ? ['name'] : []), ...(aeIndex(m[0]) >= 0 ? ['vowel', 'vowel'] : [])];
-    /* '피카츄와 피카츄'가 되지 않게 */
-    const j = pick(POKE_JOSA.filter((t) => t[2] !== m[0]));
-    return { name: m[0], e: m[1], type: m[2], kind: pick(kinds), j };
-  });
-  runQuiz('poke', picks, (q, i, n, mark, next) => {
+  const picks = [...fresh, ...seen].slice(0, count).map((m) => makeEncounter(m));
+  const caughtNow = [];
+  runQuiz(key, picks, (q, i, n, mark, next) => {
     const N = q.name;
+    const subj = josaPick(N, ['이', '가']), obj = josaPick(N, ['을', '를']);
     let ans, opts, ask, stage;
     if (q.kind === 'josa') {
       ans = josaPick(N, q.j);
@@ -651,57 +705,93 @@ SCREENS.poke = (skipIntro) => {
       opts = shuffle([ans, swapVowel(ans)]);
       ask = LINES.vowelAsk;
       stage = `<div class="wordcells">${cells(N.slice(0, k) + '?' + N.slice(k + 1), { [k]: 'q' })}</div>`;
-    } else {
+    } else if (q.kind === 'name') {
       ans = N;
       opts = shuffle([N, ...fakeNames(N)]);
       ask = LINES.pokeName;
       stage = `<button class="btn small" data-say="${esc(N)}">🔊 이름 다시 듣기</button>`;
+    } else { /* who: 실루엣 보고 이름 읽기 */
+      ans = N;
+      const others = shuffle(POKEMON.filter((p) => p[0] !== N)).sort((a, b) => Math.abs(a[0].length - N.length) - Math.abs(b[0].length - N.length)).slice(0, 2);
+      opts = shuffle([N, ...others.map((p) => p[0])]);
+      ask = LINES.pokeWho;
+      stage = '';
     }
+    const hidden = q.kind === 'name' || q.kind === 'who';
     app.innerHTML = `
       ${dots(i, n)}
       ${bubble(ask)}
-      <div class="encounter ${TYPE_TONE[q.type] || 'tn'}">
-        <div class="mon" aria-hidden="true"><span>${q.e}</span></div>
+      <div class="encounter ${TYPE_TONE[q.type] || 'tn'}${q.shiny ? ' shiny' : ''}">
+        ${q.again ? '<span class="tag again">🔁 다시 나타났다!</span>' : ''}${q.shiny ? '<span class="tag sparkle">✨ 색이 다른 포켓몬!</span>' : ''}
+        <div class="mon" aria-hidden="true">${artImg(q.m, q.shiny, q.kind === 'who' ? 'sil' : '')}</div>
         <div class="ball" aria-hidden="true">${ballSvg}</div>
-        <p class="mon-name">${q.kind === 'name' ? '???' : N}<small>${q.type} 타입</small></p>
+        <p class="mon-name">${hidden ? '???' : N}<small>${q.type} 타입</small></p>
+        <p class="mon-no">${dexNo(q.id)} · ${hidden ? '???' : q.genus}</p>
         ${stage}
       </div>
-      <div class="choices ${q.kind === 'name' ? 'names' : ''}">${opts.map((v) => `<button class="choice" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>
+      <div class="choices ${hidden ? 'names' : ''}">${opts.map((v) => `<button class="choice" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>
       <div class="explain" hidden></div>`;
+    const cried = playCry(q.id);
+    const intro = [...(q.shiny ? [LINES.shiny] : []), q.again ? LINES.reappear(N, subj) : LINES.appear('포켓몬', '이'), ask, ...(q.kind === 'name' ? [N] : [])];
+    const introTimer = setTimeout(() => speak(intro), cried ? 1100 : 0);
     wireChoices(app, ans, (ok, chosen) => {
+      clearTimeout(introTimer);
       mark(ok);
       const enc = $('.encounter', app);
       $('.mon-name', app).innerHTML = `${N}<small>${q.type} 타입</small>`;
+      $('.mon-no', app).textContent = `${dexNo(q.id)} · ${q.genus}`;
+      $('.art.sil', app)?.classList.remove('sil');
       if (q.kind === 'josa') { $('.blank', app).textContent = ans; $('.blank', app).classList.add('filled'); }
       if (q.kind === 'vowel') $('.wordcells', app).innerHTML = cells(N, { [aeIndex(N)]: 'good' });
       const isNew = ok && addDex(N);
+      if (ok && q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
+      if (ok) caughtNow.push(q);
+      /* 도망친 포켓몬은 한 번 더 나와요 */
+      const comes = !ok && !q.again;
+      if (comes) picks.push(makeEncounter(q.m, true, q.kind)); /* runQuiz가 같은 배열을 보고 있어요 */
       enc.classList.add(ok ? 'catching' : 'fleeing');
-      const obj = josaPick(N, ['을', '를']), subj = josaPick(N, ['이', '가']);
       const headline = ok ? LINES.caught(N, obj) : LINES.fled(N, subj);
       let body;
       if (q.kind === 'josa') body = josaExplain(N, ans);
       else if (q.kind === 'vowel') body = vowelExplain(ans);
-      else {
+      else if (q.kind === 'name') {
         const fake = ok ? opts.find((o) => o !== N) : chosen;
         const diff = {};
         [...N].forEach((ch, k) => { if (fake[k] !== ch) diff[k] = 'hot'; });
         body = `<div class="twoline"><div class="tl"><span class="tl-lab">진짜 이름</span>${cells(N, diff)}</div>
           <div class="tl"><span class="tl-lab">가짜 이름</span>${cells(fake, diff)}</div></div>
           <p>비슷하게 들려도 한 글자가 달라요. 소리를 잘 들으면 가짜를 찾을 수 있어요!</p>`;
+      } else {
+        body = `<div class="wordcells">${cells(N)}</div><p>그림자의 주인공은 <b class="hl">${N}</b>! ${esc(q.genus)}예요.</p>`;
       }
       const ex = $('.explain', app);
       ex.innerHTML = `<p class="catch-line ${ok ? 'yay' : ''}">${ok ? '🔴 ' : '💨 '}${headline}</p>
-        ${isNew ? `<p class="small-note">📖 새 포켓몬! 도감에 ${N}${josaPick(N, ['이', '가'])} 등록됐어요. (${S.dex.length}/${POKEMON.length})</p>` : ''}
+        ${isNew ? `<p class="small-note">📖 새 포켓몬! 도감에 ${N}${subj} 등록됐어요. (${S.dex.length}/${POKEMON.length})</p>` : ''}
+        ${comes ? `<p class="small-note">🔁 ${LINES.fledSoon}</p>` : ''}
         ${body}<button class="btn primary next">다음 ➜</button>`;
       ex.hidden = false;
       if (ok) confetti();
       const said = q.kind === 'josa' ? [q.j[2] + N + ans + q.j[3]] : [];
-      speak([ok ? LINES.ding : LINES.oops, ...said, headline]);
+      speak([ok ? LINES.ding : LINES.oops, ...said, headline, ...(comes ? [LINES.fledSoon] : [])]);
       $('.next', ex).onclick = next;
     });
-    speak(q.kind === 'name' ? [LINES.appear('포켓몬', '이'), LINES.pokeName, N] : [LINES.appear('포켓몬', '이'), ask]);
+  }, (score) => {
+    let badge = null;
+    if (key === 'poke' && score >= 6 && (S.badges || 0) < BADGES.length) {
+      S.badges = (S.badges || 0) + 1;
+      save();
+      badge = BADGES[S.badges - 1];
+    }
+    return { caught: caughtNow, badge };
   });
-};
+}
+SCREENS.poke = (skipIntro) => (skipIntro ? pokeRound(QUIZ_SIZE.poke, 'poke') : pokeIntro());
+SCREENS.bonus = () => pokeRound(1, 'bonus');
+
+const badgeCase = () => `<div class="badges" aria-label="배지 ${S.badges || 0}개">${BADGES.map(([b, e, c], k) => k < (S.badges || 0)
+  ? `<span class="badge got" style="--bc:${c}" title="${b}"><i>${e}</i><small>${b}</small></span>`
+  : '<span class="badge"><i>?</i><small>&nbsp;</small></span>').join('')}</div>`;
+
 function pokeIntro() {
   const have = (S.dex || []).length;
   app.innerHTML = `
@@ -713,11 +803,13 @@ function pokeIntro() {
         <li>🧩 <b>조사</b> — 피카츄<b class="hl">가</b>? 이상해꽃<b class="hl">이</b>?</li>
         <li>🦀 <b>ㅐ·ㅔ</b> — 메타몽, 팬텀, 캐터피</li>
         <li>👂 <b>진짜 이름</b> — 피카츄? 피가츄?</li>
+        ${artOK ? '<li>👤 <b>그림자 퀴즈</b> — 이 포켓몬은 누구일까?</li>' : ''}
       </ul>
-      <p>맞히면 몬스터볼로 <b>잡고</b>, 틀리면 포켓몬이 <b>도망가요</b>!</p>
+      <p>맞히면 몬스터볼로 <b>잡고</b>, 틀리면 <b>도망가요</b>. 도망친 포켓몬은 한 번 더 나타나요!<br>✨ 아주 가끔 <b>색이 다른 포켓몬</b>도 나와요.</p>
     </div>
     <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${POKEMON.length}" aria-valuenow="${have}">
       <span style="width:${(have / POKEMON.length) * 100}%"></span><b>📖 도감 ${have} / ${POKEMON.length}</b></div>
+    <section class="setbox"><h3 class="h3">🏅 체육관 배지 <small class="h-note">8마리 중 6마리 넘게 잡으면 하나씩!</small></h3>${badgeCase()}</section>
     <div class="row">
       <button class="btn primary big" id="start">모험 시작! ▶</button>
       <button class="btn big" id="dexBtn">📖 도감</button>
@@ -728,14 +820,19 @@ function pokeIntro() {
 }
 SCREENS.dex = () => {
   const have = (S.dex || []).length;
+  const shinies = (S.shinies || []).length;
   app.innerHTML = `
-    <h2 class="h">📖 포켓몬 도감 <small class="h-note">${have} / ${POKEMON.length}</small></h2>
+    <h2 class="h">📖 포켓몬 도감 <small class="h-note">${have} / ${POKEMON.length}${shinies ? ` · ✨ ${shinies}` : ''}</small></h2>
     ${bubble(LINES.pokeDex)}
-    <div class="dex">${POKEMON.map(([name, e, type]) => dexHas(name)
-      ? `<button class="dexcard ${TYPE_TONE[type] || 'tn'}" data-say="${esc(name)}"><span class="dex-e">${e}</span><b>${name}</b><small>${type}</small></button>`
-      : `<div class="dexcard empty"><span class="dex-e">?</span><b>???</b><small>&nbsp;</small></div>`).join('')}</div>
+    <div class="dex">${POKEMON.map((m) => {
+      const [name, , type, id, genus] = m;
+      return dexHas(name)
+        ? `<button class="dexcard ${TYPE_TONE[type] || 'tn'}" data-id="${id}" data-say="${sayAttr([name, genus])}"><span class="dex-no">${dexNo(id)}</span>${hasShiny(name) ? '<span class="dex-shiny" title="색이 다른 포켓몬">✨</span>' : ''}<span class="dex-art">${artImg(m, hasShiny(name))}</span><b>${name}</b><small>${genus}</small></button>`
+        : `<div class="dexcard empty"><span class="dex-no">${dexNo(id)}</span><span class="dex-art">${artOK ? artImg(m, false, 'sil') : '<span class="art-fallback">?</span>'}</span><b>???</b><small>&nbsp;</small></div>`;
+    }).join('')}</div>
     <button class="btn primary big" id="start">포켓몬 잡으러 가기 ▶</button>`;
   speak(LINES.pokeDex);
+  $$('.dexcard[data-id]', app).forEach((c) => c.addEventListener('click', () => playCry(+c.dataset.id)));
   $('#start').onclick = () => go('poke', true);
 };
 
@@ -971,6 +1068,8 @@ SCREENS.voice = () => {
     ${CLIPS.size ? `
       <label class="opt"><input type="checkbox" id="useClips" ${S.useClips !== false ? 'checked' : ''}>
         <span><b>🎙️ 녹음된 목소리 쓰기</b><br><small>미리 만든 자연스러운 목소리 (${window.AUDIO_CLIPS.voice || '녹음'}, ${CLIPS.size}개)</small></span></label>` : ''}
+    <label class="opt"><input type="checkbox" id="useCries" ${S.cries !== false ? 'checked' : ''}>
+      <span><b>🐾 포켓몬 울음소리</b><br><small>포켓몬이 나타날 때 울음소리를 들려줘요</small></span></label>
     <section class="setbox">
       <h3 class="h3">빠르기</h3>
       <div class="seg" role="radiogroup" aria-label="말 빠르기">${[['slow', '🐢 느리게'], ['normal', '🙂 보통'], ['fast', '🐇 빠르게']].map(([k, l]) =>
@@ -986,6 +1085,7 @@ SCREENS.voice = () => {
       <p class="tipbox">💡 ${tips}</p>
     </section>
     <p class="small-note">가장 자연스러운 목소리는 부모님 컴퓨터에서 녹음 파일을 한 번 만들어 두는 방법이에요. 방법은 README의 "자연스러운 목소리" 부분에 있어요.</p>`;
+  $('#useCries').addEventListener('change', (e) => { S.cries = e.target.checked; save(); if (S.cries) playCry(25); });
   $('#useClips')?.addEventListener('change', (e) => { S.useClips = e.target.checked; save(); speak(LINES.voiceTest); });
   $$('[data-rate]', app).forEach((b) => b.addEventListener('click', () => {
     S.rate = b.dataset.rate; save();
