@@ -1,0 +1,14 @@
+{
+  "name": "ttobak-dictation",
+  "private": true,
+  "description": "또박또박 받아쓰기 — 초등 1학년 받아쓰기 놀이",
+  "type": "module",
+  "scripts": {
+    "audio": "node tools/make-audio.mjs",
+    "audio:list": "node tools/make-audio.mjs --dry",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "msedge-tts": "^2.0.7"
+  }
+}

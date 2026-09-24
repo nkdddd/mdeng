@@ -16,6 +16,40 @@ python3 -m http.server 8000
 - 소리는 브라우저의 한국어 음성으로 나옵니다. 한국어 목소리가 없는 기기에서는 받아쓰기 화면의 **👀 어른용** 버튼을 눌러 어른이 읽어 주세요.
 - 별과 스티커는 그 기기의 브라우저에 저장됩니다.
 
+## 🎙️ 자연스러운 목소리
+
+앱은 아래 순서로 목소리를 골라요.
+
+1. **녹음 파일** (`audio/*.mp3`): 사람처럼 자연스러운 신경망 음성. 한 번만 만들어 두면 인터넷 없이도 나와요.
+2. **기기 목소리**: 기기에 있는 한국어 목소리 중에서 가장 자연스러운 것을 자동으로 골라요. 화면 위 ⚙️ 버튼에서 직접 바꾸고 빠르기도 정할 수 있어요.
+
+### 녹음 파일 만들기 (부모님 컴퓨터에서 한 번)
+
+[Node.js](https://nodejs.org) 18 이상이 필요해요.
+
+```bash
+npm install
+npm run audio                                   # 기본: 여자 목소리 SunHi
+npm run audio -- --voice ko-KR-InJoonNeural     # 남자 목소리
+```
+
+- 앱이 말하는 문장 365개(약 4,500자)를 `audio/` 폴더에 MP3로 만들고, 목록을 `js/clips.js`에 적어요. 새로고침하면 바로 새 목소리로 들려요.
+- 문제를 더하거나 고친 뒤 다시 실행하면 새로 생긴 문장만 만들어요.
+- 기본 방법은 Microsoft Edge의 "소리 내어 읽기" 서비스를 써요. 공식 API가 아니어서 언제든 막힐 수 있으니 가정이나 교실에서 쓰기에 알맞아요.
+  학교나 기관에 배포하려면 공식 [Azure Speech](https://azure.microsoft.com/products/ai-services/text-to-speech) 키를 쓰세요. 같은 목소리이고, 무료 사용량(한 달 50만 자) 안에서 충분해요.
+  ```bash
+  AZURE_SPEECH_KEY=발급받은키 AZURE_SPEECH_REGION=koreacentral npm run audio
+  ```
+- `npm run audio:list`로 만들 문장 목록만 볼 수 있어요.
+
+### 기기 목소리를 더 좋게
+
+| 기기 | 방법 |
+|---|---|
+| Windows / Mac 컴퓨터 | **Microsoft Edge**로 열면 "SunHi Online (Natural)" 목소리가 나와요 |
+| iPad / iPhone | 설정 → 손쉬운 사용 → 읽기 및 말하기 → 음성 → 한국어 → **Yuna (프리미엄)** 내려받기 |
+| 안드로이드 | 설정 → 텍스트 음성 변환 → Google 음성 인식 및 합성 → 한국어 **고품질** 음성 데이터 설치 |
+
 ## 놀이 구성
 
 | 섬 | 배우는 것 |
@@ -34,8 +68,12 @@ python3 -m http.server 8000
 ```
 index.html      화면 틀
 css/style.css   공책(밝은 화면) · 칠판(어두운 화면) 디자인
-js/data.js      문제와 설명 데이터 (여기만 고치면 문제를 늘릴 수 있어요)
-js/app.js       한글 조각내기, 채점, 놀이 화면
+js/data.js      문제와 설명 데이터, 또박이가 하는 말(LINES)
+js/voice.js     말 조각 이름표 (앱과 녹음 스크립트가 함께 씀)
+js/clips.js     녹음 파일 목록 (npm run audio가 만듦)
+js/app.js       한글 조각내기, 채점, 목소리 재생, 놀이 화면
+tools/make-audio.mjs   자연스러운 목소리 녹음 파일 만들기
+audio/          녹음 파일 (*.mp3)
 ```
 
 ## 문제 추가하기

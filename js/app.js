@@ -35,26 +35,81 @@ try { S = Object.assign(S, JSON.parse(localStorage.getItem(KEY)) || {}); } catch
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 무시 */ } };
 const stickerCount = () => Math.min(STICKERS.length, Math.floor(S.stars / 10));
 
-/* ---------- 소리 ---------- */
-let koVoice = null;
+/* ---------- 소리 ----------
+ * 1순위: 미리 만든 녹음 파일(audio/*.mp3, js/clips.js 목록)
+ * 2순위: 기기 목소리 중 가장 자연스러운 것 (설정에서 바꿀 수 있음)
+ */
 const hasTTS = 'speechSynthesis' in window;
+const CLIPS = new Set((window.AUDIO_CLIPS && window.AUDIO_CLIPS.keys) || []);
+const RATES = { slow: 0.8, normal: 0.95, fast: 1.05 };
+let koVoices = [];
+let koVoice = null;
+/* 자연스러운 목소리일수록 점수가 높아요 */
+function voiceScore(v) {
+  const n = v.name;
+  let s = 0;
+  if (/natural|online|neural/i.test(n)) s += 60;          /* Edge: SunHi Online (Natural) */
+  if (/premium|프리미엄|enhanced|향상/i.test(n)) s += 50;   /* iPad·Mac: Yuna 프리미엄 */
+  if (/google/i.test(n)) s += 30;                         /* Chrome: Google 한국의 */
+  if (/yuna|유나|sunhi|injoon|heami|sora|minsu/i.test(n)) s += 5;
+  if (!v.localService) s += 3;
+  return s;
+}
 function pickVoice() {
   if (!hasTTS) return;
-  const vs = speechSynthesis.getVoices();
-  koVoice = vs.find((v) => /^ko/i.test(v.lang) && /google|yuna|heami|sunhi|injoon/i.test(v.name))
-    || vs.find((v) => /^ko/i.test(v.lang)) || null;
+  koVoices = speechSynthesis.getVoices().filter((v) => /^ko/i.test(v.lang))
+    .sort((a, b) => voiceScore(b) - voiceScore(a));
+  koVoice = koVoices.find((v) => v.name === S.voiceName) || koVoices[0] || null;
+  if (app.className === 'screen-voice') SCREENS.voice();
 }
-if (hasTTS) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-function speak(text, slow) {
+if (hasTTS) { pickVoice(); speechSynthesis.addEventListener?.('voiceschanged', pickVoice); }
+
+let playToken = 0;
+let clip = null;
+function hush() {
+  playToken++;
+  if (hasTTS) speechSynthesis.cancel();
+  if (clip) { clip.pause(); clip = null; }
+}
+function ttsSpeak(text, slow, voice) {
   if (!hasTTS || !text) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(String(text).replace(/\p{Extended_Pictographic}|️|[[\]]/gu, ''));
+  const u = new SpeechSynthesisUtterance(text);
   u.lang = 'ko-KR';
-  if (koVoice) u.voice = koVoice;
-  u.rate = slow ? 0.6 : 0.9;
-  u.pitch = 1.1;
+  if (voice || koVoice) u.voice = voice || koVoice;
+  const r = RATES[S.rate] || RATES.normal;
+  u.rate = slow ? r * 0.7 : r;
   speechSynthesis.speak(u);
 }
+function playClips(parts, slow) {
+  const tok = ++playToken;
+  let i = 0;
+  /* 파일이 없으면 그 조각부터 기기 목소리로 (한 번만) */
+  const fallback = () => {
+    if (tok !== playToken) return;
+    playToken++;
+    ttsSpeak(parts.slice(i - 1).join(' '), slow);
+  };
+  const step = () => {
+    if (tok !== playToken || i >= parts.length) return;
+    const a = new Audio('audio/' + VOICE.key(parts[i++]) + '.mp3');
+    a.preservesPitch = true;
+    a.playbackRate = slow ? 0.75 : (S.rate === 'slow' ? 0.9 : S.rate === 'fast' ? 1.1 : 1);
+    a.onended = () => setTimeout(step, 150);
+    a.onerror = fallback;
+    clip = a;
+    a.play().catch(fallback);
+  };
+  step();
+}
+/* parts: 문자열 하나 또는 말 조각 배열 */
+function speak(parts, slow) {
+  parts = [].concat(parts).map(VOICE.norm).filter(Boolean);
+  hush();
+  if (!parts.length) return;
+  if (S.useClips !== false && CLIPS.size && parts.every((p) => CLIPS.has(VOICE.key(p)))) return playClips(parts, slow);
+  ttsSpeak(parts.join(' '), slow);
+}
+const sayAttr = (parts) => esc([].concat(parts).join('|'));
 
 let actx = null;
 function sfx(kind) {
@@ -132,7 +187,7 @@ function addStar() {
     setTimeout(() => {
       sfx('star');
       toast(`<div class="newsticker"><span>${st}</span>새 스티커를 받았어요!</div>`, 2600);
-      speak('와! 새 스티커를 받았어요!');
+      speak(LINES.sticker);
     }, 700);
   }
 }
@@ -144,7 +199,7 @@ function setBest(key, score) {
 /* 전역 클릭: 🔊 버튼 */
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-say]');
-  if (b) { speak(b.dataset.say, b.dataset.slow === '1'); }
+  if (b) { speak(b.dataset.say.split('|'), b.dataset.slow === '1'); }
 });
 
 /* ---------- 화면 이동 ---------- */
@@ -158,7 +213,7 @@ const ISLANDS = [
 ];
 const SCREENS = {};
 function go(name, ...args) {
-  if (hasTTS) speechSynthesis.cancel();
+  hush();
   $('#homeBtn').hidden = name === 'home';
   app.innerHTML = '';
   app.className = 'screen-' + name;
@@ -173,7 +228,7 @@ $('#homeBtn').addEventListener('click', () => { sfx('pop'); go('home'); });
 SCREENS.home = () => {
   app.innerHTML = `
     <h1 class="title">또박또박 <span>받아쓰기</span></h1>
-    ${bubble('안녕! 나는 또박이야. 어느 섬에 놀러 갈까?')}
+    ${bubble(LINES.home)}
     <div class="map">
       ${ISLANDS.map((s) => `
         <button class="island ${s.tone}" data-go="${s.id}">
@@ -184,7 +239,7 @@ SCREENS.home = () => {
         </button>`).join('')}
     </div>`;
   $$('.island', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); go(b.dataset.go); }));
-  speak('안녕! 나는 또박이야. 어느 섬에 놀러 갈까?');
+  speak(LINES.home);
 };
 
 /* ---------- 결과 ---------- */
@@ -197,14 +252,14 @@ function finish(key, score, total, again) {
       <div class="stamp ${great ? '' : 'soft'}">${great ? '참<br>잘했어요' : '잘<br>했어요'}</div>
       <h2>${total}문제 중에 <b>${score}</b>개 맞혔어요!</h2>
       <p class="finish-stars" aria-label="별 ${score}개">${'⭐'.repeat(score) || '🌱'}</p>
-      ${bubble(great ? '우아, 정말 멋져! 별을 모아서 스티커를 받자!' : '괜찮아, 틀린 건 배우는 거야. 한 번 더 해 볼까?')}
+      ${bubble(great ? LINES.great : LINES.soso)}
       <div class="row">
         <button class="btn primary" id="again">🔁 한 번 더</button>
         <button class="btn" id="toMap">🗺️ 지도로</button>
       </div>
     </div>`;
   if (great) { confetti(); sfx('star'); }
-  speak(`${total}문제 중에 ${score}개 맞혔어요! ` + (great ? '참 잘했어요!' : '한 번 더 해 볼까?'));
+  speak([LINES.score(total, score), great ? LINES.finishGreat : LINES.finishSoso]);
   $('#again').onclick = again;
   $('#toMap').onclick = () => go('home');
 }
@@ -240,7 +295,7 @@ function wireChoices(box, answer, onPick) {
 /* ---------- 🧩 조사 마을 ---------- */
 SCREENS.josa = (skipIntro) => {
   if (!skipIntro) return josaIntro();
-  const items = shuffle(NOUNS).slice(0, 10).map((n, k) => {
+  const items = shuffle(NOUNS).slice(0, QUIZ_SIZE.josa).map((n, k) => {
     const j = JOSA[k % JOSA.length];
     const other = pick(NOUNS.filter((m) => m !== n));
     return { noun: n[0], e: n[1], j, other };
@@ -251,7 +306,7 @@ SCREENS.josa = (skipIntro) => {
     const pic = q.j[2] ? q.e : q.e + ' ' + q.other[1];
     app.innerHTML = `
       ${dots(i, n)}
-      ${bubble('빈칸에 어떤 말이 들어갈까?')}
+      ${bubble(LINES.josaAsk)}
       <div class="qcard"><div class="pic" aria-hidden="true">${pic}</div>
         <p class="sentence"><b>${q.noun}</b><span class="blank">?</span>${esc(rest)}</p></div>
       <div class="choices">${shuffle([q.j[0], q.j[1]]).map((v) => `<button class="choice" data-v="${v}">${v}</button>`).join('')}</div>
@@ -275,21 +330,21 @@ SCREENS.josa = (skipIntro) => {
           : `'${lastChar(q.noun)}'에는 받침이 없어요. 그래서 <b class="hl">${ans}</b>!`}</p>
         <button class="btn primary next">다음 ➜</button>`;
       ex.hidden = false;
-      speak(`${ok ? '딩동댕! ' : '아쉬워! '}${q.noun}${ans}${rest}`);
+      speak([ok ? LINES.ding : LINES.oops, ...(q.j[2] ? [q.noun + ans + q.j[2]] : [q.noun + ans, q.other[0]])]);
       $('.next', ex).onclick = next;
     });
-    speak('빈칸에 어떤 말이 들어갈까?');
+    speak(LINES.josaAsk);
   });
 };
 function josaIntro() {
   app.innerHTML = `
     <h2 class="h">🧩 조사 마을</h2>
-    ${bubble('곰가? 곰이? 어느 게 말하기 편해? 소리 내서 말해 봐!')}
+    ${bubble(LINES.josaBubble)}
     <div class="compare">
-      <button class="cmp good" data-say="곰이 있어요">🐻 곰<b>이</b> 있어요 <small>[고미] 부드러워요 😊</small></button>
-      <button class="cmp bad" data-say="곰가 있어요">🐻 곰<b>가</b> 있어요 <small>어색해요 🤔</small></button>
-      <button class="cmp good" data-say="토끼가 있어요">🐰 토끼<b>가</b> 있어요 <small>부드러워요 😊</small></button>
-      <button class="cmp bad" data-say="토끼이 있어요">🐰 토끼<b>이</b> 있어요 <small>어색해요 🤔</small></button>
+      <button class="cmp good" data-say="곰이 있어요.">🐻 곰<b>이</b> 있어요 <small>[고미] 부드러워요 😊</small></button>
+      <button class="cmp bad" data-say="곰가 있어요.">🐻 곰<b>가</b> 있어요 <small>어색해요 🤔</small></button>
+      <button class="cmp good" data-say="토끼가 있어요.">🐰 토끼<b>가</b> 있어요 <small>부드러워요 😊</small></button>
+      <button class="cmp bad" data-say="토끼이 있어요.">🐰 토끼<b>이</b> 있어요 <small>어색해요 🤔</small></button>
     </div>
     <div class="rulecard">
       <p class="rule-q">받침이 뭐야? 글자 아래에 받쳐 주는 친구!</p>
@@ -300,7 +355,7 @@ function josaIntro() {
       </table>
     </div>
     <button class="btn primary big" id="start">놀이 시작! ▶</button>`;
-  speak('곰가? 곰이? 어느 게 말하기 편해? 받침이 있으면 이, 을, 은, 과. 받침이 없으면 가, 를, 는, 와를 써요.');
+  speak([LINES.josaBubble, LINES.josaRule]);
   $('#start').onclick = () => go('josa', true);
 }
 
@@ -314,14 +369,14 @@ const vowelSvg = (kind) => {
 };
 SCREENS.vowel = (skipIntro) => {
   if (!skipIntro) return vowelIntro();
-  const items = shuffle(VOWELS).slice(0, 10);
+  const items = shuffle(VOWELS).slice(0, QUIZ_SIZE.vowel);
   runQuiz('vowel', items, (q, i, n, mark, next) => {
     const ans = q.w[q.i];
     const wrong = swapVowel(ans);
     const shown = q.w.slice(0, q.i) + '?' + q.w.slice(q.i + 1);
     app.innerHTML = `
       ${dots(i, n)}
-      ${bubble('그림을 보고 알맞은 글자를 골라 봐!')}
+      ${bubble(LINES.vowelAsk)}
       <div class="qcard"><div class="pic" aria-hidden="true">${q.e}</div>
         <div class="wordcells">${cells(shown, { [q.i]: 'q' })}</div>
         <button class="btn small" data-say="${esc(q.w)}">🔊 들어 보기</button></div>
@@ -341,21 +396,21 @@ SCREENS.vowel = (skipIntro) => {
       const ex = $('.explain', app);
       ex.innerHTML = `<div class="vrow">${vowelSvg(kind)}<p>${line}</p></div><button class="btn primary next">다음 ➜</button>`;
       ex.hidden = false;
-      speak(`${ok ? '딩동댕! ' : '아쉬워! '}${q.w}`);
+      speak([ok ? LINES.ding : LINES.oops, q.w]);
       $('.next', ex).onclick = next;
     });
-    speak('그림을 보고 알맞은 글자를 골라 봐! ' + q.w);
+    speak([LINES.vowelAsk, q.w]);
   });
 };
 function vowelIntro() {
   app.innerHTML = `
     <h2 class="h">🦀 ㅐㅔ 바닷가</h2>
-    ${bubble('개랑 게, 들어 봐! 소리가 거의 똑같지? 그래서 귀 말고 눈으로 기억해야 해.')}
+    ${bubble(LINES.vowelBubble)}
     <div class="pair">
-      <button class="vcard" data-say="개. 멍멍 짖는 개">
+      <button class="vcard" data-say="${sayAttr(LINES.vowelDog)}">
         <span class="vpic">🐶</span><span class="vword">개</span>${vowelSvg('ae')}
         <span class="vtip">짧은 팔이 <b>안</b>에!<br>개는 집 <b>안</b>에 🏠</span></button>
-      <button class="vcard" data-say="게. 집게가 있는 게">
+      <button class="vcard" data-say="${sayAttr(LINES.vowelCrab)}">
         <span class="vpic">🦀</span><span class="vword">게</span>${vowelSvg('e')}
         <span class="vtip">짧은 팔이 <b>밖</b>에!<br>게는 집게를 <b>밖</b>으로 🦀</span></button>
     </div>
@@ -363,14 +418,14 @@ function vowelIntro() {
       <div class="vrow">${vowelSvg('ye')}<p><b class="hl">ㅖ</b>는 팔이 두 개! 시계 ⏰, 계단 🪜은 [시게], [게단]처럼 들려도 <b>ㅖ</b>로 써요.</p></div>
     </div>
     <button class="btn primary big" id="start">놀이 시작! ▶</button>`;
-  speak('개랑 게, 소리가 거의 똑같지? ㅐ는 짧은 팔이 안에, ㅔ는 짧은 팔이 밖에 있어요.');
+  speak([LINES.vowelBubble, LINES.vowelRule]);
   $('#start').onclick = () => go('vowel', true);
 }
 
 /* ---------- ✂️ 띄어쓰기 숲 ---------- */
 SCREENS.space = (skipIntro) => {
   if (!skipIntro) return spaceIntro();
-  runQuiz('space', shuffle(SPACING).slice(0, 8), (q, i, n, mark, next) => {
+  runQuiz('space', shuffle(SPACING).slice(0, QUIZ_SIZE.space), (q, i, n, mark, next) => {
     const syl = [...q.t.replace(/ /g, '')];
     const want = [];
     { let k = 0; for (const ch of q.t) { if (ch === ' ') want[k - 1] = true; else k++; } }
@@ -378,7 +433,7 @@ SCREENS.space = (skipIntro) => {
     let tries = 0;
     app.innerHTML = `
       ${dots(i, n)}
-      ${bubble('글자 사이를 눌러서 띄어 써 봐!')}
+      ${bubble(LINES.spaceAsk)}
       <div class="qcard"><div class="pic" aria-hidden="true">${q.e}</div>
         <div class="spacer" id="spacer"></div>
         <button class="btn small" data-say="${esc(q.t)}" data-slow="1">🔊 천천히 들어 보기</button></div>
@@ -410,7 +465,7 @@ SCREENS.space = (skipIntro) => {
         ex.innerHTML = `<p>딩동댕! <b class="hl">${esc(q.t)}</b></p>
           <p class="small-note">✂️ 이·가·을·를·은·는·에는 앞말에 딱 붙여 썼지요?</p>
           <button class="btn primary next">다음 ➜</button>`;
-        speak('딩동댕! ' + q.t);
+        speak([LINES.ding, q.t]);
         ex.hidden = false;
         $('.next', ex).onclick = next;
       } else {
@@ -420,7 +475,7 @@ SCREENS.space = (skipIntro) => {
           <p class="small-note">${TYPES.space.why}</p>
           <div class="row"><button class="btn primary" id="retry">✏️ 고쳐 볼래요</button><button class="btn" id="show">정답 보고 다음 ➜</button></div>`;
         ex.hidden = false;
-        speak('아쉬워! 빨간 곳은 띄고, 노란 곳은 붙여 봐.');
+        speak(LINES.spaceWrong);
         $('#retry').onclick = () => { ex.hidden = true; draw(); };
         $('#show').onclick = () => {
           gaps.forEach((_, k) => { gaps[k] = !!want[k]; });
@@ -432,13 +487,13 @@ SCREENS.space = (skipIntro) => {
         };
       }
     };
-    speak('글자 사이를 눌러서 띄어 써 봐! ' + q.t);
+    speak([LINES.spaceAsk, q.t]);
   });
 };
 function spaceIntro() {
   app.innerHTML = `
     <h2 class="h">✂️ 띄어쓰기 숲</h2>
-    ${bubble('띄어쓰기를 잘못하면 아버지가 가방에 들어가신대! 눌러서 확인해 봐.')}
+    ${bubble(LINES.spaceBubble)}
     <div class="funny">${FUNNY.map((f, k) => `
       <div class="fcard" data-k="${k}">
         <div class="raw">${cells(f.raw)}</div>
@@ -457,9 +512,9 @@ function spaceIntro() {
     $('.raw', card).innerHTML = cells(f[0]);
     $('.scene-pic', card).textContent = f[1];
     $('.scene-txt', card).textContent = f[2];
-    speak(f[0] + '. ' + f[2]);
+    speak([f[0], f[2]]);
   }));
-  speak('띄어쓰기를 잘못하면 아버지가 가방에 들어가신대! 버튼을 눌러서 확인해 봐.');
+  speak(LINES.spaceBubble);
   $('#start').onclick = () => go('space', true);
 }
 
@@ -473,12 +528,12 @@ function soundCompare(w, s) {
 }
 SCREENS.sound = (skipIntro) => {
   if (!skipIntro) return soundIntro();
-  runQuiz('sound', shuffle(SOUNDS).slice(0, 10), (q, i, n, mark, next) => {
+  runQuiz('sound', shuffle(SOUNDS).slice(0, QUIZ_SIZE.sound), (q, i, n, mark, next) => {
     const opts = shuffle([q.w, q.s, ...(q.x ? [q.x] : [])]);
     const tp = TYPES[q.k];
     app.innerHTML = `
       ${dots(i, n)}
-      ${bubble('이렇게 소리 나는 낱말, 글자로는 어떻게 쓸까?')}
+      ${bubble(LINES.soundAsk)}
       <div class="qcard"><div class="pic" aria-hidden="true">${q.e}</div>
         <p class="ear">👂 [${q.s}]</p>
         <button class="btn small" data-say="${esc(q.w)}">🔊 들어 보기</button></div>
@@ -495,16 +550,16 @@ SCREENS.sound = (skipIntro) => {
         <p class="small-note">${tp.why}</p>
         <button class="btn primary next">다음 ➜</button>`;
       ex.hidden = false;
-      speak(`${ok ? '딩동댕! ' : '아쉬워! '}소리는 ${q.s}, 글자는 ${q.w}. ${q.tip}`);
+      speak([ok ? LINES.ding : LINES.oops, LINES.soundAnswer(q.s, q.w), q.tip]);
       $('.next', ex).onclick = next;
     });
-    speak('이렇게 소리 나는 낱말, 글자로는 어떻게 쓸까? ' + q.w);
+    speak([LINES.soundAsk, q.w]);
   });
 };
 function soundIntro() {
   app.innerHTML = `
     <h2 class="h">🔍 소리 탐정</h2>
-    ${bubble('말할 때 소리랑 글자가 다를 때가 있어. 왜 소리 나는 대로 안 쓸까?')}
+    ${bubble(LINES.soundBubble)}
     <div class="rulecard why">
       <div id="fam">${WHY_FAMILY.map((f) => `<div class="fam-row">${cells(f.w, { 0: 'root' })}</div>`).join('')}</div>
       <button class="btn primary" id="flip">🔊 소리 나는 대로 써 보면?</button>
@@ -513,7 +568,7 @@ function soundIntro() {
     <h3 class="h3">소리를 바꾸는 친구들</h3>
     <div class="types">${['yeon', 'tense', 'nasal', 'palatal', 'h', 'rep', 'liquid'].map((k) => {
       const ex = SOUNDS.find((s) => s.k === k);
-      return `<button class="tcard" data-say="${esc(TYPES[k].name + '. ' + TYPES[k].why)}">
+      return `<button class="tcard" data-say="${sayAttr(LINES.typeCard(TYPES[k]))}">
         <span class="t-icon">${TYPES[k].icon}</span><span class="t-name">${TYPES[k].name}</span>
         <span class="t-ex">${ex.w} → [${ex.s}]</span></button>`;
     }).join('')}</div>
@@ -526,9 +581,9 @@ function soundIntro() {
     $('#whySay').innerHTML = flipped
       ? '어? <b class="hl">먹</b>이 사라졌어요! 머거요, 먹꼬, 멍는다… 무슨 뜻인지 알아보기 어렵지요? 그래서 <b>글자는 뜻을 지키고, 입은 편하게 말해요.</b>'
       : '세 낱말 모두 \'먹\'이 들어 있어서 \'먹다\'라는 뜻인 걸 금방 알 수 있어요.';
-    speak(flipped ? '머거요, 먹꼬, 멍는다. 어? 먹이 사라졌어요! 그래서 글자는 뜻을 지키고, 입은 편하게 말해요.' : '먹어요, 먹고, 먹는다');
+    speak(flipped ? LINES.flipOn : LINES.flipOff);
   };
-  speak('말할 때 소리랑 글자가 다를 때가 있어. 왜 소리 나는 대로 안 쓸까? 버튼을 눌러 봐.');
+  speak([LINES.soundBubble, LINES.pressButton]);
   $('#start').onclick = () => go('sound', true);
 }
 
@@ -536,14 +591,14 @@ function soundIntro() {
 SCREENS.dict = () => {
   app.innerHTML = `
     <h2 class="h">🎧 받아쓰기 섬</h2>
-    ${bubble('몇 단계에 도전할까? 잘 듣고 공책에 또박또박 써 보자!')}
+    ${bubble(LINES.dictBubble)}
     <div class="levels">${DICTATION.map((lv) => `
       <button class="level" data-id="${lv.id}"><span class="l-icon">${lv.icon}</span>
         <span class="l-name">${lv.name}</span><span class="l-sub">${lv.desc} · ${lv.items.length}문제</span>
         ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>
     ${hasTTS ? '' : '<p class="notice">이 기기에서는 소리가 나오지 않아요. 문제 화면의 👀 어른용 버튼을 눌러 어른이 읽어 주세요.</p>'}`;
   $$('.level', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); dictLevel(b.dataset.id); }));
-  speak('몇 단계에 도전할까?');
+  speak(LINES.dictBubble);
 };
 
 let inputMode = 'tiles';
@@ -628,7 +683,7 @@ function dictQuestion(q, i, n, mark, next) {
 
   app.innerHTML = `
     ${dots(i, n)}
-    ${bubble('잘 듣고 공책에 써 봐! 몇 번이든 다시 들을 수 있어.')}
+    ${bubble(LINES.dictAsk)}
     <div class="listen">
       <button class="btn listen-big" data-say="${esc(q.t)}">🔊 듣기</button>
       <button class="btn" data-say="${esc(q.t)}" data-slow="1">🐢 천천히</button>
@@ -686,7 +741,7 @@ function dictQuestion(q, i, n, mark, next) {
   paintAns(); paintPad();
 
   $('#check').onclick = () => {
-    if (!clean(typed)) { toast('먼저 공책에 써 보세요! ✏️'); speak('먼저 공책에 써 보세요!'); return; }
+    if (!clean(typed)) { toast('먼저 공책에 써 보세요! ✏️'); speak(LINES.writeFirst); return; }
     tries++;
     const u = clean(typed);
     const ok = u === target;
@@ -702,7 +757,7 @@ function dictQuestion(q, i, n, mark, next) {
       res.innerHTML = `<p class="yay">딩동댕! 또박또박 잘 썼어요! ⭐</p>
         <p class="small-note">이 문장에 숨은 비밀</p><ul class="secrets">${secrets}</ul>
         <button class="btn primary next">다음 ➜</button>`;
-      speak('딩동댕! 또박또박 잘 썼어요!');
+      speak(LINES.dictOk);
     } else {
       const reasons = diagnose(typed, q.t, q.hints);
       $('#paper').innerHTML = `
@@ -713,7 +768,7 @@ function dictQuestion(q, i, n, mark, next) {
           : '<p>빨간 칸을 바른 글과 비교해 봐요.</p>'}
         <p class="small-note">이 문장에 숨은 비밀</p><ul class="secrets">${secrets}</ul>
         <div class="row"><button class="btn primary" id="retry">✏️ 다시 써 볼래요</button><button class="btn next">다음 ➜</button></div>`;
-      speak('아쉬워! 바른 글과 비교해 볼까? ' + q.t);
+      speak([LINES.dictWrong, q.t]);
       $('#retry').onclick = () => {
         typed = ''; stack = []; pieces.forEach((p) => { p.used = false; });
         $('#paper').innerHTML = '<div id="ans"></div>';
@@ -738,14 +793,61 @@ SCREENS.book = () => {
   const all = [...ISLANDS.filter((s) => s.id !== 'book' && s.id !== 'dict'), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` }))];
   app.innerHTML = `
     <h2 class="h">🏆 스티커북</h2>
-    ${bubble(have < STICKERS.length ? `별을 ${toNext}개 더 모으면 새 스티커를 받아!` : '스티커를 모두 모았어! 최고야!')}
+    ${bubble(have < STICKERS.length ? LINES.bookLeft(toNext) : LINES.bookAll)}
     <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="${S.stars % 10}">
       <span style="width:${(S.stars % 10) * 10}%"></span><b>⭐ ${S.stars % 10} / 10</b></div>
     <div class="stickers">${STICKERS.map((s, k) => `<span class="sticker ${k < have ? 'got' : ''}">${k < have ? s : '?'}</span>`).join('')}</div>
     <h3 class="h3">섬마다 최고 점수</h3>
     <ul class="bests">${all.map((s) => `<li><span>${s.icon} ${s.name}</span><b>${S.best[s.id] != null ? S.best[s.id] + '점' : '—'}</b></li>`).join('')}</ul>`;
-  speak(have < STICKERS.length ? `별을 ${toNext}개 더 모으면 새 스티커를 받아!` : '스티커를 모두 모았어!');
+  speak(have < STICKERS.length ? LINES.bookLeft(toNext) : LINES.bookAll);
 };
+
+/* ---------- ⚙️ 목소리 설정 (어른용) ---------- */
+SCREENS.voice = () => {
+  const ua = navigator.userAgent;
+  const device = /iPad|iPhone|Macintosh/.test(ua) && 'ontouchend' in document ? 'ios'
+    : /Android/.test(ua) ? 'android' : /Mac/.test(ua) ? 'mac' : 'pc';
+  const tips = {
+    ios: '설정 → 손쉬운 사용 → 읽기 및 말하기 → 음성 → 한국어 → <b>Yuna (프리미엄)</b>을 내려받으면 훨씬 자연스러워요. 내려받은 뒤 이 화면을 다시 열어 고르세요.',
+    mac: '시스템 설정 → 손쉬운 사용 → 읽기 및 말하기 → 시스템 음성 → 음성 관리에서 <b>Yuna (프리미엄)</b>을 내려받거나, <b>Microsoft Edge</b>로 열면 자연스러운 목소리가 나와요.',
+    android: '설정 → 텍스트 음성 변환(TTS) → Google 음성 인식 및 합성 → 한국어 <b>고품질 음성 데이터</b>를 설치하세요.',
+    pc: '<b>Microsoft Edge</b>로 열면 "SunHi Online (Natural)" 같은 사람 같은 목소리를 쓸 수 있어요. 크롬에서는 "Google 한국의"가 가장 나아요.',
+  }[device];
+  const rate = S.rate || 'normal';
+  app.innerHTML = `
+    <h2 class="h">⚙️ 목소리 설정 <small class="h-note">어른용</small></h2>
+    ${CLIPS.size ? `
+      <label class="opt"><input type="checkbox" id="useClips" ${S.useClips !== false ? 'checked' : ''}>
+        <span><b>🎙️ 녹음된 목소리 쓰기</b><br><small>미리 만든 자연스러운 목소리 (${window.AUDIO_CLIPS.voice || '녹음'}, ${CLIPS.size}개)</small></span></label>` : ''}
+    <section class="setbox">
+      <h3 class="h3">빠르기</h3>
+      <div class="seg" role="radiogroup" aria-label="말 빠르기">${[['slow', '🐢 느리게'], ['normal', '🙂 보통'], ['fast', '🐇 빠르게']].map(([k, l]) =>
+        `<button role="radio" aria-checked="${rate === k}" data-rate="${k}">${l}</button>`).join('')}</div>
+    </section>
+    <section class="setbox">
+      <h3 class="h3">기기 목소리</h3>
+      ${koVoices.length ? `<ul class="voices">${koVoices.map((v, k) => `
+        <li><label class="opt"><input type="radio" name="voice" id="voice-${k}" value="${esc(v.name)}" ${koVoice && v.name === koVoice.name ? 'checked' : ''}>
+          <span><b>${esc(v.name)}</b>${k === 0 ? ' <em class="rec">추천</em>' : ''}<br><small>${v.localService ? '기기 안 목소리' : '인터넷 목소리'}</small></span></label>
+          <button class="btn small" data-test="${k}">▶ 들어 보기</button></li>`).join('')}</ul>`
+        : `<p class="notice">${hasTTS ? '한국어 목소리를 찾는 중이에요. 없으면 아래 방법으로 설치해 주세요.' : '이 브라우저는 읽어 주기를 지원하지 않아요.'}</p>`}
+      <p class="tipbox">💡 ${tips}</p>
+    </section>
+    <p class="small-note">가장 자연스러운 목소리는 부모님 컴퓨터에서 녹음 파일을 한 번 만들어 두는 방법이에요. 방법은 README의 "자연스러운 목소리" 부분에 있어요.</p>`;
+  $('#useClips')?.addEventListener('change', (e) => { S.useClips = e.target.checked; save(); speak(LINES.voiceTest); });
+  $$('[data-rate]', app).forEach((b) => b.addEventListener('click', () => {
+    S.rate = b.dataset.rate; save();
+    $$('[data-rate]', app).forEach((x) => x.setAttribute('aria-checked', x === b));
+    speak(LINES.voiceTest);
+  }));
+  $$('input[name="voice"]', app).forEach((r) => r.addEventListener('change', () => {
+    S.voiceName = r.value; save();
+    koVoice = koVoices.find((v) => v.name === r.value) || koVoice;
+    hush(); ttsSpeak(LINES.voiceTest);
+  }));
+  $$('[data-test]', app).forEach((b) => b.addEventListener('click', () => { hush(); ttsSpeak(LINES.voiceTest, false, koVoices[+b.dataset.test]); }));
+};
+$('#voiceBtn').addEventListener('click', () => { sfx('pop'); go('voice'); });
 
 /* ---------- 시작 ---------- */
 paintStars();
