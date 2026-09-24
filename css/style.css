@@ -613,3 +613,55 @@ h1:focus, h2:focus { outline: none; }
   .badges { gap: 6px; }
   .badge i { width: 44px; height: 44px; font-size: 20px; }
 }
+
+/* 모은 몬스터볼 줄 */
+.tray { display: flex; justify-content: center; align-items: center; gap: 4px; min-height: 30px; flex-wrap: wrap; }
+.tball { width: 28px; height: 28px; display: block; }
+.tball.pop { animation: trayPop .6s cubic-bezier(.3, 1.8, .5, 1); }
+@keyframes trayPop { from { transform: translateY(40px) scale(2) rotate(-200deg); } }
+.tray-empty { font-size: 14px; color: var(--ink-soft); }
+.encounter.happy .mon { animation: happy .5s ease-in-out 2; }
+@keyframes happy { 30% { transform: translateY(-18px) rotate(-6deg); } 60% { transform: translateY(0) rotate(4deg); } }
+
+/* 🔴 포획 타임 */
+.field {
+  position: relative; overflow: hidden; height: 380px; max-width: 100%;
+  border: 3px solid var(--ink); border-radius: 28px; box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--t2) 0%, var(--card) 62%, var(--t4) 62%, var(--t4) 100%);
+}
+.field.tn { background: linear-gradient(180deg, var(--t2) 0%, var(--card) 62%, var(--t4) 62%); }
+.field::after { /* 풀숲 */
+  content: ''; position: absolute; left: 0; right: 0; top: calc(62% - 22px); height: 24px;
+  background: radial-gradient(circle at 12px 24px, var(--grid) 12px, transparent 13px) 0 0 / 24px 24px repeat-x;
+}
+.target {
+  position: absolute; z-index: 1; left: 50%; top: 34px; width: 170px; height: 170px; margin-left: -85px;
+  display: grid; place-items: center; animation: idle 1.8s ease-in-out infinite;
+}
+.target .art-fallback { font-size: 96px; }
+.field.shiny .target { filter: drop-shadow(0 0 16px var(--sun)); }
+.throwball {
+  position: absolute; z-index: 2; left: 50%; bottom: 26px; width: 84px; height: 84px; margin-left: -42px;
+  padding: 0; border: 0; background: none; border-radius: 50%;
+  animation: ready 1.2s ease-in-out infinite;
+}
+.throwball:disabled { animation: none; opacity: 1; }
+.throwball:focus-visible { outline-offset: 6px; }
+@keyframes ready { 50% { transform: translateY(-8px) rotate(-8deg); } }
+.throwball.locked { filter: drop-shadow(0 0 10px var(--sun)); }
+.throw-hint {
+  position: absolute; z-index: 2; left: 50%; bottom: 8px; transform: translateX(46px); margin: 0;
+  font-family: var(--display); font-size: 20px; animation: bob 1.2s ease-in-out infinite;
+}
+.flash { position: absolute; inset: 0; z-index: 3; background: #fff; opacity: 0; pointer-events: none; }
+.field.flashing .flash { animation: flash .5s ease-out; }
+@keyframes flash { 20% { opacity: .75; } 100% { opacity: 0; } }
+.catch-msg { margin: 0; min-height: 40px; text-align: center; font-family: var(--display); font-size: 30px; color: var(--ink-soft); }
+.catch-msg b { font-weight: 400; color: var(--red); animation: pop .5s; display: inline-block; }
+#after { flex-direction: column; align-items: center; gap: 8px; }
+#after .small-note { text-align: center; }
+@media (max-width: 480px) {
+  .field { height: 340px; }
+  .target { width: 140px; height: 140px; margin-left: -70px; top: 30px; }
+  .catch-msg { font-size: 26px; }
+}

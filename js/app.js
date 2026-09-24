@@ -117,7 +117,7 @@ let actx = null;
 function sfx(kind) {
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    const notes = { ok: [660, 880, 1320], no: [300, 220], pop: [520], star: [880, 1175, 1568, 2093] }[kind];
+    const notes = { ok: [660, 880, 1320], no: [300, 220], pop: [520], star: [880, 1175, 1568, 2093], click: [190], whoosh: [1200, 900, 600, 400] }[kind];
     notes.forEach((f, i) => {
       const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i * 0.09;
       o.type = kind === 'no' ? 'triangle' : 'sine';
@@ -278,7 +278,10 @@ function finish(key, score, total, again, extra) {
 function runQuiz(key, items, render, onDone) {
   let i = 0, score = 0, streak = 0;
   const next = () => {
-    if (i >= items.length) return finish(key, score, items.length, () => go(key, true), onDone ? onDone(score) : null);
+    if (i >= items.length) {
+      const end = (extra) => finish(key, score, items.length, () => go(key, true), extra);
+      return onDone ? onDone(score, end) : end(null);
+    }
     app.innerHTML = '';
     render(items[i], i, items.length, (ok) => {
       if (!ok) { streak = 0; return; }
@@ -720,11 +723,11 @@ function pokeRound(count, key) {
     const hidden = q.kind === 'name' || q.kind === 'who';
     app.innerHTML = `
       ${dots(i, n)}
+      <div class="tray" aria-label="모은 몬스터볼 ${caughtNow.length}개">${ballTray(caughtNow.length)}</div>
       ${bubble(ask)}
       <div class="encounter ${TYPE_TONE[q.type] || 'tn'}${q.shiny ? ' shiny' : ''}">
         ${q.again ? '<span class="tag again">🔁 다시 나타났다!</span>' : ''}${q.shiny ? '<span class="tag sparkle">✨ 색이 다른 포켓몬!</span>' : ''}
         <div class="mon" aria-hidden="true">${artImg(q.m, q.shiny, q.kind === 'who' ? 'sil' : '')}</div>
-        <div class="ball" aria-hidden="true">${ballSvg}</div>
         <p class="mon-name">${hidden ? '???' : N}<small>${q.type} 타입</small></p>
         <p class="mon-no">${dexNo(q.id)} · ${hidden ? '???' : q.genus}</p>
         ${stage}
@@ -743,14 +746,16 @@ function pokeRound(count, key) {
       $('.art.sil', app)?.classList.remove('sil');
       if (q.kind === 'josa') { $('.blank', app).textContent = ans; $('.blank', app).classList.add('filled'); }
       if (q.kind === 'vowel') $('.wordcells', app).innerHTML = cells(N, { [aeIndex(N)]: 'good' });
-      const isNew = ok && addDex(N);
-      if (ok && q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
-      if (ok) caughtNow.push(q);
+      /* 잡기는 마지막 '포획 타임'에! 지금은 몬스터볼만 모아요 */
+      if (ok) {
+        caughtNow.push(q);
+        $('.tray', app).innerHTML = ballTray(caughtNow.length, true);
+      }
       /* 도망친 포켓몬은 한 번 더 나와요 */
       const comes = !ok && !q.again;
       if (comes) picks.push(makeEncounter(q.m, true, q.kind)); /* runQuiz가 같은 배열을 보고 있어요 */
-      enc.classList.add(ok ? 'catching' : 'fleeing');
-      const headline = ok ? LINES.caught(N, obj) : LINES.fled(N, subj);
+      enc.classList.add(ok ? 'happy' : 'fleeing');
+      const headline = ok ? LINES.gotBall(N, obj) : LINES.fled(N, subj);
       let body;
       if (q.kind === 'josa') body = josaExplain(N, ans);
       else if (q.kind === 'vowel') body = vowelExplain(ans);
@@ -766,24 +771,132 @@ function pokeRound(count, key) {
       }
       const ex = $('.explain', app);
       ex.innerHTML = `<p class="catch-line ${ok ? 'yay' : ''}">${ok ? '🔴 ' : '💨 '}${headline}</p>
-        ${isNew ? `<p class="small-note">📖 새 포켓몬! 도감에 ${N}${subj} 등록됐어요. (${S.dex.length}/${POKEMON.length})</p>` : ''}
         ${comes ? `<p class="small-note">🔁 ${LINES.fledSoon}</p>` : ''}
         ${body}<button class="btn primary next">다음 ➜</button>`;
       ex.hidden = false;
-      if (ok) confetti();
       const said = q.kind === 'josa' ? [q.j[2] + N + ans + q.j[3]] : [];
       speak([ok ? LINES.ding : LINES.oops, ...said, headline, ...(comes ? [LINES.fledSoon] : [])]);
       $('.next', ex).onclick = next;
     });
-  }, (score) => {
+  }, (score, end) => {
     let badge = null;
     if (key === 'poke' && score >= 6 && (S.badges || 0) < BADGES.length) {
       S.badges = (S.badges || 0) + 1;
       save();
       badge = BADGES[S.badges - 1];
     }
-    return { caught: caughtNow, badge };
+    const done = () => end({ caught: caughtNow, badge });
+    if (caughtNow.length) catchScene(caughtNow, done); else done();
   });
+}
+
+/* 모은 몬스터볼 줄 */
+function ballTray(n, popLast) {
+  if (!n) return '<span class="tray-empty">맞히면 몬스터볼을 모아요</span>';
+  return Array.from({ length: n }, (_, k) => `<span class="tball${popLast && k === n - 1 ? ' pop' : ''}">${ballSvg}</span>`).join('');
+}
+
+/* 🔴 포획 타임: 모은 몬스터볼을 하나씩 던져서 잡아요 (항상 성공) */
+function catchScene(list, onEnd) {
+  const fast = reduceMotion;
+  const wait = (ms) => new Promise((r) => setTimeout(r, fast ? Math.min(ms, 120) : ms));
+  const run = (el, frames, opts) => el.animate(frames, { fill: 'forwards', ...opts, duration: fast ? 1 : opts.duration }).finished;
+  let k = 0;
+  let busy = false;
+  const register = (q) => {
+    const isNew = addDex(q.name);
+    if (q.shiny && !hasShiny(q.name)) { S.shinies = [...(S.shinies || []), q.name]; save(); }
+    return isNew;
+  };
+
+  const show = () => {
+    const q = list[k];
+    app.innerHTML = `
+      <h2 class="h">🔴 포획 타임! <small class="h-note">${k + 1} / ${list.length}</small></h2>
+      ${bubble(LINES.throwAsk)}
+      <div class="field ${TYPE_TONE[q.type] || 'tn'}${q.shiny ? ' shiny' : ''}">
+        <div class="target" id="target">${artImg(q.m, q.shiny)}</div>
+        <div class="flash" aria-hidden="true"></div>
+        <button class="throwball" id="throw" aria-label="${q.name}에게 몬스터볼 던지기">${ballSvg}</button>
+        <p class="throw-hint">👆 톡!</p>
+      </div>
+      <p class="catch-msg" aria-live="polite"></p>
+      <div class="row" id="after"></div>
+      <div class="row"><button class="btn ghost" id="skip">모두 잡기 ⏭</button></div>`;
+    playCry(q.id);
+    setTimeout(() => speak(LINES.throwAsk), 900);
+    $('#throw').addEventListener('click', () => throwAt(q));
+    $('#skip').onclick = () => {
+      hush();
+      list.slice(k).forEach(register);
+      onEnd();
+    };
+  };
+
+  const throwAt = async (q) => {
+    if (busy) return;
+    busy = true;
+    hush();
+    const ball = $('#throw'), target = $('#target'), field = $('.field', app);
+    $('.throw-hint', app).hidden = true;
+    ball.disabled = true;
+    const b = ball.getBoundingClientRect(), t = target.getBoundingClientRect();
+    const dx = t.left + t.width / 2 - (b.left + b.width / 2);
+    const dy = t.top + t.height / 2 - (b.top + b.height / 2);
+    /* 1. 휙! 포물선으로 날아가기 */
+    sfx('whoosh');
+    await run(ball, [
+      { transform: 'translate(0, 0) rotate(0) scale(1)' },
+      { transform: `translate(${dx * 0.5}px, ${dy - 90}px) rotate(-400deg) scale(.85)`, offset: 0.55 },
+      { transform: `translate(${dx}px, ${dy}px) rotate(-720deg) scale(.7)` },
+    ], { duration: 650, easing: 'cubic-bezier(.3,.6,.5,1)' });
+    /* 2. 번쩍! 포켓몬이 빛이 되어 공 속으로 */
+    field.classList.add('flashing');
+    sfx('pop');
+    await run(target, [
+      { transform: 'scale(1)', filter: 'brightness(1)', opacity: 1 },
+      { transform: 'scale(1.08)', filter: 'brightness(4)', opacity: 1, offset: 0.35 },
+      { transform: 'scale(0)', filter: 'brightness(4)', opacity: 0 },
+    ], { duration: 520, easing: 'ease-in' });
+    /* 3. 톡 떨어지기 */
+    await run(ball, [
+      { transform: `translate(${dx}px, ${dy}px) rotate(-720deg) scale(.7)` },
+      { transform: `translate(${dx}px, ${dy + 70}px) rotate(-720deg) scale(.7)` },
+    ], { duration: 280, easing: 'cubic-bezier(.5,0,1,1)' });
+    /* 4. 흔들흔들 하나, 둘, 셋 */
+    const msg = $('.catch-msg', app);
+    for (let w = 1; w <= 3; w++) {
+      msg.textContent = '…'.repeat(w);
+      sfx('click');
+      await run(ball, [
+        { transform: `translate(${dx}px, ${dy + 70}px) rotate(0deg) scale(.7)` },
+        { transform: `translate(${dx}px, ${dy + 70}px) rotate(-22deg) scale(.7)`, offset: 0.3 },
+        { transform: `translate(${dx}px, ${dy + 70}px) rotate(22deg) scale(.7)`, offset: 0.7 },
+        { transform: `translate(${dx}px, ${dy + 70}px) rotate(0deg) scale(.7)` },
+      ], { duration: 520, easing: 'ease-in-out' });
+      await wait(260);
+    }
+    /* 5. 딸깍! */
+    const N = q.name, obj = josaPick(N, ['을', '를']), subj = josaPick(N, ['이', '가']);
+    const isNew = register(q);
+    ball.classList.add('locked');
+    sfx('star');
+    confetti();
+    msg.innerHTML = `<b>딸깍! ${N}${obj} 잡았다!</b>`;
+    const last = k === list.length - 1;
+    $('#after').innerHTML = `
+      ${isNew ? `<p class="small-note">📖 새 포켓몬! 도감에 ${N}${subj} 등록됐어요. (${S.dex.length}/${POKEMON.length})</p>` : ''}
+      ${q.shiny ? '<p class="small-note">✨ 색이 다른 포켓몬을 잡았어요!</p>' : ''}
+      <button class="btn primary big" id="nextMon">${last ? '결과 보기 ▶' : '다음 포켓몬 ▶'}</button>`;
+    speak(LINES.caught(N, obj));
+    $('#nextMon').onclick = () => {
+      k++;
+      busy = false;
+      if (k < list.length) show(); else onEnd();
+    };
+    $('#skip').parentElement.hidden = last;
+  };
+  show();
 }
 SCREENS.poke = (skipIntro) => (skipIntro ? pokeRound(QUIZ_SIZE.poke, 'poke') : pokeIntro());
 SCREENS.bonus = () => pokeRound(1, 'bonus');

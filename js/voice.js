@@ -40,6 +40,7 @@ const VOICE = (() => {
       add(LINES.caught(n, batchim(n) ? '을' : '를'));
       add(LINES.fled(n, batchim(n) ? '이' : '가'));
       add(LINES.reappear(n, batchim(n) ? '이' : '가'));
+      add(LINES.gotBall(n, batchim(n) ? '을' : '를'));
       POKE_JOSA.forEach((j) => { if (!j[2].startsWith(n)) add(j[2] + n + (batchim(n) ? j[0] : j[1]) + j[3]); });
     });
     NOUNS.forEach(([noun]) => {
