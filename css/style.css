@@ -665,3 +665,38 @@ h1:focus, h2:focus { outline: none; }
   .target { width: 140px; height: 140px; margin-left: -70px; top: 30px; }
   .catch-msg { font-size: 26px; }
 }
+
+/* 🎯 화살표 맞히기 */
+.field { height: 420px; }
+.target { top: 16px; }
+.aim { position: absolute; z-index: 2; left: 24px; right: 24px; top: 212px; height: 48px; }
+.aim-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 22px; overflow: hidden;
+  border: 3px solid var(--ink); border-radius: 999px;
+  background: linear-gradient(90deg, var(--red-soft), var(--sun-soft) 35%, var(--sun-soft) 65%, var(--red-soft));
+}
+.aim-zone { position: absolute; top: 0; bottom: 0; background: var(--ok); opacity: .85; }
+.aim-arrow {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%); font-size: 26px; line-height: 1;
+  color: var(--ink); text-shadow: 0 2px 0 var(--card);
+}
+.aim.hit .aim-bar { box-shadow: 0 0 0 4px var(--ok); }
+.aim.miss .aim-bar { box-shadow: 0 0 0 4px var(--red); }
+.aim.hit .aim-arrow, .aim.miss .aim-arrow { animation: pop .4s; }
+.throwball { bottom: 22px; }
+
+.bet { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.bet-btn { width: 60px; min-height: 56px; padding: 0; font-size: 30px; }
+.bet-stars { display: flex; gap: 2px; font-size: 30px; }
+.bet-stars span { filter: grayscale(1); opacity: .3; transition: transform .2s; }
+.bet-stars span.on { filter: none; opacity: 1; transform: scale(1.15); }
+.bet-note { margin: -6px 0 0; text-align: center; font-size: 16px; color: var(--ink-soft); }
+.bet-note b { color: var(--ink); font-family: var(--display); font-weight: 400; }
+.catch-msg b.missed { color: var(--ink-soft); }
+@media (max-width: 480px) {
+  .field { height: 380px; }
+  .target { top: 12px; }
+  .aim { top: 170px; left: 16px; right: 16px; }
+  .bet-stars { font-size: 24px; }
+  .bet-btn { width: 52px; }
+}

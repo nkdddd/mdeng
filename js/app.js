@@ -33,7 +33,9 @@ const KEY = 'ttobak-v1';
 let S = { stars: 0, best: {} };
 try { S = Object.assign(S, JSON.parse(localStorage.getItem(KEY)) || {}); } catch (e) { /* 저장소를 못 쓰면 이번만 기억 */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 무시 */ } };
-const stickerCount = () => Math.min(STICKERS.length, Math.floor(S.stars / 10));
+/* stars = 쓸 수 있는 별(포획 타임에 걸어요), earned = 지금까지 모은 별 전체(스티커 기준) */
+if (S.earned == null) S.earned = S.stars;
+const stickerCount = () => Math.min(STICKERS.length, Math.floor(S.earned / 10));
 
 /* ---------- 소리 ----------
  * 1순위: 미리 만든 녹음 파일(audio/*.mp3, js/clips.js 목록)
@@ -180,6 +182,7 @@ function paintStars() { $('#starCount').textContent = S.stars; }
 function addStar() {
   const before = stickerCount();
   S.stars++;
+  S.earned++;
   save();
   paintStars();
   const pill = $('#starPill');
@@ -785,8 +788,8 @@ function pokeRound(count, key) {
       save();
       badge = BADGES[S.badges - 1];
     }
-    const done = () => end({ caught: caughtNow, badge });
-    if (caughtNow.length) catchScene(caughtNow, done); else done();
+    const done = (caught) => end({ caught, badge });
+    if (caughtNow.length) catchScene(caughtNow, done); else done([]);
   });
 }
 
@@ -796,105 +799,153 @@ function ballTray(n, popLast) {
   return Array.from({ length: n }, (_, k) => `<span class="tball${popLast && k === n - 1 ? ' pop' : ''}">${ballSvg}</span>`).join('');
 }
 
-/* 🔴 포획 타임: 모은 몬스터볼을 하나씩 던져서 잡아요 (항상 성공) */
-function catchScene(list, onEnd) {
+/* 🔴 포획 타임: 모은 포켓몬 중 3마리가 나와요.
+ * 화살표가 좌우로 움직이고, 가운데에서 던지면 잡혀요.
+ * 별을 걸수록 화살표가 느려져서 잡기 쉬워요 (건 별은 던질 때 써요). */
+const CATCH_MAX = 3;
+const BET_MAX = 5;
+const SWEEP_MS = [650, 950, 1300, 1750, 2300, 3000]; /* 별 0~5개: 한쪽 끝에서 끝까지 가는 시간 */
+const SPEED_WORD = ['아주 빠름', '빠름', '보통', '느림', '아주 느림', '거북이 🐢'];
+const HIT_ZONE = 10; /* 가운데에서 ±10% 안이면 성공 */
+
+function catchScene(earned, onEnd) {
+  const list = shuffle(earned).slice(0, CATCH_MAX);
+  const caught = [];
   const fast = reduceMotion;
   const wait = (ms) => new Promise((r) => setTimeout(r, fast ? Math.min(ms, 120) : ms));
   const run = (el, frames, opts) => el.animate(frames, { fill: 'forwards', ...opts, duration: fast ? 1 : opts.duration }).finished;
-  let k = 0;
-  let busy = false;
   const register = (q) => {
     const isNew = addDex(q.name);
     if (q.shiny && !hasShiny(q.name)) { S.shinies = [...(S.shinies || []), q.name]; save(); }
     return isNew;
   };
+  let k = 0;
 
   const show = () => {
     const q = list[k];
+    const N = q.name, obj = josaPick(N, ['을', '를']), subj = josaPick(N, ['이', '가']);
+    let bet = 0, pos = 50, dir = 1, raf = 0, last = 0, thrown = false;
     app.innerHTML = `
       <h2 class="h">🔴 포획 타임! <small class="h-note">${k + 1} / ${list.length}</small></h2>
       ${bubble(LINES.throwAsk)}
       <div class="field ${TYPE_TONE[q.type] || 'tn'}${q.shiny ? ' shiny' : ''}">
         <div class="target" id="target">${artImg(q.m, q.shiny)}</div>
         <div class="flash" aria-hidden="true"></div>
-        <button class="throwball" id="throw" aria-label="${q.name}에게 몬스터볼 던지기">${ballSvg}</button>
-        <p class="throw-hint">👆 톡!</p>
+        <div class="aim" id="aim" aria-hidden="true">
+          <div class="aim-bar"><span class="aim-zone" style="left:${50 - HIT_ZONE}%;width:${HIT_ZONE * 2}%"></span></div>
+          <span class="aim-arrow" id="arrow">▼</span>
+        </div>
+        <button class="throwball" id="throw" aria-label="${N}에게 몬스터볼 던지기">${ballSvg}</button>
       </div>
+      <div class="bet" id="betBox">
+        <button class="btn bet-btn" id="betMinus" aria-label="별 하나 덜 걸기">−</button>
+        <div class="bet-stars" id="betStars" aria-live="polite"></div>
+        <button class="btn bet-btn" id="betPlus" aria-label="별 하나 더 걸기">＋</button>
+      </div>
+      <p class="bet-note" id="betNote"></p>
       <p class="catch-msg" aria-live="polite"></p>
-      <div class="row" id="after"></div>
-      <div class="row"><button class="btn ghost" id="skip">모두 잡기 ⏭</button></div>`;
+      <div class="row" id="after"></div>`;
+    const arrow = $('#arrow');
+    const paintBet = () => {
+      $('#betStars').innerHTML = Array.from({ length: BET_MAX }, (_, s) => `<span class="${s < bet ? 'on' : ''}">⭐</span>`).join('');
+      $('#betNote').innerHTML = `⭐ <b>${bet}개</b> 걸기 · 화살표 <b>${SPEED_WORD[bet]}</b> · 남은 별 ${thrown ? S.stars : S.stars - bet}개`; /* 던진 뒤에는 이미 뺐어요 */
+      $('#betMinus').disabled = thrown || bet === 0;
+      $('#betPlus').disabled = thrown || bet >= BET_MAX || bet >= S.stars;
+    };
+    const tick = (t) => {
+      if (!last) last = t;
+      const dt = Math.min(t - last, 50);
+      last = t;
+      pos += dir * (100 * dt / SWEEP_MS[bet]);
+      if (pos >= 100) { pos = 200 - pos; dir = -1; }
+      if (pos <= 0) { pos = -pos; dir = 1; }
+      arrow.style.left = pos + '%';
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    paintBet();
+    $('#betPlus').onclick = () => { bet++; sfx('pop'); paintBet(); };
+    $('#betMinus').onclick = () => { bet--; sfx('pop'); paintBet(); };
     playCry(q.id);
-    setTimeout(() => speak(LINES.throwAsk), 900);
-    $('#throw').addEventListener('click', () => throwAt(q));
-    $('#skip').onclick = () => {
-      hush();
-      list.slice(k).forEach(register);
-      onEnd();
-    };
-  };
+    setTimeout(() => { if (!thrown) speak(k === 0 && earned.length > list.length ? [LINES.catchIntro, LINES.throwAsk] : LINES.throwAsk); }, 900);
 
-  const throwAt = async (q) => {
-    if (busy) return;
-    busy = true;
-    hush();
-    const ball = $('#throw'), target = $('#target'), field = $('.field', app);
-    $('.throw-hint', app).hidden = true;
-    ball.disabled = true;
-    const b = ball.getBoundingClientRect(), t = target.getBoundingClientRect();
-    const dx = t.left + t.width / 2 - (b.left + b.width / 2);
-    const dy = t.top + t.height / 2 - (b.top + b.height / 2);
-    /* 1. 휙! 포물선으로 날아가기 */
-    sfx('whoosh');
-    await run(ball, [
-      { transform: 'translate(0, 0) rotate(0) scale(1)' },
-      { transform: `translate(${dx * 0.5}px, ${dy - 90}px) rotate(-400deg) scale(.85)`, offset: 0.55 },
-      { transform: `translate(${dx}px, ${dy}px) rotate(-720deg) scale(.7)` },
-    ], { duration: 650, easing: 'cubic-bezier(.3,.6,.5,1)' });
-    /* 2. 번쩍! 포켓몬이 빛이 되어 공 속으로 */
-    field.classList.add('flashing');
-    sfx('pop');
-    await run(target, [
-      { transform: 'scale(1)', filter: 'brightness(1)', opacity: 1 },
-      { transform: 'scale(1.08)', filter: 'brightness(4)', opacity: 1, offset: 0.35 },
-      { transform: 'scale(0)', filter: 'brightness(4)', opacity: 0 },
-    ], { duration: 520, easing: 'ease-in' });
-    /* 3. 톡 떨어지기 */
-    await run(ball, [
-      { transform: `translate(${dx}px, ${dy}px) rotate(-720deg) scale(.7)` },
-      { transform: `translate(${dx}px, ${dy + 70}px) rotate(-720deg) scale(.7)` },
-    ], { duration: 280, easing: 'cubic-bezier(.5,0,1,1)' });
-    /* 4. 흔들흔들 하나, 둘, 셋 */
-    const msg = $('.catch-msg', app);
-    for (let w = 1; w <= 3; w++) {
-      msg.textContent = '…'.repeat(w);
-      sfx('click');
+    $('#throw').addEventListener('click', async () => {
+      if (thrown) return;
+      thrown = true;
+      cancelAnimationFrame(raf);
+      hush();
+      const hit = Math.abs(pos - 50) <= HIT_ZONE;
+      if (bet) { S.stars -= bet; save(); paintStars(); }
+      paintBet();
+      $('#aim').classList.add(hit ? 'hit' : 'miss');
+      const ball = $('#throw'), target = $('#target'), field = $('.field', app), msg = $('.catch-msg', app);
+      ball.disabled = true;
+      const b = ball.getBoundingClientRect(), tr = target.getBoundingClientRect();
+      const dx = tr.left + tr.width / 2 - (b.left + b.width / 2);
+      const dy = tr.top + tr.height / 2 - (b.top + b.height / 2);
+      /* 1. 휙! 포물선으로 날아가기 (빗나가면 옆으로 살짝 비껴요) */
+      const off = hit ? 0 : (pos < 50 ? -1 : 1) * 70;
+      sfx('whoosh');
       await run(ball, [
-        { transform: `translate(${dx}px, ${dy + 70}px) rotate(0deg) scale(.7)` },
-        { transform: `translate(${dx}px, ${dy + 70}px) rotate(-22deg) scale(.7)`, offset: 0.3 },
-        { transform: `translate(${dx}px, ${dy + 70}px) rotate(22deg) scale(.7)`, offset: 0.7 },
-        { transform: `translate(${dx}px, ${dy + 70}px) rotate(0deg) scale(.7)` },
-      ], { duration: 520, easing: 'ease-in-out' });
-      await wait(260);
-    }
-    /* 5. 딸깍! */
-    const N = q.name, obj = josaPick(N, ['을', '를']), subj = josaPick(N, ['이', '가']);
-    const isNew = register(q);
-    ball.classList.add('locked');
-    sfx('star');
-    confetti();
-    msg.innerHTML = `<b>딸깍! ${N}${obj} 잡았다!</b>`;
-    const last = k === list.length - 1;
-    $('#after').innerHTML = `
-      ${isNew ? `<p class="small-note">📖 새 포켓몬! 도감에 ${N}${subj} 등록됐어요. (${S.dex.length}/${POKEMON.length})</p>` : ''}
-      ${q.shiny ? '<p class="small-note">✨ 색이 다른 포켓몬을 잡았어요!</p>' : ''}
-      <button class="btn primary big" id="nextMon">${last ? '결과 보기 ▶' : '다음 포켓몬 ▶'}</button>`;
-    speak(LINES.caught(N, obj));
-    $('#nextMon').onclick = () => {
-      k++;
-      busy = false;
-      if (k < list.length) show(); else onEnd();
-    };
-    $('#skip').parentElement.hidden = last;
+        { transform: 'translate(0, 0) rotate(0) scale(1)' },
+        { transform: `translate(${(dx + off) * 0.5}px, ${dy - 90}px) rotate(-400deg) scale(.85)`, offset: 0.55 },
+        { transform: `translate(${dx + off}px, ${dy}px) rotate(-720deg) scale(.7)` },
+      ], { duration: 650, easing: 'cubic-bezier(.3,.6,.5,1)' });
+
+      if (!hit) {
+        /* 빗나감: 공은 튕겨 나가고 포켓몬은 도망 */
+        sfx('no');
+        run(ball, [
+          { transform: `translate(${dx + off}px, ${dy}px) rotate(-720deg) scale(.7)`, opacity: 1 },
+          { transform: `translate(${dx + off * 3}px, ${dy + 260}px) rotate(-1000deg) scale(.6)`, opacity: 0 },
+        ], { duration: 700, easing: 'ease-in' });
+        await wait(250);
+        await run(target, [
+          { transform: 'translateX(0)', opacity: 1 },
+          { transform: 'translateX(-14px)', opacity: 1, offset: 0.25 },
+          { transform: `translateX(${pos < 50 ? 300 : -300}px) rotate(${pos < 50 ? 20 : -20}deg)`, opacity: 0 },
+        ], { duration: 700, easing: 'ease-in' });
+        msg.innerHTML = `<b class="missed">💨 ${LINES.fled(N, subj)}</b>`;
+        speak([LINES.missed, LINES.fled(N, subj)]);
+      } else {
+        /* 2. 번쩍! → 3. 톡 → 4. 흔들흔들 → 5. 딸깍 */
+        field.classList.add('flashing');
+        sfx('pop');
+        await run(target, [
+          { transform: 'scale(1)', filter: 'brightness(1)', opacity: 1 },
+          { transform: 'scale(1.08)', filter: 'brightness(4)', opacity: 1, offset: 0.35 },
+          { transform: 'scale(0)', filter: 'brightness(4)', opacity: 0 },
+        ], { duration: 520, easing: 'ease-in' });
+        await run(ball, [
+          { transform: `translate(${dx}px, ${dy}px) rotate(-720deg) scale(.7)` },
+          { transform: `translate(${dx}px, ${dy + 60}px) rotate(-720deg) scale(.7)` },
+        ], { duration: 280, easing: 'cubic-bezier(.5,0,1,1)' });
+        for (let w = 1; w <= 3; w++) {
+          msg.textContent = '…'.repeat(w);
+          sfx('click');
+          await run(ball, [
+            { transform: `translate(${dx}px, ${dy + 60}px) rotate(0deg) scale(.7)` },
+            { transform: `translate(${dx}px, ${dy + 60}px) rotate(-22deg) scale(.7)`, offset: 0.3 },
+            { transform: `translate(${dx}px, ${dy + 60}px) rotate(22deg) scale(.7)`, offset: 0.7 },
+            { transform: `translate(${dx}px, ${dy + 60}px) rotate(0deg) scale(.7)` },
+          ], { duration: 520, easing: 'ease-in-out' });
+          await wait(260);
+        }
+        const isNew = register(q);
+        caught.push(q);
+        ball.classList.add('locked');
+        sfx('star');
+        confetti();
+        msg.innerHTML = `<b>딸깍! ${N}${obj} 잡았다!</b>`;
+        $('#after').innerHTML = `
+          ${isNew ? `<p class="small-note">📖 새 포켓몬! 도감에 ${N}${subj} 등록됐어요. (${S.dex.length}/${POKEMON.length})</p>` : ''}
+          ${q.shiny ? '<p class="small-note">✨ 색이 다른 포켓몬을 잡았어요!</p>' : ''}`;
+        speak(LINES.caught(N, obj));
+      }
+      const lastOne = k === list.length - 1;
+      $('#after').insertAdjacentHTML('beforeend', `<button class="btn primary big" id="nextMon">${lastOne ? '결과 보기 ▶' : '다음 포켓몬 ▶'}</button>`);
+      $('#nextMon').onclick = () => { k++; if (k < list.length) show(); else onEnd(caught); };
+    });
   };
   show();
 }
@@ -1151,13 +1202,13 @@ function dictQuestion(q, i, n, mark, next) {
 /* ---------- 🏆 스티커북 ---------- */
 SCREENS.book = () => {
   const have = stickerCount();
-  const toNext = 10 - (S.stars % 10);
+  const toNext = 10 - (S.earned % 10);
   const all = [...ISLANDS.filter((s) => s.id !== 'book' && s.id !== 'dict'), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` }))];
   app.innerHTML = `
     <h2 class="h">🏆 스티커북</h2>
     ${bubble(have < STICKERS.length ? LINES.bookLeft(toNext) : LINES.bookAll)}
-    <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="${S.stars % 10}">
-      <span style="width:${(S.stars % 10) * 10}%"></span><b>⭐ ${S.stars % 10} / 10</b></div>
+    <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="${S.earned % 10}">
+      <span style="width:${(S.earned % 10) * 10}%"></span><b>⭐ ${S.earned % 10} / 10</b></div>
     <div class="stickers">${STICKERS.map((s, k) => `<span class="sticker ${k < have ? 'got' : ''}">${k < have ? s : '?'}</span>`).join('')}</div>
     <h3 class="h3">섬마다 최고 점수</h3>
     <ul class="bests">${all.map((s) => `<li><span>${s.icon} ${s.name}</span><b>${S.best[s.id] != null ? S.best[s.id] + '점' : '—'}</b></li>`).join('')}</ul>`;
