@@ -10,4 +10,11 @@
  *   appId: '1:1234567890:web:abcdef',
  * };
  */
-window.FIREBASE_CONFIG = null;
+window.FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyAF8uZGiYHJ9jyRBrZUqDD_3f9bU2idQqI',
+  authDomain: 'ttobak-ca6f8.firebaseapp.com',
+  projectId: 'ttobak-ca6f8',
+  storageBucket: 'ttobak-ca6f8.firebasestorage.app',
+  messagingSenderId: '1007500368122',
+  appId: '1:1007500368122:web:412119a3c7d54674b79143',
+};
