@@ -739,3 +739,4 @@ h1:focus, h2:focus { outline: none; }
 /* 첫 화면 부모님 로그인 */
 .splash-acct { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 8px; }
 .splash-acct .small-note { font-size: 14px; }
+.auth-error { margin: 4px 0 0; max-width: 34em; padding: 8px 12px; border-radius: 12px; background: var(--red-soft); color: var(--ink); font-size: 15px; text-align: left; }

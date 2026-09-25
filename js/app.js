@@ -1340,7 +1340,8 @@ function familyBox() {
       ? `<div class="acct"><span>👤 <b>${esc(c.user.email || c.user.displayName || '로그인됨')}</b></span><button class="btn small" id="signOut">로그아웃</button></div>
          <p class="small-note" id="cloudStatus">${CLOUD_TEXT[c.status] || ''}</p>`
       : `<button class="btn primary" id="signIn" ${c.ready ? '' : 'disabled'}>Google로 로그인</button>
-         <p class="small-note" id="cloudStatus">${CLOUD_TEXT[c.status] || ''}</p>`;
+         <p class="small-note" id="cloudStatus">${CLOUD_TEXT[c.status] || ''}</p>
+         ${authError ? `<p class="auth-error" role="alert">⚠️ ${authError}</p>` : ''}`;
   const me = STORE.current().id;
   const kids = STORE.profiles().map((p) => {
     const st = STORE.load(p.id);
@@ -1360,9 +1361,7 @@ function familyBox() {
   </section>`;
 }
 function wireFamily() {
-  $('#signIn')?.addEventListener('click', async () => {
-    try { await STORE.signIn(); } catch (e) { toast('로그인하지 못했어요: ' + esc(e.code || e.message || '')); }
-  });
+  $('#signIn')?.addEventListener('click', doSignIn);
   $('#signOut')?.addEventListener('click', () => STORE.signOut());
   $$('[data-rename]', app).forEach((b) => b.addEventListener('click', () => {
     const row = b.closest('.kid-row');
@@ -1388,6 +1387,32 @@ function wireFamily() {
     $('[data-no]', act).onclick = () => SCREENS.voice();
   }));
 }
+/* 로그인 오류를 부모님이 알아볼 수 있게 (Firebase 오류 코드 → 할 일) */
+const AUTH_HELP = {
+  'auth/unauthorized-domain': 'Firebase 콘솔 → Authentication → 설정 → 승인된 도메인에 nkdddd.github.io를 추가해 주세요.',
+  'auth/operation-not-allowed': 'Firebase 콘솔 → Authentication → 로그인 방법에서 Google을 "사용 설정"하고 저장해 주세요.',
+  'auth/configuration-not-found': 'Firebase 콘솔 → Authentication에서 "시작하기"를 누르고 Google 로그인을 켜 주세요.',
+  'auth/popup-closed-by-user': '로그인 창이 닫혔어요. 다시 눌러서 계정을 골라 주세요.',
+  'auth/cancelled-popup-request': '로그인 창이 닫혔어요. 다시 눌러 주세요.',
+  'auth/network-request-failed': '인터넷 연결을 확인해 주세요. 광고 차단 프로그램이 막을 수도 있어요.',
+  'auth/invalid-api-key': 'js/firebase-config.js의 apiKey가 맞는지 확인해 주세요.',
+  'auth/api-key-not-valid.-please-pass-a-valid-api-key.': 'js/firebase-config.js의 apiKey가 맞는지 확인해 주세요.',
+  'auth/internal-error': 'Firebase가 잠시 응답하지 않았어요. 조금 뒤 다시 해 주세요.',
+};
+let authError = '';
+async function doSignIn() {
+  authError = '';
+  try {
+    await STORE.signIn();
+  } catch (e) {
+    const code = e.code || '';
+    authError = `로그인하지 못했어요 (${esc(code || e.message || '알 수 없는 오류')}). ${AUTH_HELP[code] || ''}`;
+    console.error(e);
+  }
+  paintSplashAcct();
+  if (app.className === 'screen-voice') SCREENS.voice();
+}
+
 /* 첫 화면의 부모님 로그인 */
 function paintSplashAcct() {
   const box = $('#splashAcct');
@@ -1397,10 +1422,9 @@ function paintSplashAcct() {
     box.innerHTML = `<span class="small-note">☁️ ${esc(c.user.email || '가족 계정')} · ${CLOUD_TEXT[c.status] || ''}</span>`;
   } else {
     box.innerHTML = `<button class="btn small" id="splashSignIn" ${c.ready ? '' : 'disabled'}>👨‍👩‍👧 부모님 로그인</button>
-      <span class="small-note">${c.status === 'error' ? CLOUD_TEXT.error : '로그인하면 여러 기기에서 이어서 공부해요'}</span>`;
-    $('#splashSignIn').onclick = async () => {
-      try { await STORE.signIn(); } catch (e) { toast('로그인하지 못했어요: ' + esc(e.code || e.message || '')); }
-    };
+      <span class="small-note">${c.status === 'error' ? CLOUD_TEXT.error : '로그인하면 여러 기기에서 이어서 공부해요'}</span>
+      ${authError ? `<p class="auth-error" role="alert">⚠️ ${authError}</p>` : ''}`;
+    $('#splashSignIn').onclick = doSignIn;
   }
 }
 
