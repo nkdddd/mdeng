@@ -1361,7 +1361,7 @@ function familyBox() {
 }
 function wireFamily() {
   $('#signIn')?.addEventListener('click', async () => {
-    try { await STORE.signIn(); } catch (e) { toast('로그인하지 못했어요. 다시 해 볼까요?'); }
+    try { await STORE.signIn(); } catch (e) { toast('로그인하지 못했어요: ' + esc(e.code || e.message || '')); }
   });
   $('#signOut')?.addEventListener('click', () => STORE.signOut());
   $$('[data-rename]', app).forEach((b) => b.addEventListener('click', () => {
@@ -1388,8 +1388,25 @@ function wireFamily() {
     $('[data-no]', act).onclick = () => SCREENS.voice();
   }));
 }
+/* 첫 화면의 부모님 로그인 */
+function paintSplashAcct() {
+  const box = $('#splashAcct');
+  const c = STORE.cloud;
+  if (!box || !c.enabled) return;
+  if (c.user) {
+    box.innerHTML = `<span class="small-note">☁️ ${esc(c.user.email || '가족 계정')} · ${CLOUD_TEXT[c.status] || ''}</span>`;
+  } else {
+    box.innerHTML = `<button class="btn small" id="splashSignIn" ${c.ready ? '' : 'disabled'}>👨‍👩‍👧 부모님 로그인</button>
+      <span class="small-note">${c.status === 'error' ? CLOUD_TEXT.error : '로그인하면 여러 기기에서 이어서 공부해요'}</span>`;
+    $('#splashSignIn').onclick = async () => {
+      try { await STORE.signIn(); } catch (e) { toast('로그인하지 못했어요: ' + esc(e.code || e.message || '')); }
+    };
+  }
+}
+
 /* 다른 기기에서 바뀐 기록이 오면 다시 그려요 */
 STORE.on((what) => {
+  paintSplashAcct();
   if (what === 'status') { const el = $('#cloudStatus'); if (el) el.textContent = CLOUD_TEXT[STORE.cloud.status] || ''; return; }
   if (what === 'current') { loadState(); pickVoice(); paintStars(); }
   paintWho();
@@ -1411,5 +1428,6 @@ paintWho();
 go('home');
 $('#whoList').innerHTML = whoButtons();
 wireWho($('#whoList'), startAfterWho);
+paintSplashAcct();
 STORE.init();
 })();
