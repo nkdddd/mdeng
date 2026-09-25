@@ -740,3 +740,123 @@ h1:focus, h2:focus { outline: none; }
 .splash-acct { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 8px; }
 .splash-acct .small-note { font-size: 14px; }
 .auth-error { margin: 4px 0 0; max-width: 34em; padding: 8px 12px; border-radius: 12px; background: var(--red-soft); color: var(--ink); font-size: 15px; text-align: left; }
+
+/* ---------- 등급 ---------- */
+:root {
+  --gc: #9aa3ad; --gr: #3b82f6; --gl: #f5b400; --gm: #a855f7;
+  --gs: conic-gradient(from 0deg, #ff5f6d, #ffc371, #f9f871, #7cf29c, #47c1ff, #a78bfa, #ff5f6d);
+}
+.grade-chip {
+  display: inline-flex; align-items: center; gap: 4px; font-family: var(--display); font-size: 15px; white-space: nowrap;
+  padding: 1px 10px; border-radius: 999px; border: 2px solid var(--ink); background: var(--card);
+}
+.grade-chip.gr { background: #dbeafe; color: #1e3a8a; }
+.grade-chip.gl { background: #fef3c7; color: #7c4a00; }
+.grade-chip.gm { background: #f3e8ff; color: #5b21b6; }
+.grade-chip.gs { background: linear-gradient(90deg, #ffd1dc, #fff3b0, #c8f7d8, #cfe6ff, #e9d5ff); color: #3b2a55; }
+
+/* ---------- 🌿 공부 중 만남 ---------- */
+.wild {
+  position: relative; height: 260px; overflow: hidden; border: 3px solid var(--ink); border-radius: 28px; box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--t2) 0%, var(--card) 58%, var(--t4) 58%);
+}
+.wild.tn { background: linear-gradient(180deg, var(--t2) 0%, var(--card) 58%, var(--t4) 58%); }
+.bush {
+  position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%); font-size: 70px; letter-spacing: -18px; white-space: nowrap;
+  animation: rustle .18s ease-in-out infinite alternate;
+}
+@keyframes rustle { from { transform: translateX(-52%) rotate(-3deg); } to { transform: translateX(-48%) rotate(3deg); } }
+.wild-mon { position: absolute; left: 50%; bottom: 40px; width: 170px; height: 170px; margin-left: -85px; opacity: 0; transform: translateY(60px) scale(.4); }
+.wild-mon .art-fallback { font-size: 90px; }
+.wild.out .bush { animation: none; transform: translateX(-50%); opacity: .55; }
+.wild.out .wild-mon { animation: popOut .6s cubic-bezier(.3, 1.6, .5, 1) forwards, idle 1.8s .6s ease-in-out infinite; }
+@keyframes popOut { to { opacity: 1; transform: translateY(-30px) scale(1); } }
+.wild.shiny .wild-mon { filter: drop-shadow(0 0 16px var(--sun)); }
+.wild-line { margin: 0; text-align: center; font-family: var(--display); font-size: 26px; min-height: 40px; }
+.wild-line b { font-weight: 400; color: var(--red); }
+.wild-after { flex-direction: column; align-items: center; gap: 8px; }
+.wild-after .grade-chip { font-size: 20px; padding: 2px 16px; }
+
+/* ---------- 🗺️ 퀘스트 ---------- */
+.quest {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 16px; text-align: left;
+  border: 3px solid var(--ink); border-radius: 22px; background: var(--card); box-shadow: var(--shadow);
+}
+.quest.gl { background: linear-gradient(135deg, #fff8e1, var(--card) 60%); }
+.quest.gm { background: linear-gradient(135deg, #f5edff, var(--card) 60%); }
+.quest.gs { background: linear-gradient(135deg, #fde2f3, #e0f2fe 50%, var(--card)); }
+.quest.done { justify-content: center; font-family: var(--display); font-size: 20px; }
+.quest-art { width: 96px; height: 96px; flex: none; display: grid; place-items: center; }
+.quest-art .art.sil { opacity: .85; }
+.quest-art .art-fallback { font-size: 56px; }
+.quest-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.quest-body small { color: var(--ink-soft); font-size: 14px; }
+.quest-body > b { font-family: var(--display); font-weight: 400; font-size: 24px; }
+.quest-body p { margin: 0; font-size: 16px; }
+.quest-body p b { font-weight: 400; font-family: var(--display); color: var(--red); }
+.quest-body .btn { align-self: flex-start; margin-top: 4px; }
+.pieces { display: flex; gap: 4px; font-size: 24px; }
+.piece { filter: grayscale(1); opacity: .3; }
+.piece.on { filter: none; opacity: 1; }
+:root[data-theme="dark"] .quest.gl, :root[data-theme="dark"] .quest.gm, :root[data-theme="dark"] .quest.gs { background: var(--card); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quest.gl, :root:not([data-theme="light"]) .quest.gm, :root:not([data-theme="light"]) .quest.gs { background: var(--card); } }
+.quest-notes { display: flex; flex-direction: column; gap: 6px; }
+.qn { margin: 0; padding: 8px 12px; border-radius: 14px; font-size: 17px; background: var(--sun-soft); border: 2px solid var(--ink); }
+.qn.ready { background: var(--red-soft); animation: pop .6s 2; }
+.qn b { font-family: var(--display); font-weight: 400; color: var(--red); }
+.field-grade { position: absolute; z-index: 3; top: 10px; left: 10px; }
+.field.gl { box-shadow: 0 0 0 4px var(--gl), var(--shadow); }
+.field.gm { box-shadow: 0 0 0 4px var(--gm), var(--shadow); }
+.field.gs { box-shadow: 0 0 0 4px #f0abfc, 0 0 24px #a78bfa, var(--shadow); }
+.catch-msg small { display: block; font-size: 18px; color: var(--ink-soft); }
+.card-reveal { animation: flipIn .7s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes flipIn { from { transform: rotateY(90deg) scale(.6); opacity: 0; } }
+.card-reveal .pcard { width: 150px; }
+
+/* ---------- 📖 도감 카드 ---------- */
+.dex-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.dex-tabs button {
+  display: flex; flex-direction: column; align-items: center; line-height: 1.2; padding: 6px 12px; min-height: 48px;
+  font-family: var(--display); font-size: 17px; border: 3px solid var(--ink); border-radius: 14px; background: var(--card);
+}
+.dex-tabs button small { font-family: var(--body); font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.dex-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.dex-tabs button[aria-selected="true"] small { color: var(--paper); }
+.pdex { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+.dex-tip { grid-column: 1 / -1; text-align: center; }
+.pcard {
+  --frame: var(--gc);
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 20px 6px 10px;
+  border-radius: 16px; background: var(--card); border: 4px solid var(--frame); box-shadow: var(--shadow); text-align: center; overflow: hidden;
+}
+.pcard.gr { --frame: var(--gr); }
+.pcard.gl { --frame: var(--gl); background: linear-gradient(160deg, #fff7d6, var(--card) 55%); }
+.pcard.gm { --frame: var(--gm); background: linear-gradient(160deg, #f3e8ff, var(--card) 55%); }
+.pcard.gs { border: 4px solid transparent; background: linear-gradient(var(--card), var(--card)) padding-box, var(--gs) border-box; }
+:root[data-theme="dark"] .pcard.gl, :root[data-theme="dark"] .pcard.gm { background: var(--card); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pcard.gl, :root:not([data-theme="light"]) .pcard.gm { background: var(--card); } }
+/* 반짝이: 전설·신화·시크릿 */
+.pcard.gl::after, .pcard.gm::after, .pcard.gs::after {
+  content: ''; position: absolute; inset: -40%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, .55) 50%, transparent 60%);
+  animation: shine 3.2s ease-in-out infinite;
+}
+@keyframes shine { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+.pcard b { font-family: var(--display); font-weight: 400; font-size: 18px; }
+.pcard small { font-size: 12px; color: var(--ink-soft); }
+.pcard .grade-chip { font-size: 12px; padding: 0 8px; margin-top: 2px; }
+.pc-no { position: absolute; top: 4px; left: 8px; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pc-art { width: 84px; height: 84px; display: grid; place-items: center; }
+.pc-art .art-fallback { font-size: 44px; }
+.pcard.locked { box-shadow: none; border-style: dashed; background: transparent; }
+.pcard.locked::after { display: none; }
+.pcard.locked .art.sil { opacity: .22; }
+.pcard.locked b { color: var(--ink-soft); }
+@media (max-width: 480px) {
+  .pdex { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .pc-art { width: 64px; height: 64px; }
+  .pcard b { font-size: 15px; }
+  .quest-art { width: 72px; height: 72px; }
+  .wild { height: 230px; }
+}
+@media (prefers-reduced-motion: reduce) { .pcard::after { display: none; } }
