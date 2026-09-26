@@ -236,6 +236,7 @@ $('#homeBtn').addEventListener('click', () => { sfx('pop'); go('home'); });
 function dexHint() {
   const q = questNow();
   const have = (S.dex || []).filter((n) => POKE_BY[n]).length;
+  if (packCount()) return `🎴 뜯을 카드팩이 ${packCount()}개 있어요!`;
   if (!q) return `카드 ${have}/${POKEMON.length}장 · 모든 퀘스트 완료!`;
   if (S.qready) return `🔥 ${q.p} 등장 준비 완료!`;
   return `카드 ${have}/${POKEMON.length}장 · 🧩 ${q.p}까지 조각 ${q.steps.length - (S.qstep || 0)}개`;
@@ -270,6 +271,7 @@ function finish(key, score, total, again, extra) {
       ${extra && extra.badge ? `<div class="badge-won"><span class="badge got big" style="--bc:${extra.badge[2]}"><i>${extra.badge[1]}</i></span><p><b>${extra.badge[0]}</b>를 받았어요!</p></div>` : ''}
       ${extra && extra.caught && extra.caught.length ? `<div class="caught-row" aria-label="이번에 잡은 포켓몬">${extra.caught.map((q) => `<span class="mini">${artImg(q.m, q.shiny)}<small>${q.name}</small></span>`).join('')}</div>` : ''}
       ${bubble(great ? LINES.great : LINES.soso)}
+      ${packCount() ? `<button class="pack-cta" id="toPacks">${packArt(S.packs.l ? 'l' : 'b')}<span><b>🎴 카드팩 뜯기!</b><small>${packCount()}팩이 기다려요</small></span></button>` : ''}
       ${questPanel(false)}
       <div class="row">
         <button class="btn primary" id="again">🔁 한 번 더</button>
@@ -283,6 +285,7 @@ function finish(key, score, total, again, extra) {
   $('#again').onclick = again;
   $('#toDex').onclick = () => go('dex');
   $('#toMap').onclick = () => go('home');
+  $('#toPacks')?.addEventListener('click', () => { sfx('pop'); go('packs', () => go('home')); });
 }
 
 /* 문제 풀이 틀: items를 하나씩 render로 넘기고 끝나면 결과 화면 */
@@ -949,6 +952,8 @@ function catchScene(list, onEnd, notes) {
         const isNew = addDex(N);
         if (q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
         if (q.legend) badge = questCaught();
+        const packKind = q.legend || q.shiny || 'lms'.includes(q.grade) ? 'l' : 'b';
+        addPack(packKind);
         caught.push(q);
         ball.classList.add('locked');
         sfx('star');
@@ -956,8 +961,9 @@ function catchScene(list, onEnd, notes) {
         msg.innerHTML = `<b>딸깍! ${N}${obj} 잡았다!</b>`;
         $('#after').innerHTML = `
           <div class="card-reveal">${pokeCard(q.m, q.shiny)}</div>
-          ${isNew ? `<p class="small-note">📖 새 카드! 도감에 ${N}${subj} 등록됐어요.</p>` : ''}`;
-        speak(LINES.caught(N, obj));
+          ${isNew ? `<p class="small-note">📖 새 카드! 도감에 ${N}${subj} 등록됐어요.</p>` : ''}
+          <p class="pack-got">🎴 ${PACK_ODDS[packKind].name} 획득!</p>`;
+        speak([LINES.caught(N, obj), LINES.packGot]);
       }
       const lastOne = k === list.length - 1;
       $('#after').insertAdjacentHTML('beforeend', `<button class="btn primary big" id="nextMon">${lastOne ? '결과 보기 ▶' : '다음 포켓몬 ▶'}</button>`);
@@ -1002,6 +1008,10 @@ SCREENS.dex = () => {
   app.innerHTML = `
     <h2 class="h">📖 포켓몬 도감</h2>
     ${bubble(LINES.pokeDex)}
+    <div class="row">
+      <button class="btn primary" id="toPacks">🎴 카드팩 뜯기 (${packCount()})</button>
+      <button class="btn" id="toAlbum">🗂️ 카드 앨범 (${cardCount()}종)</button>
+    </div>
     ${questPanel(true)}
     <div class="dex-tabs" role="tablist">${tabs.map(([g, label, have, all]) =>
       `<button role="tab" aria-selected="${dexTab === g}" data-tab="${g}" class="g${g}">${label}<small>${have}${all != null ? `/${all}` : ''}</small></button>`).join('')}</div>
@@ -1011,6 +1021,168 @@ SCREENS.dex = () => {
   $$('[data-tab]', app).forEach((b) => b.addEventListener('click', () => { dexTab = b.dataset.tab; sfx('pop'); SCREENS.dex(); }));
   $$('.pcard[data-id]', app).forEach((c) => c.addEventListener('click', () => playCry(+c.dataset.id)));
   $('[data-go-mode]', app)?.addEventListener('click', (e) => go(e.target.dataset.goMode));
+  $('#toPacks').onclick = () => go('packs');
+  $('#toAlbum').onclick = () => go('album');
+};
+
+/* ---------- 🎴 카드팩 · 카드 앨범 ---------- */
+const packCount = () => { const p = S.packs || {}; return (p.b || 0) + (p.l || 0); };
+function addPack(kind) {
+  S.packs = S.packs || { b: 0, l: 0 };
+  S.packs[kind] = (S.packs[kind] || 0) + 1;
+  save();
+}
+const cardCount = () => Object.keys(S.cards || {}).length;
+/* 카드 목록(js/cards.js, 약 700KB)은 처음 필요할 때 한 번만 불러와요 */
+let cardsLoading = null;
+function loadCards() {
+  if (window.CARDS) return Promise.resolve();
+  if (!cardsLoading) {
+    cardsLoading = new Promise((ok, no) => {
+      const s = document.createElement('script');
+      s.src = 'js/cards.js';
+      s.onload = () => {
+        window.CARD_BY = Object.fromEntries(window.CARDS.map((c) => [c[0], c]));
+        window.CARD_POOL = {};
+        window.CARDS.forEach((c) => { (window.CARD_POOL[c[5]] = window.CARD_POOL[c[5]] || []).push(c); });
+        ok();
+      };
+      s.onerror = () => { cardsLoading = null; no(new Error('카드 목록을 불러오지 못했어요')); };
+      document.head.appendChild(s);
+    });
+  }
+  return cardsLoading;
+}
+/* 팩 종류에 맞춰 등급을 먼저 뽑고, 그 등급에서 한 장 */
+function drawCard(kind) {
+  const odds = PACK_ODDS[kind];
+  const classes = Object.keys(CARD_CLASS).filter((c) => odds[c] > 0 && (CARD_POOL[c] || []).length);
+  let roll = Math.random() * classes.reduce((a, c) => a + odds[c], 0);
+  const cls = classes.find((c) => (roll -= odds[c]) < 0) || classes[0];
+  return pick(CARD_POOL[cls]);
+}
+const cardImgUrl = (c) => CARD_IMG + c[6];
+const cardDetailUrl = (c) => 'https://pokemoncard.co.kr/cards/detail/' + c[0];
+const classChip = (cls) => `<span class="class-chip c${cls}">${CARD_CLASS[cls].icon} ${CARD_CLASS[cls].name}</span>`;
+/* 카드 그림. 못 불러오면 이름이 적힌 카드로 바꿔요 */
+const cardFace = (c, lazy) => `<span class="tcg c${c[5]}"><img class="cimg" src="${cardImgUrl(c)}" alt="${esc(c[1])} 카드"${lazy ? ' loading="lazy"' : ''} referrerpolicy="no-referrer" data-name="${esc(c[1])}" data-kind="${esc(c[2])}"></span>`;
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.classList.contains('cimg')) return;
+  const div = document.createElement('span');
+  div.className = 'cimg-fallback';
+  div.innerHTML = `<b>${esc(img.dataset.name)}</b><small>${esc(img.dataset.kind)}</small><i>🎴</i>`;
+  img.replaceWith(div);
+}, true);
+const packArt = (kind) => `<div class="pack p${kind}">
+    <div class="pack-top"></div>
+    <div class="pack-body"><span class="pack-ball">${ballSvg}</span><b>${PACK_ODDS[kind].name}</b><small>POKÉMON CARD</small></div>
+  </div>`;
+
+/* 카드팩 뜯기: 톡톡톡 세 번 → 윗부분이 찢어지고 → 카드가 올라와 뒤집혀요 */
+SCREENS.packs = (back) => {
+  const p = S.packs || {};
+  const kind = p.l ? 'l' : p.b ? 'b' : null;
+  const leave = () => (back ? back() : go('dex'));
+  if (!kind) {
+    app.innerHTML = `<h2 class="h">🎴 카드팩</h2>${bubble('카드팩이 없어요. 공부하면서 포켓몬을 잡으면 카드팩을 받아요!')}
+      <div class="row"><button class="btn primary" id="album">🗂️ 카드 앨범</button><button class="btn" id="back">돌아가기</button></div>`;
+    $('#album').onclick = () => go('album');
+    $('#back').onclick = leave;
+    return;
+  }
+  app.innerHTML = `
+    <h2 class="h">🎴 카드팩 뜯기</h2>
+    <p class="small-note">남은 팩 ${packCount()}개${p.l ? ` · ✨ 빛나는 팩 ${p.l}개` : ''}</p>
+    ${bubble(LINES.packTap)}
+    <div class="pack-stage" id="stage">
+      ${packArt(kind)}
+      <div class="flip" id="flip" hidden><div class="flip-in"><div class="face back"><span class="pack-ball">${ballSvg}</span></div><div class="face front" id="front"></div></div></div>
+      <p class="tap-hint" id="tapHint">👆 톡! 톡! 톡!</p>
+    </div>
+    <div class="reveal-info" id="info" aria-live="polite"></div>
+    <div class="row" id="packBtns"></div>`;
+  speak(LINES.packTap);
+  let taps = 0, opening = false, card = null;
+  loadCards().then(() => { card = drawCard(kind); $('#front').innerHTML = cardFace(card); }).catch(() => {
+    $('#info').innerHTML = '<p class="auth-error">⚠️ 카드 목록을 불러오지 못했어요. 인터넷을 확인하고 다시 해 주세요.</p>';
+  });
+  const pack = $('.pack', app);
+  pack.addEventListener('click', async () => {
+    if (opening) return;
+    taps++;
+    sfx(taps < 3 ? 'click' : 'whoosh');
+    pack.classList.remove('shake'); void pack.offsetWidth; pack.classList.add('shake', 't' + Math.min(taps, 3));
+    if (taps < 3) return;
+    opening = true;
+    await loadCards().catch(() => {});
+    if (!card) { opening = false; taps = 2; return; }
+    /* 뜯은 순간 기록해요 (중간에 나가도 카드는 받아요) */
+    S.packs[kind]--;
+    S.cards = S.cards || {};
+    S.cards[card[0]] = (S.cards[card[0]] || 0) + 1;
+    const dup = S.cards[card[0]] > 1;
+    save();
+    $('#tapHint').hidden = true;
+    pack.classList.add('torn');
+    await new Promise((r) => setTimeout(r, reduceMotion ? 50 : 650));
+    const flip = $('#flip');
+    flip.hidden = false;
+    flip.classList.add('rise');
+    await new Promise((r) => setTimeout(r, reduceMotion ? 50 : 700));
+    flip.classList.add('turn', 'c' + card[5]);
+    sfx(card[5] === 'n' ? 'ok' : 'star');
+    if ('asu'.includes(card[5])) confetti();
+    if (card[5] === 'u' || card[5] === 's') setTimeout(confetti, 600);
+    $('#info').innerHTML = `${classChip(card[5])}<b>${esc(card[1])}</b><small>${esc(card[2])} · ${esc(CARD_SETS[card[3]])}${card[4] ? ` · ${esc(card[4])}` : ''}</small>
+      ${dup ? `<p class="small-note">이미 가진 카드예요 (${S.cards[card[0]]}장)</p>` : '<p class="small-note">🗂️ 새 카드! 앨범에 넣었어요.</p>'}`;
+    speak([LINES.cardClass[card[5]], card[1]]);
+    $('#packBtns').innerHTML = `
+      ${packCount() ? `<button class="btn primary big" id="more">🎴 한 팩 더 뜯기 (${packCount()})</button>` : ''}
+      <button class="btn" id="album">🗂️ 카드 앨범</button><button class="btn" id="back">돌아가기</button>`;
+    $('#more')?.addEventListener('click', () => SCREENS.packs(back));
+    $('#album').onclick = () => go('album');
+    $('#back').onclick = leave;
+  });
+};
+
+/* 🗂️ 카드 앨범 */
+let albumTab = 'all';
+SCREENS.album = () => {
+  app.innerHTML = `<h2 class="h">🗂️ 카드 앨범</h2><p class="small-note">카드를 불러오는 중…</p>`;
+  loadCards().then(() => {
+    if (app.className !== 'screen-album') return;
+    const mine = Object.entries(S.cards || {}).map(([id, n]) => [CARD_BY[id], n]).filter(([c]) => c)
+      .sort((a, b) => 'usarn'.indexOf(a[0][5]) - 'usarn'.indexOf(b[0][5]));
+    const count = (cls) => mine.filter(([c]) => cls === 'all' || c[5] === cls).length;
+    const shown = mine.filter(([c]) => albumTab === 'all' || c[5] === albumTab);
+    app.innerHTML = `
+      <h2 class="h">🗂️ 카드 앨범 <small class="h-note">${mine.length}종 · 전체 ${CARDS.length}종</small></h2>
+      ${bubble(LINES.album)}
+      <div class="row"><button class="btn primary" id="toPacks">🎴 카드팩 뜯기 (${packCount()})</button><button class="btn" id="toDex">📖 도감</button></div>
+      <div class="dex-tabs" role="tablist">${['all', ...Object.keys(CARD_CLASS)].map((k) => `<button role="tab" aria-selected="${albumTab === k}" data-tab="${k}">${k === 'all' ? '전체' : `${CARD_CLASS[k].icon} ${CARD_CLASS[k].name}`}<small>${count(k)}</small></button>`).join('')}</div>
+      <div class="album">${shown.length ? shown.map(([c, n]) => `<button class="album-card" data-id="${c[0]}">${cardFace(c, true)}${n > 1 ? `<span class="dup">×${n}</span>` : ''}</button>`).join('')
+        : '<p class="small-note">아직 카드가 없어요. 포켓몬을 잡고 카드팩을 뜯어 봐요!</p>'}</div>
+      <div class="zoom" id="zoom" hidden></div>`;
+    speak(LINES.album);
+    $('#toPacks').onclick = () => go('packs', () => go('album'));
+    $('#toDex').onclick = () => go('dex');
+    $$('[data-tab]', app).forEach((b) => b.addEventListener('click', () => { albumTab = b.dataset.tab; sfx('pop'); SCREENS.album(); }));
+    $$('.album-card', app).forEach((b) => b.addEventListener('click', () => {
+      const c = CARD_BY[b.dataset.id];
+      const z = $('#zoom');
+      z.innerHTML = `<div class="zoom-in">${cardFace(c)}<div class="reveal-info">${classChip(c[5])}<b>${esc(c[1])}</b>
+        <small>${esc(c[2])} · ${esc(CARD_SETS[c[3]])}${c[4] ? ` · ${esc(c[4])}` : ''} · ${S.cards[c[0]]}장</small>
+        <a class="small-note" href="${cardDetailUrl(c)}" target="_blank" rel="noopener">카드 자세히 보기 ↗</a></div>
+        <button class="btn" id="zoomClose">닫기</button></div>`;
+      z.hidden = false;
+      speak(c[1]);
+      $('#zoomClose').onclick = () => { z.hidden = true; };
+      z.onclick = (e) => { if (e.target === z) z.hidden = true; };
+    }));
+  }).catch(() => {
+    app.innerHTML = `<h2 class="h">🗂️ 카드 앨범</h2><p class="auth-error">⚠️ 카드 목록을 불러오지 못했어요. 인터넷을 확인하고 다시 해 주세요.</p>`;
+  });
 };
 
 /* ---------- 🎧 받아쓰기 섬 ---------- */
