@@ -271,7 +271,7 @@ function finish(key, score, total, again, extra) {
       ${extra && extra.badge ? `<div class="badge-won"><span class="badge got big" style="--bc:${extra.badge[2]}"><i>${extra.badge[1]}</i></span><p><b>${extra.badge[0]}</b>를 받았어요!</p></div>` : ''}
       ${extra && extra.caught && extra.caught.length ? `<div class="caught-row" aria-label="이번에 잡은 포켓몬">${extra.caught.map((q) => `<span class="mini">${artImg(q.m, q.shiny)}<small>${q.name}</small></span>`).join('')}</div>` : ''}
       ${bubble(great ? LINES.great : LINES.soso)}
-      ${packCount() ? `<button class="pack-cta" id="toPacks">${packArt(S.packs.l ? 'l' : 'b')}<span><b>🎴 카드팩 뜯기!</b><small>${packCount()}팩이 기다려요</small></span></button>` : ''}
+      ${packCount() ? `<button class="pack-cta" id="toPacks">${packArt(packList()[0].k, packList()[0].p)}<span><b>🎴 카드팩 뜯기!</b><small>${packCount()}팩이 기다려요</small></span></button>` : ''}
       ${questPanel(false)}
       <div class="row">
         <button class="btn primary" id="again">🔁 한 번 더</button>
@@ -953,7 +953,7 @@ function catchScene(list, onEnd, notes) {
         if (q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
         if (q.legend) badge = questCaught();
         const packKind = q.legend || q.shiny || 'lms'.includes(q.grade) ? 'l' : 'b';
-        addPack(packKind);
+        addPack(packKind, N);
         caught.push(q);
         ball.classList.add('locked');
         sfx('star');
@@ -1026,10 +1026,18 @@ SCREENS.dex = () => {
 };
 
 /* ---------- 🎴 카드팩 · 카드 앨범 ---------- */
-const packCount = () => { const p = S.packs || {}; return (p.b || 0) + (p.l || 0); };
-function addPack(kind) {
-  S.packs = S.packs || { b: 0, l: 0 };
-  S.packs[kind] = (S.packs[kind] || 0) + 1;
+/* 카드팩 = [{ k: 'b'|'l', p: 잡은 포켓몬 이름 }] — 예전 기록({ b: 2, l: 1 })은 이름 없는 팩으로 바꿔요 */
+function packList() {
+  if (!Array.isArray(S.packs)) {
+    const old = S.packs || {};
+    S.packs = [...Array(old.l || 0).fill(0).map(() => ({ k: 'l', p: null })), ...Array(old.b || 0).fill(0).map(() => ({ k: 'b', p: null }))];
+  }
+  return S.packs;
+}
+const packCount = () => packList().length;
+const hasGlowPack = () => packList().some((x) => x.k === 'l');
+function addPack(kind, name) {
+  packList().push({ k: kind, p: name });
   save();
 }
 const cardCount = () => Object.keys(S.cards || {}).length;
@@ -1053,13 +1061,36 @@ function loadCards() {
   }
   return cardsLoading;
 }
-/* 팩 종류에 맞춰 등급을 먼저 뽑고, 그 등급에서 한 장 */
-function drawCard(kind) {
+/* 잡은 포켓몬과 관련된 카드 중에서 한 장:
+ * 그 포켓몬 카드(3배) · 진화 가족 카드 → 없으면 비슷한 포켓몬 카드(전설끼리, 또는 같은 타입) → 그래도 없으면 아무 카드.
+ * 등급은 팩 확률로 먼저 정하되, 그 포켓몬 카드에 있는 등급 중에서만 골라요 */
+function drawCard(kind, name) {
+  const rel = (name && CARD_REL[name]) || [[], [], []];
+  const weighted = [];
+  rel[0].forEach((i) => weighted.push([CARDS[i], 3, 'exact']));
+  rel[1].forEach((i) => weighted.push([CARDS[i], 1, 'family']));
+  rel[2].forEach((i) => weighted.push([CARDS[i], 1, 'similar']));
+  if (!weighted.length) CARDS.forEach((c) => weighted.push([c, 1, 'any']));
   const odds = PACK_ODDS[kind];
-  const classes = Object.keys(CARD_CLASS).filter((c) => odds[c] > 0 && (CARD_POOL[c] || []).length);
-  let roll = Math.random() * classes.reduce((a, c) => a + odds[c], 0);
-  const cls = classes.find((c) => (roll -= odds[c]) < 0) || classes[0];
-  return pick(CARD_POOL[cls]);
+  const present = [...new Set(weighted.map((w) => w[0][5]))];
+  let classes = present.filter((c) => odds[c] > 0);
+  if (!classes.length) classes = present; /* 빛나는 팩인데 일반 카드뿐이면 그중에서 */
+  const weightOf = (c) => odds[c] || 1;
+  let roll = Math.random() * classes.reduce((a, c) => a + weightOf(c), 0);
+  const cls = classes.find((c) => (roll -= weightOf(c)) < 0) || classes[0];
+  const inClass = weighted.filter((w) => w[0][5] === cls);
+  let r = Math.random() * inClass.reduce((a, w) => a + w[1], 0);
+  const hit = inClass.find((w) => (r -= w[1]) < 0) || inClass[0];
+  return { card: hit[0], how: hit[2] };
+}
+/* 어떤 카드인지 알려 주는 한 줄 */
+function relLine(name, how, card) {
+  if (!name || how === 'any') return '';
+  if (how === 'exact') return `🎯 ${esc(name)} 카드예요!`;
+  if (how === 'family') return `👪 ${esc(name)}의 진화 가족 카드예요!`;
+  const m = POKE_BY[name];
+  return 'lms'.includes(m[5]) ? `✨ ${esc(name)} 카드가 없어서, 다른 전설·신화 포켓몬 카드가 나왔어요!`
+    : `✨ ${esc(name)} 카드가 없어서, 같은 ${esc(m[2])} 타입 포켓몬 카드가 나왔어요!`;
 }
 const cardImgUrl = (c) => CARD_IMG + c[6];
 const cardDetailUrl = (c) => 'https://pokemoncard.co.kr/cards/detail/' + c[0];
@@ -1074,17 +1105,22 @@ document.addEventListener('error', (e) => {
   div.innerHTML = `<b>${esc(img.dataset.name)}</b><small>${esc(img.dataset.kind)}</small><i>🎴</i>`;
   img.replaceWith(div);
 }, true);
-const packArt = (kind) => `<div class="pack p${kind}">
+/* 팩 겉면: 잡은 포켓몬 그림이 있으면 그걸, 없으면 몬스터볼 */
+const packArt = (kind, name) => {
+  const m = name && POKE_BY[name];
+  return `<div class="pack p${kind}">
     <div class="pack-top"></div>
-    <div class="pack-body"><span class="pack-ball">${ballSvg}</span><b>${PACK_ODDS[kind].name}</b><small>POKÉMON CARD</small></div>
+    <div class="pack-body"><span class="pack-ball${m ? ' mon' : ''}">${m ? artImg(m, false) : ballSvg}</span><b>${m ? `${esc(name)} 팩` : PACK_ODDS[kind].name}</b><small>POKÉMON CARD</small></div>
   </div>`;
+};
 
 /* 카드팩 뜯기: 톡톡톡 세 번 → 윗부분이 찢어지고 → 카드가 올라와 뒤집혀요 */
 SCREENS.packs = (back) => {
-  const p = S.packs || {};
-  const kind = p.l ? 'l' : p.b ? 'b' : null;
+  const packs = packList();
+  const pk = packs[0]; /* 받은 순서대로 뜯어요 */
+  const kind = pk && pk.k;
   const leave = () => (back ? back() : go('dex'));
-  if (!kind) {
+  if (!pk) {
     app.innerHTML = `<h2 class="h">🎴 카드팩</h2>${bubble('카드팩이 없어요. 공부하면서 포켓몬을 잡으면 카드팩을 받아요!')}
       <div class="row"><button class="btn primary" id="album">🗂️ 카드 앨범</button><button class="btn" id="back">돌아가기</button></div>`;
     $('#album').onclick = () => go('album');
@@ -1093,18 +1129,18 @@ SCREENS.packs = (back) => {
   }
   app.innerHTML = `
     <h2 class="h">🎴 카드팩 뜯기</h2>
-    <p class="small-note">남은 팩 ${packCount()}개${p.l ? ` · ✨ 빛나는 팩 ${p.l}개` : ''}</p>
+    <p class="small-note">남은 팩 ${packCount()}개${hasGlowPack() ? ` · ✨ 빛나는 팩 ${packs.filter((x) => x.k === 'l').length}개` : ''}${pk.p ? ` · 이번 팩: ${esc(pk.p)}` : ''}</p>
     ${bubble(LINES.packTap)}
     <div class="pack-stage" id="stage">
-      ${packArt(kind)}
+      ${packArt(kind, pk.p)}
       <div class="flip" id="flip" hidden><div class="flip-in"><div class="face back"><span class="pack-ball">${ballSvg}</span></div><div class="face front" id="front"></div></div></div>
       <p class="tap-hint" id="tapHint">👆 톡! 톡! 톡!</p>
     </div>
     <div class="reveal-info" id="info" aria-live="polite"></div>
     <div class="row" id="packBtns"></div>`;
   speak(LINES.packTap);
-  let taps = 0, opening = false, card = null;
-  loadCards().then(() => { card = drawCard(kind); $('#front').innerHTML = cardFace(card); }).catch(() => {
+  let taps = 0, opening = false, card = null, how = '';
+  loadCards().then(() => { ({ card, how } = drawCard(kind, pk.p)); $('#front').innerHTML = cardFace(card); }).catch(() => {
     $('#info').innerHTML = '<p class="auth-error">⚠️ 카드 목록을 불러오지 못했어요. 인터넷을 확인하고 다시 해 주세요.</p>';
   });
   const pack = $('.pack', app);
@@ -1118,7 +1154,7 @@ SCREENS.packs = (back) => {
     await loadCards().catch(() => {});
     if (!card) { opening = false; taps = 2; return; }
     /* 뜯은 순간 기록해요 (중간에 나가도 카드는 받아요) */
-    S.packs[kind]--;
+    packs.shift();
     S.cards = S.cards || {};
     S.cards[card[0]] = (S.cards[card[0]] || 0) + 1;
     const dup = S.cards[card[0]] > 1;
@@ -1135,6 +1171,7 @@ SCREENS.packs = (back) => {
     if ('asu'.includes(card[5])) confetti();
     if (card[5] === 'u' || card[5] === 's') setTimeout(confetti, 600);
     $('#info').innerHTML = `${classChip(card[5])}<b>${esc(card[1])}</b><small>${esc(card[2])} · ${esc(CARD_SETS[card[3]])}${card[4] ? ` · ${esc(card[4])}` : ''}</small>
+      ${relLine(pk.p, how, card) ? `<p class="rel-line">${relLine(pk.p, how, card)}</p>` : ''}
       ${dup ? `<p class="small-note">이미 가진 카드예요 (${S.cards[card[0]]}장)</p>` : '<p class="small-note">🗂️ 새 카드! 앨범에 넣었어요.</p>'}`;
     speak([LINES.cardClass[card[5]], card[1]]);
     $('#packBtns').innerHTML = `
