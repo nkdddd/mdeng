@@ -966,3 +966,12 @@ h1:focus, h2:focus { outline: none; }
 .pack-ball.mon .art-fallback { font-size: 60px; }
 .pack-cta .pack-ball.mon { width: 40px; height: 40px; padding: 2px; border-width: 2px; }
 .rel-line { font-family: var(--display); font-size: 17px; color: var(--red); max-width: 30em; }
+
+/* ⭐ 난이도 */
+.diff-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 13px; color: #b7791f; letter-spacing: 1px; white-space: nowrap; }
+.diff-tag small { font-size: 12px; color: var(--ink-soft); letter-spacing: 0; }
+.diff-tag.d3, .diff-tag.d4 { color: var(--red); }
+.island.poke .diff-tag { display: none; }
+.finish-stars b { font-family: var(--display); font-weight: 400; font-size: 1.3em; color: var(--red); }
+.finish-stars small { font-size: 16px; color: var(--ink-soft); letter-spacing: 0; }
+.diff-note { margin: -8px 0 0; font-size: 15px; color: #b7791f; }

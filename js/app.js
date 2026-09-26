@@ -181,10 +181,10 @@ function toast(html, ms = 2200) {
   toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
 function paintStars() { $('#starCount').textContent = S.stars; }
-function addStar() {
+function addStar(n = 1) {
   const before = stickerCount();
-  S.stars++;
-  S.earned++;
+  S.stars += n;
+  S.earned += n;
   save();
   paintStars();
   const pill = $('#starPill');
@@ -232,6 +232,11 @@ function go(name, ...args) {
 }
 $('#homeBtn').addEventListener('click', () => { sfx('pop'); go('home'); });
 
+/* 난이도 표시: ★★☆☆ 보통 · 정답 ⭐1 */
+function diffTag(key) {
+  const d = diffOf(key), D = DIFF_INFO[d];
+  return `<span class="diff-tag d${d}" title="${D.name}: 정답마다 별 ${D.stars}개, 희귀 포켓몬 ${Math.round(D.rare * 100)}%부터">${diffStars(d)} <small>정답 ⭐${D.stars}</small></span>`;
+}
 /* ---------- 🗺️ 지도 ---------- */
 function dexHint() {
   const q = questNow();
@@ -251,6 +256,7 @@ SCREENS.home = () => {
           <span class="i-icon" aria-hidden="true">${s.icon}</span>
           <span class="i-name">${s.name}</span>
           <span class="i-sub">${s.id === 'dex' ? dexHint() : s.sub}</span>
+          ${DIFFICULTY[s.id] ? diffTag(s.id) : s.id === 'dict' ? '<span class="diff-tag">★★~★★★★</span>' : ''}
           ${S.best[s.id] ? `<span class="i-best">최고 ${S.best[s.id]}점</span>` : ''}
         </button>`).join('')}
     </div>`;
@@ -267,7 +273,8 @@ function finish(key, score, total, again, extra) {
     <div class="finish">
       <div class="stamp ${great ? '' : 'soft'}">${great ? '참<br>잘했어요' : '잘<br>했어요'}</div>
       <h2>${total}문제 중에 <b>${score}</b>개 맞혔어요!</h2>
-      <p class="finish-stars" aria-label="별 ${score}개">${'⭐'.repeat(score) || '🌱'}</p>
+      ${extra && extra.stars ? `<p class="finish-stars" aria-label="별 ${extra.stars.gained}개 받음">⭐ <b>+${extra.stars.gained}</b>${extra.stars.bonus ? ` <small>(다 맞힘 보너스 +${extra.stars.bonus})</small>` : ''}</p>` : ''}
+      <p class="diff-note">${diffStars(diffOf(key))} ${DIFF_INFO[diffOf(key)].name}</p>
       ${extra && extra.badge ? `<div class="badge-won"><span class="badge got big" style="--bc:${extra.badge[2]}"><i>${extra.badge[1]}</i></span><p><b>${extra.badge[0]}</b>를 받았어요!</p></div>` : ''}
       ${extra && extra.caught && extra.caught.length ? `<div class="caught-row" aria-label="이번에 잡은 포켓몬">${extra.caught.map((q) => `<span class="mini">${artImg(q.m, q.shiny)}<small>${q.name}</small></span>`).join('')}</div>` : ''}
       ${bubble(great ? LINES.great : LINES.soso)}
@@ -280,7 +287,7 @@ function finish(key, score, total, again, extra) {
       </div>
     </div>`;
   if (great) { confetti(); sfx('star'); }
-  speak([LINES.score(total, score), great ? LINES.finishGreat : LINES.finishSoso,
+  speak([LINES.score(total, score), ...(extra && extra.stars && extra.stars.bonus ? [LINES.perfect(extra.stars.bonus)] : []), great ? LINES.finishGreat : LINES.finishSoso,
     ...(extra && extra.badge ? [LINES.badge(extra.badge[0])] : [])]);
   $('#again').onclick = again;
   $('#toDex').onclick = () => go('dex');
@@ -289,16 +296,24 @@ function finish(key, score, total, again, extra) {
 }
 
 /* 문제 풀이 틀: items를 하나씩 render로 넘기고 끝나면 결과 화면 */
+const diffOf = (key) => DIFFICULTY[key] || 2;
+const diffStars = (d) => '★'.repeat(d) + '☆'.repeat(4 - d);
 function runQuiz(key, items, render) {
-  let i = 0, score = 0, streak = 0, maxStreak = 0, lastOk = false;
+  let i = 0, score = 0, streak = 0, maxStreak = 0, lastOk = false, gained = 0;
+  const D = DIFF_INFO[diffOf(key)];
   const seen = []; /* 이번 판에 만난 포켓몬 */
   const next = () => {
-    if (i >= items.length) return endRound(key, score, items.length, maxStreak, seen, () => go(key, true));
+    if (i >= items.length) {
+      /* 다 맞히면 난이도만큼 보너스 별 */
+      const bonus = score === items.length ? D.bonus : 0;
+      if (bonus) addStar(bonus);
+      return endRound(key, score, items.length, maxStreak, seen, () => go(key, true), { gained: gained + bonus, bonus });
+    }
     app.innerHTML = '';
     render(items[i], i, items.length, (ok) => {
       lastOk = ok;
       if (!ok) { streak = 0; return; }
-      score++; streak++; addStar();
+      score++; streak++; addStar(D.stars); gained += D.stars;
       maxStreak = Math.max(maxStreak, streak);
       if (streak >= 3) showCombo(streak);
     }, () => {
@@ -308,7 +323,7 @@ function runQuiz(key, items, render) {
       const want = lastOk && left > 0 && seen.length < ENCOUNTER_MAX
         && (Math.random() < 0.35 || (seen.length === 0 && left <= 2));
       if (want) {
-        const e = rollWild(streak, seen);
+        const e = rollWild(streak, seen, diffOf(key));
         seen.push(e);
         showWild(e, next);
       } else next();
@@ -764,16 +779,16 @@ function questPanel(full) {
 
 /* ---------- 🌿 공부 중에 만나는 포켓몬 ---------- */
 const ENCOUNTER_MAX = 3;
-function rollWild(streak, seen) {
+function rollWild(streak, seen, diff) {
   const caughtBig = (S.dex || []).some((n) => POKE_BY[n] && 'lms'.includes(POKE_BY[n][5]));
-  /* 연속 정답이 길수록 희귀 확률이 올라가요: 0연속 12% → 3연속 42% → 5연속 이상 60% */
-  const grade = Math.random() < Math.min(0.6, 0.12 + 0.1 * streak) ? 'r' : 'c';
+  /* 어려운 섬일수록, 연속 정답이 길수록 희귀 확률이 올라가요 (예: 쉬움 0연속 8% · 도전 3연속 65%, 최대 75%) */
+  const grade = Math.random() < Math.min(0.75, DIFF_INFO[diff].rare + 0.1 * streak) ? 'r' : 'c';
   const pool = POKEMON.filter((m) => m[5] === grade && !seen.some((e) => e.name === m[0]));
   const fresh = pool.filter((m) => !dexHas(m[0]));
   const m = pick(fresh.length && Math.random() < 0.7 ? fresh : pool);
   /* ✨ 시크릿(이로치)은 전설·신화를 잡은 뒤에만, 연속 정답일수록 잘 나와요 */
   const shiny = caughtBig && Math.random() < (streak >= 5 ? 0.12 : 0.04);
-  return { m, name: m[0], id: m[3], type: m[2], grade: m[5], genus: m[4], shiny };
+  return { m, name: m[0], id: m[3], type: m[2], grade: m[5], genus: m[4], shiny, diff };
 }
 function showWild(e, cont) {
   const N = e.name, subj = josaPick(N, ['이', '가']);
@@ -804,16 +819,16 @@ function showWild(e, cont) {
 }
 
 /* 한 판이 끝나면: 퀘스트 확인 → 포획 타임 → 결과 */
-function endRound(key, score, total, maxStreak, seen, again) {
+function endRound(key, score, total, maxStreak, seen, again, stars) {
   const pct = Math.round((score / total) * 100);
   const notes = checkQuest(key, pct, maxStreak);
   const list = seen.slice();
   const q = questNow();
   if (S.qready && q) {
     const m = POKE_BY[q.p];
-    list.push({ m, name: m[0], id: m[3], type: m[2], grade: m[5], genus: m[4], shiny: false, legend: true });
+    list.push({ m, name: m[0], id: m[3], type: m[2], grade: m[5], genus: m[4], shiny: false, legend: true, diff: diffOf(key) });
   }
-  const done = (caught, badge) => finish(key, score, total, again, { caught, notes, badge });
+  const done = (caught, badge) => finish(key, score, total, again, { caught, notes, badge, stars });
   if (list.length) catchScene(list, done, notes); else done([], null);
 }
 
@@ -953,7 +968,7 @@ function catchScene(list, onEnd, notes) {
         if (q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
         if (q.legend) badge = questCaught();
         const packKind = q.legend || q.shiny || 'lms'.includes(q.grade) ? 'l' : 'b';
-        addPack(packKind, N);
+        addPack(packKind, N, q.diff);
         caught.push(q);
         ball.classList.add('locked');
         sfx('star');
@@ -1036,8 +1051,8 @@ function packList() {
 }
 const packCount = () => packList().length;
 const hasGlowPack = () => packList().some((x) => x.k === 'l');
-function addPack(kind, name) {
-  packList().push({ k: kind, p: name });
+function addPack(kind, name, diff) {
+  packList().push({ k: kind, p: name, d: diff || 2 });
   save();
 }
 const cardCount = () => Object.keys(S.cards || {}).length;
@@ -1064,14 +1079,16 @@ function loadCards() {
 /* 잡은 포켓몬과 관련된 카드 중에서 한 장:
  * 그 포켓몬 카드(3배) · 진화 가족 카드 → 없으면 비슷한 포켓몬 카드(전설끼리, 또는 같은 타입) → 그래도 없으면 아무 카드.
  * 등급은 팩 확률로 먼저 정하되, 그 포켓몬 카드에 있는 등급 중에서만 골라요 */
-function drawCard(kind, name) {
+function drawCard(kind, name, diff) {
   const rel = (name && CARD_REL[name]) || [[], [], []];
   const weighted = [];
   rel[0].forEach((i) => weighted.push([CARDS[i], 3, 'exact']));
   rel[1].forEach((i) => weighted.push([CARDS[i], 1, 'family']));
   rel[2].forEach((i) => weighted.push([CARDS[i], 1, 'similar']));
   if (!weighted.length) CARDS.forEach((c) => weighted.push([c, 1, 'any']));
-  const odds = PACK_ODDS[kind];
+  /* 어려운 섬에서 잡은 포켓몬의 팩일수록 레어 이상 카드가 잘 나와요 */
+  const boost = DIFF_INFO[diff || 2].card;
+  const odds = Object.fromEntries(Object.entries(PACK_ODDS[kind]).map(([c, v]) => [c, c === 'n' || c === 'name' ? v : v * boost]));
   const present = [...new Set(weighted.map((w) => w[0][5]))];
   let classes = present.filter((c) => odds[c] > 0);
   if (!classes.length) classes = present; /* 빛나는 팩인데 일반 카드뿐이면 그중에서 */
@@ -1140,7 +1157,7 @@ SCREENS.packs = (back) => {
     <div class="row" id="packBtns"></div>`;
   speak(LINES.packTap);
   let taps = 0, opening = false, card = null, how = '';
-  loadCards().then(() => { ({ card, how } = drawCard(kind, pk.p)); $('#front').innerHTML = cardFace(card); }).catch(() => {
+  loadCards().then(() => { ({ card, how } = drawCard(kind, pk.p, pk.d)); $('#front').innerHTML = cardFace(card); }).catch(() => {
     $('#info').innerHTML = '<p class="auth-error">⚠️ 카드 목록을 불러오지 못했어요. 인터넷을 확인하고 다시 해 주세요.</p>';
   });
   const pack = $('.pack', app);
@@ -1229,7 +1246,8 @@ SCREENS.dict = () => {
     ${bubble(LINES.dictBubble)}
     <div class="levels">${DICTATION.map((lv) => `
       <button class="level" data-id="${lv.id}"><span class="l-icon">${lv.icon}</span>
-        <span class="l-name">${lv.name}</span><span class="l-sub">${lv.desc} · ${lv.items.length}문제</span>
+        <span class="l-name">${lv.name}</span><span class="l-sub">${lv.desc} · ${Math.min(DICT_SIZE, lv.items.length)}문제</span>
+        ${diffTag(lv.id)}
         ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>
     ${hasTTS ? '' : '<p class="notice">이 기기에서는 소리가 나오지 않아요. 문제 화면의 👀 어른용 버튼을 눌러 어른이 읽어 주세요.</p>'}`;
   $$('.level', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); dictLevel(b.dataset.id); }));
@@ -1239,7 +1257,7 @@ SCREENS.dict = () => {
 let inputMode = 'tiles';
 function dictLevel(id) {
   const lv = DICTATION.find((l) => l.id === id);
-  runQuiz(id, shuffle(lv.items), (q, i, n, mark, next) => dictQuestion(q, i, n, mark, next));
+  runQuiz(id, shuffle(lv.items).slice(0, DICT_SIZE), (q, i, n, mark, next) => dictQuestion(q, i, n, mark, next));
   /* runQuiz의 '한 번 더'가 go(key)로 가므로 단계 화면을 등록 */
   SCREENS[id] = () => dictLevel(id);
 }

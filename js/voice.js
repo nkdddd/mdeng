@@ -24,7 +24,8 @@ const VOICE = (() => {
     Object.values(LINES).forEach((v) => { if (typeof v === 'string') add(v); else if (Array.isArray(v)) v.forEach(add); else if (v && typeof v === 'object') Object.values(v).forEach(add); });
     Object.values(TYPES).forEach((t) => add(LINES.typeCard(t)));
     for (let n = 1; n <= 10; n++) add(LINES.bookLeft(n));
-    const totals = new Set([...Object.values(QUIZ_SIZE), ...DICTATION.map((d) => d.items.length)]);
+    const totals = new Set([...Object.values(QUIZ_SIZE), ...DICTATION.map((d) => Math.min(DICT_SIZE, d.items.length))]);
+    Object.values(DIFF_INFO).forEach((d) => add(LINES.perfect(d.bonus)));
     totals.forEach((t) => { for (let s = 0; s <= t; s++) add(LINES.score(t, s)); });
     BADGES.forEach(([b]) => add(LINES.badge(b)));
     DICTATION.forEach((d) => d.items.forEach((q) => add(q.t)));

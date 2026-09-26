@@ -275,6 +275,7 @@ const LINES = {
   bookAll: '스티커를 모두 모았어! 최고야!',
   bookLeft: (n) => `별을 ${n}개 더 모으면 새 스티커를 받아!`,
   score: (total, score) => `${total}문제 중에 ${score}개 맞혔어요!`,
+  perfect: (n) => `다 맞혔어! 보너스 별 ${n}개!`,
   soundAnswer: (s, w) => `소리는 ${s}, 글자는 ${w}.`,
   typeCard: (t) => `${t.name}. ${t.why}`,
   voiceTest: '안녕! 나는 또박이야. 이 목소리 어때?',
@@ -299,7 +300,20 @@ const LINES = {
   badge: (b) => `축하해! ${b}를 받았어요!`,
 };
 /* 문제 수 (결과 화면 말에 쓰임) */
-const QUIZ_SIZE = { josa: 10, vowel: 10, space: 8, sound: 10 };
+const QUIZ_SIZE = { josa: 6, vowel: 6, space: 5, sound: 6 };
+const DICT_SIZE = 5; /* 받아쓰기는 단계마다 5문제씩 골라서 */
+
+/* ⭐ 난이도: 어려운 섬일수록 별을 더 주고, 희귀 포켓몬·희귀 카드가 더 잘 나와요
+ * stars: 정답 하나에 별 · bonus: 다 맞히면 더 주는 별
+ * rare: 🔵 희귀 포켓몬이 나올 기본 확률 (연속 정답마다 +10%, 최대 75%)
+ * card: 카드팩의 레어 이상 카드 확률을 몇 배로 */
+const DIFFICULTY = { josa: 1, vowel: 2, space: 2, sound: 3, d1: 2, d2: 3, d3: 3, d4: 4, d5: 3 };
+const DIFF_INFO = {
+  1: { name: '쉬움', stars: 1, bonus: 1, rare: 0.08, card: 1 },
+  2: { name: '보통', stars: 1, bonus: 2, rare: 0.15, card: 1.3 },
+  3: { name: '어려움', stars: 2, bonus: 3, rare: 0.25, card: 1.7 },
+  4: { name: '도전', stars: 2, bonus: 5, rare: 0.35, card: 2.2 },
+};
 
 
 /* 📖 포켓몬 도감: [이름, 그림 없을 때 이모지, 타입, 전국도감 번호, 분류, 등급]
@@ -369,14 +383,14 @@ const QUESTS = [
   { p: '썬더', steps: [{ mode: 'any', min: 70, times: 2 }, { mode: 'josa', min: 90 }, { mode: 'any', streak: 3 }] },
   { p: '파이어', steps: [{ mode: 'vowel', min: 80 }, { mode: 'dict', min: 70 }, { mode: 'any', streak: 5 }] },
   { p: '프리져', steps: [{ mode: 'space', min: 80 }, { mode: 'sound', min: 80 }, { mode: 'any', min: 100 }] },
-  { p: '뮤', steps: [{ mode: 'd2', min: 80 }, { mode: 'josa', min: 100 }, { mode: 'vowel', min: 100 }, { mode: 'any', streak: 7 }] },
+  { p: '뮤', steps: [{ mode: 'd2', min: 80 }, { mode: 'josa', min: 100 }, { mode: 'vowel', min: 100 }, { mode: 'any', streak: 5, times: 2 }] },
   { p: '칠색조', steps: [{ mode: 'sound', min: 90 }, { mode: 'space', min: 100 }, { mode: 'any', min: 80, times: 3 }] },
-  { p: '루기아', steps: [{ mode: 'd3', min: 80 }, { mode: 'dict', min: 90, times: 2 }, { mode: 'any', streak: 8 }] },
+  { p: '루기아', steps: [{ mode: 'd3', min: 80 }, { mode: 'dict', min: 90, times: 2 }, { mode: 'sound', min: 100 }] },
   { p: '세레비', steps: [{ mode: 'josa', min: 100, times: 2 }, { mode: 'sound', min: 100 }, { mode: 'd4', min: 80 }, { mode: 'any', min: 90, times: 3 }] },
   { p: '레쿠쟈', steps: [{ mode: 'd5', min: 90 }, { mode: 'vowel', min: 100, times: 2 }, { mode: 'space', min: 100, times: 2 }] },
-  { p: '뮤츠', steps: [{ mode: 'd4', min: 100 }, { mode: 'any', streak: 10 }, { mode: 'any', min: 100, times: 3 }] },
+  { p: '뮤츠', steps: [{ mode: 'd4', min: 100 }, { mode: 'sound', min: 100, times: 2 }, { mode: 'any', min: 100, times: 3 }] },
   { p: '지라치', steps: [{ mode: 'dict', min: 100, times: 2 }, { mode: 'sound', min: 100, times: 2 }, { mode: 'josa', min: 100, times: 3 }, { mode: 'any', min: 100, times: 5 }] },
-  { p: '아르세우스', steps: [{ mode: 'any', min: 100, times: 5 }, { mode: 'any', streak: 10 }, { mode: 'd5', min: 100 }] },
+  { p: '아르세우스', steps: [{ mode: 'any', min: 100, times: 5 }, { mode: 'd4', min: 100, times: 2 }, { mode: 'd5', min: 100 }] },
 ];
 const MODE_NAME = { josa: '조사 마을', vowel: 'ㅐㅔ 바닷가', space: '띄어쓰기 숲', sound: '소리 탐정', dict: '받아쓰기 섬', any: '아무 섬',
   d1: '받아쓰기 낱말', d2: '받아쓰기 짧은 문장', d3: '받아쓰기 긴 문장', d4: '받아쓰기 도전', d5: '받아쓰기 포켓몬' };
