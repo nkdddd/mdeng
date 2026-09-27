@@ -1064,6 +1064,31 @@ function tradeCommons() {
   packList().push({ k: 'x', p: null, d: 2 });
   save();
 }
+/* +5 카드가 바뀔 상위 카드: 같은 포켓몬 카드 먼저, 없으면 진화 가족 카드.
+ * 바로 위 등급부터 찾아요 (일반 → 레어 → 아트 레어 → 슈퍼 레어 → 스페셜) */
+const CLASS_ORDER = 'nrasu';
+function evolveTarget(c) {
+  const up = CLASS_ORDER.slice(CLASS_ORDER.indexOf(c[5]) + 1);
+  for (const [k, how] of [[8, 'mon'], [9, 'family']]) {
+    if (!c[k]) continue;
+    for (const cls of up) {
+      const list = (CARD_POOL[cls] || []).filter((d) => d[k] === c[k] && d[0] !== c[0]);
+      if (list.length) return { cls, list, how };
+    }
+  }
+  return null;
+}
+/* 강화한 카드 한 장이 상위 카드로 바뀌어요. 겹친 카드는 강화 전(+0)으로 남아요 */
+function evolveCard(c, target) {
+  const next = pick(target.list);
+  S.stars -= EVOLVE_COST;
+  if (--S.cards[c[0]] <= 0) delete S.cards[c[0]];
+  delete S.cardLv[c[0]];
+  S.cards[next[0]] = (S.cards[next[0]] || 0) + 1;
+  save();
+  paintStars();
+  return next;
+}
 /* 카드 목록(js/cards.js, 약 700KB)은 처음 필요할 때 한 번만 불러와요 */
 let cardsLoading = null;
 function loadCards() {
@@ -1247,17 +1272,23 @@ SCREENS.album = () => {
       go('packs', () => go('album'));
     };
     $$('[data-tab]', app).forEach((b) => b.addEventListener('click', () => { albumTab = b.dataset.tab; sfx('pop'); SCREENS.album(); }));
-    const openZoom = (c, quiet) => {
+    const openZoom = (c, quiet, from) => {
       const z = $('#zoom');
       const lv = cardLv(c[0]);
       const cost = UPGRADE_COST[lv];
+      const evo = cost == null ? evolveTarget(c) : null;
       z.innerHTML = `<div class="zoom-in">${cardFace(c)}<div class="reveal-info">${classChip(c[5])}<b>${esc(c[1])}${lv ? ` <span class="lv-text">+${lv}</span>` : ''}</b>
         <small>${esc(c[2])} · ${esc(CARD_SETS[c[3]])}${c[4] ? ` · ${esc(c[4])}` : ''} · ${S.cards[c[0]]}장</small>
         <p class="lv-stars" aria-label="강화 ${lv}단계">${lvStars(lv)}</p>
         ${cost != null
           ? `<button class="btn primary" id="enhance" ${S.stars >= cost ? '' : 'disabled'}>⭐ ${cost}개로 +${lv + 1} 강화</button>
              <small>${S.stars >= cost ? `가진 별 ${S.stars}개` : `별이 ${cost - S.stars}개 더 필요해요 (가진 별 ${S.stars}개)`}</small>`
-          : '<p class="rel-line">👑 최고 단계까지 강화했어요!</p>'}
+          : evo
+            ? `<p class="rel-line">🌟 +5 최고 단계! 이제 ${evo.how === 'mon' ? `같은 ${esc(c[8])}` : `${esc(c[8])} 진화 가족`}의 ${classChip(evo.cls)} 카드로 바꿀 수 있어요</p>
+               <button class="btn primary" id="evolve" ${S.stars >= EVOLVE_COST ? '' : 'disabled'}>🌟 ⭐ ${EVOLVE_COST}개로 상위 카드로 바꾸기</button>
+               <small>${S.stars >= EVOLVE_COST ? `가진 별 ${S.stars}개` : `별이 ${EVOLVE_COST - S.stars}개 더 필요해요 (가진 별 ${S.stars}개)`}${S.cards[c[0]] > 1 ? ` · 겹친 ${S.cards[c[0]] - 1}장은 +0으로 남아요` : ''}</small>`
+            : '<p class="rel-line">👑 최고 단계! 이 포켓몬에서 가장 높은 카드예요</p>'}
+        ${from ? `<p class="rel-line">🌟 ${esc(from[1])} → ${esc(c[1])} 카드로 바뀌었어요!</p>` : ''}
         <a class="small-note" href="${cardDetailUrl(c)}" target="_blank" rel="noopener">카드 자세히 보기 ↗</a></div>
         <button class="btn" id="zoomClose">닫기</button></div>`;
       z.hidden = false;
@@ -1279,6 +1310,18 @@ SCREENS.album = () => {
         openZoom(c, true);
         $('.zoom-in .tcg', z).classList.add('powerup');
         speak(lv + 1 >= UPGRADE_COST.length ? LINES.enhanceMax : LINES.enhance);
+      });
+      $('#evolve')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (S.stars < EVOLVE_COST) return;
+        $('#evolve').disabled = true;
+        const next = evolveCard(c, evo);
+        await CardFX.play(next[7] || c[7], next[5], $('.zoom-in .tcg', z));
+        sfx('star');
+        albumTab = 'all';
+        openZoom(next, true, c);
+        $('.zoom-in .tcg', z).classList.add('powerup');
+        speak(LINES.evolve);
       });
     };
     $$('.album-card', app).forEach((b) => b.addEventListener('click', () => openZoom(CARD_BY[b.dataset.id])));

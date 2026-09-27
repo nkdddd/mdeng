@@ -570,7 +570,8 @@ const LINES = {
   bagBubble: '지금까지 잡은 포켓몬이야! 많이 잡은 포켓몬일수록 숫자가 커져.',
   bagEmpty: '아직 잡은 포켓몬이 없어. 공부하다가 만난 포켓몬을 잡아 봐!',
   enhance: '카드가 더 강해졌어!',
-  enhanceMax: '최고로 강한 카드가 됐어! 대단해!',
+  enhanceMax: '최고로 강한 카드가 됐어! 다음엔 상위 카드로 바꿀 수 있어!',
+  evolve: '우와! 카드가 상위 카드로 바뀌었어!',
   trade: '일반 카드 열 장을 모아서 상위 카드 뽑기권을 받았어!',
   score: (total, score) => `${total}문제 중에 ${score}개 맞혔어요!`,
   perfect: (n) => `다 맞혔어! 보너스 별 ${n}개!`,
@@ -679,6 +680,8 @@ const PACK_ODDS = {
 const TRADE_COUNT = 10;
 /* ⭐ 카드 강화: +1~+5, 단계마다 드는 별 */
 const UPGRADE_COST = [5, 10, 15, 20, 30];
+/* +5 다음 강화: 같은 포켓몬의 상위 카드로 바뀌어요 */
+const EVOLVE_COST = 40;
 
 /* 🗺️ 전설 퀘스트: 순서대로 하나씩. 미션 하나 = 조각 하나, 조각을 다 모으면 포획 타임에 나타나요.
  * mode: josa·vowel·space·sound·dict(받아쓰기 아무 단계)·d1~d5·any(아무 섬)
