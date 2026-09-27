@@ -1182,11 +1182,11 @@ SCREENS.packs = (back) => {
     const flip = $('#flip');
     flip.hidden = false;
     flip.classList.add('rise');
-    await new Promise((r) => setTimeout(r, reduceMotion ? 50 : 700));
+    await new Promise((r) => setTimeout(r, reduceMotion ? 50 : 600));
+    /* 카드 속 포켓몬 타입에 맞는 효과(번개·불꽃·물보라 …)가 가장 셀 때 카드가 뒤집혀요 */
+    await CardFX.play(card[7], card[5], flip);
     flip.classList.add('turn', 'c' + card[5]);
-    sfx(card[5] === 'n' ? 'ok' : 'star');
-    if ('asu'.includes(card[5])) confetti();
-    if (card[5] === 'u' || card[5] === 's') setTimeout(confetti, 600);
+    if (card[5] === 'u') setTimeout(confetti, 500);
     $('#info').innerHTML = `${classChip(card[5])}<b>${esc(card[1])}</b><small>${esc(card[2])} · ${esc(CARD_SETS[card[3]])}${card[4] ? ` · ${esc(card[4])}` : ''}</small>
       ${relLine(pk.p, how, card) ? `<p class="rel-line">${relLine(pk.p, how, card)}</p>` : ''}
       ${dup ? `<p class="small-note">이미 가진 카드예요 (${S.cards[card[0]]}장)</p>` : '<p class="small-note">🗂️ 새 카드! 앨범에 넣었어요.</p>'}`;

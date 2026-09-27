@@ -91,6 +91,7 @@ def related(cards):
 
 
 def main():
+    type_of = {r['name']: r['type'] for r in csv.DictReader(SPECIES.open(encoding='utf-8'))}
     rows = list(openpyxl.load_workbook(SRC, read_only=True).active.iter_rows(values_only=True))
     head = rows[0]
     sets, cards = [], []
@@ -110,10 +111,12 @@ def main():
         if set_name not in sets:
             sets.append(set_name)
         kind = ' · '.join(p.strip() for p in kind.split('|') if p.strip())
-        cards.append([c['card_id'], name, kind, sets.index(set_name), rarity, cls, url[len(IMG_PREFIX):]])
+        # 카드 속 포켓몬의 타입 (카드를 뜯을 때 효과: 번개·불꽃·물보라 …)
+        ptype = next((type_of[n] for n in base_names(name) if n in type_of), '')
+        cards.append([c['card_id'], name, kind, sets.index(set_name), rarity, cls, url[len(IMG_PREFIX):], ptype])
     body = (
         '/* 포켓몬 카드 목록 — tools/build-cards.py가 만들어요. 직접 고치지 마세요.\n'
-        ' * [카드 id, 이름, 종류, 세트 번호, 희귀도, 앱 등급, 그림 경로] */\n'
+        ' * [카드 id, 이름, 종류, 세트 번호, 희귀도, 앱 등급, 그림 경로, 포켓몬 타입] */\n'
         f'window.CARD_IMG = {json.dumps(IMG_PREFIX)};\n'
         f'window.CARD_SETS = {json.dumps(sets, ensure_ascii=False)};\n'
         'window.CARDS = [\n' + ',\n'.join(json.dumps(x, ensure_ascii=False) for x in cards) + '\n];\n'

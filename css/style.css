@@ -975,3 +975,10 @@ h1:focus, h2:focus { outline: none; }
 .finish-stars b { font-family: var(--display); font-weight: 400; font-size: 1.3em; color: var(--red); }
 .finish-stars small { font-size: 16px; color: var(--ink-soft); letter-spacing: 0; }
 .diff-note { margin: -8px 0 0; font-size: 15px; color: #b7791f; }
+
+/* ⚡🔥💧 카드 뽑기 효과 */
+.fx-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
+.fx-dim { position: fixed; inset: 0; z-index: 48; pointer-events: none; background: radial-gradient(circle at 50% 45%, rgba(14, 18, 40, .72), rgba(6, 8, 20, .92)); animation: fxDim .25s ease-out; transition: opacity .4s; }
+.fx-dim.out { opacity: 0; }
+@keyframes fxDim { from { opacity: 0; } }
+body.fx-on .pack-stage { position: relative; z-index: 49; }
