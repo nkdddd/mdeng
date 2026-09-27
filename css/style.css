@@ -982,3 +982,5 @@ h1:focus, h2:focus { outline: none; }
 .fx-dim.out { opacity: 0; }
 @keyframes fxDim { from { opacity: 0; } }
 body.fx-on .pack-stage { position: relative; z-index: 49; }
+/* 알림은 보여 주기만 하고 아래 버튼을 가리지 않아요 */
+.toast { pointer-events: none; }
