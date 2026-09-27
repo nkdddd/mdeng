@@ -37,7 +37,6 @@ function loadState() {
 }
 loadState();
 const save = () => STORE.save(S);
-const stickerCount = () => Math.min(STICKERS.length, Math.floor(S.earned / 10));
 
 /* ---------- 소리 ----------
  * 1순위: 미리 만든 녹음 파일(audio/*.mp3, js/clips.js 목록)
@@ -182,21 +181,12 @@ function toast(html, ms = 2200) {
 }
 function paintStars() { $('#starCount').textContent = S.stars; }
 function addStar(n = 1) {
-  const before = stickerCount();
   S.stars += n;
   S.earned += n;
   save();
   paintStars();
   const pill = $('#starPill');
   pill.classList.remove('bump'); void pill.offsetWidth; pill.classList.add('bump');
-  if (stickerCount() > before) {
-    const st = STICKERS[stickerCount() - 1];
-    setTimeout(() => {
-      sfx('star');
-      toast(`<div class="newsticker"><span>${st}</span>새 스티커를 받았어요!</div>`, 2600);
-      speak(LINES.sticker);
-    }, 700);
-  }
 }
 function setBest(key, score) {
   S.best[key] = Math.max(S.best[key] || 0, score);
@@ -217,7 +207,7 @@ const ISLANDS = [
   { id: 'vowel', icon: '🦀', name: 'ㅐㅔ 바닷가', sub: '개 🐶 게 🦀',         tone: 't3' },
   { id: 'space', icon: '✂️', name: '띄어쓰기 숲', sub: '어디서 띄울까?',     tone: 't4' },
   { id: 'sound', icon: '🔍', name: '소리 탐정',   sub: '소리랑 글자가 달라!', tone: 't5' },
-  { id: 'book',  icon: '🏆', name: '스티커북',    sub: '모은 스티커',        tone: 't6' },
+  { id: 'book',  icon: '🎒', name: '포켓몬 가방', sub: '잡은 포켓몬',        tone: 't6' },
 ];
 const SCREENS = {};
 function go(name, ...args) {
@@ -965,6 +955,8 @@ function catchScene(list, onEnd, notes) {
           await wait(260);
         }
         const isNew = addDex(N);
+        S.catches = S.catches || {};
+        S.catches[N] = (S.catches[N] || 0) + 1;
         if (q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
         if (q.legend) badge = questCaught();
         const packKind = q.legend || q.shiny || 'lms'.includes(q.grade) ? 'l' : 'b';
@@ -1056,6 +1048,22 @@ function addPack(kind, name, diff) {
   save();
 }
 const cardCount = () => Object.keys(S.cards || {}).length;
+const cardLv = (id) => (S.cardLv || {})[id] || 0;
+const lvStars = (lv) => '★'.repeat(lv) + '☆'.repeat(UPGRADE_COST.length - lv);
+/* ♻️ 바꿀 수 있는 일반 카드: 강화하지 않은 일반 카드 (겹친 카드도 한 장씩 셈) */
+function tradeable() {
+  return Object.entries(S.cards || {}).filter(([id]) => CARD_BY[id] && CARD_BY[id][5] === 'n' && !cardLv(id));
+}
+const tradeCount = () => tradeable().reduce((a, [, n]) => a + n, 0);
+/* 일반 카드 10장을 내고 상위 카드 뽑기권 한 장. 겹친 카드부터 써요 */
+function tradeCommons() {
+  let left = TRADE_COUNT;
+  const list = tradeable().sort((a, b) => b[1] - a[1]);
+  for (const [id] of list) { while (left && S.cards[id] > 1) { S.cards[id]--; left--; } }
+  for (const [id] of list) { if (left && S.cards[id] === 1) { delete S.cards[id]; left--; } }
+  packList().push({ k: 'x', p: null, d: 2 });
+  save();
+}
 /* 카드 목록(js/cards.js, 약 700KB)은 처음 필요할 때 한 번만 불러와요 */
 let cardsLoading = null;
 function loadCards() {
@@ -1113,7 +1121,7 @@ const cardImgUrl = (c) => CARD_IMG + c[6];
 const cardDetailUrl = (c) => 'https://pokemoncard.co.kr/cards/detail/' + c[0];
 const classChip = (cls) => `<span class="class-chip c${cls}">${CARD_CLASS[cls].icon} ${CARD_CLASS[cls].name}</span>`;
 /* 카드 그림. 못 불러오면 이름이 적힌 카드로 바꿔요 */
-const cardFace = (c, lazy) => `<span class="tcg c${c[5]}"><img class="cimg" src="${cardImgUrl(c)}" alt="${esc(c[1])} 카드"${lazy ? ' loading="lazy"' : ''} referrerpolicy="no-referrer" data-name="${esc(c[1])}" data-kind="${esc(c[2])}"></span>`;
+const cardFace = (c, lazy) => `<span class="tcg c${c[5]}${cardLv(c[0]) ? ` lv lv${cardLv(c[0])}` : ''}">${cardLv(c[0]) ? `<i class="lv-badge">+${cardLv(c[0])}</i>` : ''}<img class="cimg" src="${cardImgUrl(c)}" alt="${esc(c[1])} 카드"${lazy ? ' loading="lazy"' : ''} referrerpolicy="no-referrer" data-name="${esc(c[1])}" data-kind="${esc(c[2])}"></span>`;
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || !img.classList.contains('cimg')) return;
@@ -1188,7 +1196,7 @@ SCREENS.packs = (back) => {
     flip.classList.add('turn', 'c' + card[5]);
     if (card[5] === 'u') setTimeout(confetti, 500);
     $('#info').innerHTML = `${classChip(card[5])}<b>${esc(card[1])}</b><small>${esc(card[2])} · ${esc(CARD_SETS[card[3]])}${card[4] ? ` · ${esc(card[4])}` : ''}</small>
-      ${relLine(pk.p, how, card) ? `<p class="rel-line">${relLine(pk.p, how, card)}</p>` : ''}
+      ${kind === 'x' ? '<p class="rel-line">♻️ 상위 카드 뽑기권으로 뽑은 카드예요!</p>' : relLine(pk.p, how, card) ? `<p class="rel-line">${relLine(pk.p, how, card)}</p>` : ''}
       ${dup ? `<p class="small-note">이미 가진 카드예요 (${S.cards[card[0]]}장)</p>` : '<p class="small-note">🗂️ 새 카드! 앨범에 넣었어요.</p>'}`;
     speak([LINES.cardClass[card[5]], card[1]]);
     $('#packBtns').innerHTML = `
@@ -1214,6 +1222,12 @@ SCREENS.album = () => {
       <h2 class="h">🗂️ 카드 앨범 <small class="h-note">${mine.length}종 · 전체 ${CARDS.length}종</small></h2>
       ${bubble(LINES.album)}
       <div class="row"><button class="btn primary" id="toPacks">🎴 카드팩 뜯기 (${packCount()})</button><button class="btn" id="toDex">📖 도감</button></div>
+      <section class="trade">
+        <div class="trade-meter" role="progressbar" aria-valuemin="0" aria-valuemax="${TRADE_COUNT}" aria-valuenow="${Math.min(tradeCount(), TRADE_COUNT)}">
+          <span style="width:${Math.min(100, (tradeCount() / TRADE_COUNT) * 100)}%"></span><b>⚪ 일반 카드 ${tradeCount()} / ${TRADE_COUNT}</b></div>
+        <p class="small-note">일반 카드 ${TRADE_COUNT}장을 모으면 <b>레어 이상</b>이 나오는 상위 카드 뽑기권으로 바꿀 수 있어요. 겹친 카드부터 쓰고, 강화한 카드는 쓰지 않아요.</p>
+        <button class="btn primary" id="trade" ${tradeCount() >= TRADE_COUNT ? '' : 'disabled'}>♻️ ${TRADE_COUNT}장 바꾸고 뽑기!</button>
+      </section>
       <div class="dex-tabs" role="tablist">${['all', ...Object.keys(CARD_CLASS)].map((k) => `<button role="tab" aria-selected="${albumTab === k}" data-tab="${k}">${k === 'all' ? '전체' : `${CARD_CLASS[k].icon} ${CARD_CLASS[k].name}`}<small>${count(k)}</small></button>`).join('')}</div>
       <div class="album">${shown.length ? shown.map(([c, n]) => `<button class="album-card" data-id="${c[0]}">${cardFace(c, true)}${n > 1 ? `<span class="dup">×${n}</span>` : ''}</button>`).join('')
         : '<p class="small-note">아직 카드가 없어요. 포켓몬을 잡고 카드팩을 뜯어 봐요!</p>'}</div>
@@ -1221,19 +1235,53 @@ SCREENS.album = () => {
     speak(LINES.album);
     $('#toPacks').onclick = () => go('packs', () => go('album'));
     $('#toDex').onclick = () => go('dex');
+    $('#trade').onclick = () => {
+      if (tradeCount() < TRADE_COUNT) return;
+      tradeCommons();
+      sfx('star');
+      speak(LINES.trade);
+      /* 방금 받은 뽑기권을 바로 뜯어요 */
+      const packs = packList();
+      packs.unshift(packs.pop());
+      save();
+      go('packs', () => go('album'));
+    };
     $$('[data-tab]', app).forEach((b) => b.addEventListener('click', () => { albumTab = b.dataset.tab; sfx('pop'); SCREENS.album(); }));
-    $$('.album-card', app).forEach((b) => b.addEventListener('click', () => {
-      const c = CARD_BY[b.dataset.id];
+    const openZoom = (c, quiet) => {
       const z = $('#zoom');
-      z.innerHTML = `<div class="zoom-in">${cardFace(c)}<div class="reveal-info">${classChip(c[5])}<b>${esc(c[1])}</b>
+      const lv = cardLv(c[0]);
+      const cost = UPGRADE_COST[lv];
+      z.innerHTML = `<div class="zoom-in">${cardFace(c)}<div class="reveal-info">${classChip(c[5])}<b>${esc(c[1])}${lv ? ` <span class="lv-text">+${lv}</span>` : ''}</b>
         <small>${esc(c[2])} · ${esc(CARD_SETS[c[3]])}${c[4] ? ` · ${esc(c[4])}` : ''} · ${S.cards[c[0]]}장</small>
+        <p class="lv-stars" aria-label="강화 ${lv}단계">${lvStars(lv)}</p>
+        ${cost != null
+          ? `<button class="btn primary" id="enhance" ${S.stars >= cost ? '' : 'disabled'}>⭐ ${cost}개로 +${lv + 1} 강화</button>
+             <small>${S.stars >= cost ? `가진 별 ${S.stars}개` : `별이 ${cost - S.stars}개 더 필요해요 (가진 별 ${S.stars}개)`}</small>`
+          : '<p class="rel-line">👑 최고 단계까지 강화했어요!</p>'}
         <a class="small-note" href="${cardDetailUrl(c)}" target="_blank" rel="noopener">카드 자세히 보기 ↗</a></div>
         <button class="btn" id="zoomClose">닫기</button></div>`;
       z.hidden = false;
-      speak(c[1]);
-      $('#zoomClose').onclick = () => { z.hidden = true; };
-      z.onclick = (e) => { if (e.target === z) z.hidden = true; };
-    }));
+      if (!quiet) speak(c[1]);
+      $('#zoomClose').onclick = () => { z.hidden = true; SCREENS.album(); };
+      z.onclick = (e) => { if (e.target === z) { z.hidden = true; SCREENS.album(); } };
+      $('#enhance')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (S.stars < cost) return;
+        $('#enhance').disabled = true;
+        S.stars -= cost;
+        S.cardLv = S.cardLv || {};
+        S.cardLv[c[0]] = lv + 1;
+        save();
+        paintStars();
+        /* 강화할수록 효과도 세져요 */
+        await CardFX.play(c[7], ['n', 'r', 'a', 's', 'u', 'u'][lv + 1], $('.zoom-in .tcg', z));
+        sfx('star');
+        openZoom(c, true);
+        $('.zoom-in .tcg', z).classList.add('powerup');
+        speak(lv + 1 >= UPGRADE_COST.length ? LINES.enhanceMax : LINES.enhance);
+      });
+    };
+    $$('.album-card', app).forEach((b) => b.addEventListener('click', () => openZoom(CARD_BY[b.dataset.id])));
   }).catch(() => {
     app.innerHTML = `<h2 class="h">🗂️ 카드 앨범</h2><p class="auth-error">⚠️ 카드 목록을 불러오지 못했어요. 인터넷을 확인하고 다시 해 주세요.</p>`;
   });
@@ -1452,18 +1500,22 @@ function dictQuestion(q, i, n, mark, next) {
 
 /* ---------- 🏆 스티커북 ---------- */
 SCREENS.book = () => {
-  const have = stickerCount();
-  const toNext = 10 - (S.earned % 10);
-  const all = [...ISLANDS.filter((s) => !['book', 'dict', 'dex'].includes(s.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` }))];
+  const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
+    ...SCHOOL.map((d) => ({ id: d.id, icon: '📝', name: `시험 ${d.n}급` }))];
+  const mine = POKEMON.filter((m) => dexHas(m[0]))
+    .sort((a, b) => ((S.catches || {})[b[0]] || 1) - ((S.catches || {})[a[0]] || 1));
   app.innerHTML = `
-    <h2 class="h">🏆 스티커북</h2>
-    ${bubble(have < STICKERS.length ? LINES.bookLeft(toNext) : LINES.bookAll)}
-    <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="${S.earned % 10}">
-      <span style="width:${(S.earned % 10) * 10}%"></span><b>⭐ ${S.earned % 10} / 10</b></div>
-    <div class="stickers">${STICKERS.map((s, k) => `<span class="sticker ${k < have ? 'got' : ''}">${k < have ? s : '?'}</span>`).join('')}</div>
+    <h2 class="h">🎒 포켓몬 가방 <small class="h-note">${mine.length}마리</small></h2>
+    ${bubble(mine.length ? LINES.bagBubble : LINES.bagEmpty)}
+    <div class="bag">${mine.map((m) => `<button class="bag-mon g${m[5]}${hasShiny(m[0]) ? ' shiny' : ''}" data-id="${m[3]}" data-say="${sayAttr(m[0])}">
+      ${artImg(m, hasShiny(m[0]))}<b>${m[0]}</b>${((S.catches || {})[m[0]] || 1) > 1 ? `<span class="dup">×${S.catches[m[0]]}</span>` : ''}</button>`).join('')}</div>
+    <div class="row"><button class="btn primary" id="toAlbum">🗂️ 카드 앨범</button><button class="btn" id="toDex">📖 도감</button></div>
     <h3 class="h3">섬마다 최고 점수</h3>
-    <ul class="bests">${all.map((s) => `<li><span>${s.icon} ${s.name}</span><b>${S.best[s.id] != null ? S.best[s.id] + '점' : '—'}</b></li>`).join('')}</ul>`;
-  speak(have < STICKERS.length ? LINES.bookLeft(toNext) : LINES.bookAll);
+    <ul class="bests">${all.map((x) => `<li><span>${x.icon} ${x.name}</span><b>${S.best[x.id] != null ? S.best[x.id] + '점' : '—'}</b></li>`).join('')}</ul>`;
+  speak(mine.length ? LINES.bagBubble : LINES.bagEmpty);
+  $$('.bag-mon', app).forEach((b) => b.addEventListener('click', () => playCry(+b.dataset.id)));
+  $('#toAlbum').onclick = () => go('album');
+  $('#toDex').onclick = () => go('dex');
 };
 
 /* ---------- ⚙️ 목소리 설정 (어른용) ---------- */

@@ -379,13 +379,6 @@ h1:focus, h2:focus { outline: none; }
 }
 .meter span { position: absolute; inset: 0 auto 0 0; background: var(--sun); transition: width .5s; }
 .meter b { position: relative; display: grid; place-items: center; height: 100%; font-family: var(--display); font-weight: 400; font-size: 20px; font-variant-numeric: tabular-nums; }
-.stickers { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 12px; }
-.sticker {
-  aspect-ratio: 1; max-width: 100%; display: grid; place-items: center; font-size: 40px;
-  border: 3px dashed var(--grid); border-radius: 50%; color: var(--grid); font-family: var(--display);
-}
-.sticker.got { border: 3px solid var(--ink); background: var(--card); box-shadow: var(--shadow); transform: rotate(-4deg); }
-.sticker.got:nth-child(even) { transform: rotate(5deg); }
 .bests { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .bests li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px; background: var(--card); border: 2px solid var(--grid); border-radius: 14px; }
 .bests b { font-family: var(--display); font-weight: 400; color: var(--red); font-variant-numeric: tabular-nums; }
@@ -397,8 +390,6 @@ h1:focus, h2:focus { outline: none; }
   padding: 12px 22px; font-family: var(--display); font-size: 21px; box-shadow: var(--shadow); text-align: center;
   animation: rise .3s ease-out;
 }
-.newsticker { display: flex; align-items: center; gap: 12px; }
-.newsticker span { font-size: 54px; animation: pop .6s 2; }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 25; overflow: hidden; }
 .confetti span { position: absolute; top: -40px; animation: fall 1.5s ease-in forwards; }
 @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
@@ -993,3 +984,53 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 .levels.school .l-name { font-size: 18px; text-align: center; line-height: 1.3; }
 .secrets s.wrong { color: var(--red); }
 @media (max-width: 480px) { .levels.school { grid-template-columns: repeat(2, 1fr); } }
+
+/* 🎒 포켓몬 가방 */
+.bag { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.bag-mon {
+  position: relative; display: flex; flex-direction: column; align-items: center; padding: 8px 4px; border-radius: 50%;
+  aspect-ratio: 1; max-width: 100%; justify-content: center; background: var(--card); border: 3px solid var(--ink); box-shadow: var(--shadow);
+}
+.bag-mon:nth-child(odd) { transform: rotate(-4deg); }
+.bag-mon:nth-child(even) { transform: rotate(3deg); }
+.bag-mon .art { width: 64%; height: 64%; }
+.bag-mon .art-fallback { font-size: 36px; }
+.bag-mon b { font-family: var(--display); font-weight: 400; font-size: 14px; }
+.bag-mon.gr { border-color: var(--gr); }
+.bag-mon.gl { border-color: var(--gl); box-shadow: 0 0 12px var(--gl); }
+.bag-mon.gm { border-color: var(--gm); box-shadow: 0 0 12px var(--gm); }
+.bag-mon.shiny { box-shadow: 0 0 14px #f0abfc; }
+.bag-mon .dup { right: 6px; bottom: 8px; }
+
+/* ♻️ 일반 카드 교환 */
+.trade { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 14px; border: 3px dashed var(--ink); border-radius: 20px; background: var(--card); text-align: center; }
+.trade-meter { position: relative; width: 100%; height: 34px; border: 3px solid var(--ink); border-radius: 999px; overflow: hidden; background: var(--paper); }
+.trade-meter span { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #cbd5e1, #93c5fd); transition: width .5s; }
+.trade-meter b { position: relative; display: grid; place-items: center; height: 100%; font-family: var(--display); font-weight: 400; font-size: 17px; font-variant-numeric: tabular-nums; }
+.trade .small-note b { color: var(--red); }
+.pack.px .pack-top, .pack.px .pack-body { background: linear-gradient(135deg, #7c3aed, #a78bfa 35%, #f5d0fe 48%, #60a5fa 62%, #1e40af); }
+.pack.px { animation: packGlow 1.6s ease-in-out infinite; }
+
+/* ⭐ 카드 강화: 단계마다 테두리와 빛이 세져요 */
+.tcg { position: relative; }
+.tcg.lv { outline: 3px solid var(--lvc, #cbd5e1); outline-offset: 2px; box-shadow: 0 0 var(--lvg, 8px) var(--lvc, #cbd5e1); }
+.tcg.lv1 { --lvc: #cbd5e1; --lvg: 6px; }
+.tcg.lv2 { --lvc: #60a5fa; --lvg: 10px; }
+.tcg.lv3 { --lvc: #a855f7; --lvg: 14px; }
+.tcg.lv4 { --lvc: #f5b400; --lvg: 18px; }
+.tcg.lv5 { --lvc: #f472b6; --lvg: 22px; animation: lvRainbow 3s linear infinite; }
+@keyframes lvRainbow { 0% { --lvc: #f472b6; outline-color: #f472b6; } 33% { outline-color: #60a5fa; } 66% { outline-color: #fbbf24; } 100% { outline-color: #f472b6; } }
+.tcg.lv4::after, .tcg.lv5::after {
+  content: ''; position: absolute; inset: -40%; pointer-events: none; z-index: 1;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, .55) 50%, transparent 60%);
+  animation: shine 2.6s ease-in-out infinite;
+}
+.lv-badge {
+  position: absolute; z-index: 2; top: 4px; left: 4px; font-style: normal; font-family: var(--display); font-size: 15px;
+  padding: 0 7px; border-radius: 999px; color: #fff; background: var(--lvc, #64748b); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.lv-stars { margin: 0; font-size: 24px; color: #f5b400; letter-spacing: 2px; }
+.lv-text { color: var(--red); }
+.tcg.powerup { animation: powerup .7s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes powerup { 40% { transform: scale(1.12) rotate(-3deg); } }
+@media (prefers-reduced-motion: reduce) { .tcg.lv5, .tcg.powerup { animation: none; } }
