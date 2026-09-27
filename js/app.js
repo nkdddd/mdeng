@@ -715,7 +715,7 @@ function missionText(ms, noTimes) {
   return `${where}에서 ${what}${!noTimes && (ms.times || 1) > 1 ? ` ${ms.times}번` : ''}`;
 }
 function missionHits(ms, key, pct, maxStreak) {
-  const isDict = /^d\d$/.test(key);
+  const isDict = /^(d\d|s\d+)$/.test(key); /* 학교 시험 연습도 받아쓰기로 쳐요 */
   if (ms.mode === 'dict' ? !isDict : ms.mode !== 'any' && ms.mode !== key) return false;
   if (ms.min != null && pct < ms.min) return false;
   if (ms.streak != null && maxStreak < ms.streak) return false;
@@ -1249,6 +1249,12 @@ SCREENS.dict = () => {
         <span class="l-name">${lv.name}</span><span class="l-sub">${lv.desc} · ${Math.min(DICT_SIZE, lv.items.length)}문제</span>
         ${diffTag(lv.id)}
         ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>
+    <h3 class="h3">📝 학교 받아쓰기 시험 <small class="h-note">1-2단계 · 급마다 10문제 차례대로</small></h3>
+    <div class="levels school">${SCHOOL.map((lv) => `
+      <button class="level" data-id="${lv.id}"><span class="l-grade">${lv.n}급</span>
+        <span class="l-name">${lv.name}</span>
+        ${diffTag(lv.id)}
+        ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>
     ${hasTTS ? '' : '<p class="notice">이 기기에서는 소리가 나오지 않아요. 문제 화면의 👀 어른용 버튼을 눌러 어른이 읽어 주세요.</p>'}`;
   $$('.level', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); dictLevel(b.dataset.id); }));
   speak(LINES.dictBubble);
@@ -1256,8 +1262,10 @@ SCREENS.dict = () => {
 
 let inputMode = 'tiles';
 function dictLevel(id) {
-  const lv = DICTATION.find((l) => l.id === id);
-  runQuiz(id, shuffle(lv.items).slice(0, DICT_SIZE), (q, i, n, mark, next) => dictQuestion(q, i, n, mark, next));
+  const school = SCHOOL.find((l) => l.id === id);
+  /* 학교 시험 연습은 시험처럼 10문제를 차례대로, 연습 단계는 5문제를 골라서 */
+  const items = school ? school.items : shuffle(DICTATION.find((l) => l.id === id).items).slice(0, DICT_SIZE);
+  runQuiz(id, items, (q, i, n, mark, next) => dictQuestion(q, i, n, mark, next));
   /* runQuiz의 '한 번 더'가 go(key)로 가므로 단계 화면을 등록 */
   SCREENS[id] = () => dictLevel(id);
 }
@@ -1302,8 +1310,10 @@ function diagnose(user, answer, hints) {
   }
   hints.forEach(([w, s, k]) => {
     const sw = s.replace(/ /g, '');
-    if (sw !== w.replace(/ /g, '') && un.includes(sw))
-      reasons.push({ k, text: `<b>${esc(w)}</b>를 소리 나는 대로 <b>[${esc(s)}]</b>라고 썼어요.` });
+    if (sw === w.replace(/ /g, '') || !un.includes(sw)) return;
+    reasons.push(k === 'spell' || k === 'sais'
+      ? { k, text: `<s>${esc(s)}</s>${josaPick(s, ['이', '가'])} 아니라 <b>${esc(w)}</b>${hasBatchim(w) ? '이에요' : '예요'}.` }
+      : { k, text: `<b>${esc(w)}</b>를 소리 나는 대로 <b>[${esc(s)}]</b>라고 썼어요.` });
   });
   a.split(' ').forEach((word) => {
     [...word].forEach((ch, idx) => {
@@ -1402,13 +1412,14 @@ function dictQuestion(q, i, n, mark, next) {
     sfx(ok ? 'ok' : 'no');
     const [ku, ka] = lcsMarks([...u.replace(/ /g, '')], [...target.replace(/ /g, '')]);
     const res = $('#result');
-    const secrets = q.hints.map(([w, s, k]) => `<li><span class="t-icon">${TYPES[k].icon}</span><b>${esc(w)}</b>${s !== w ? ` → 소리 [${esc(s)}]` : ''} <em>${TYPES[k].name}</em></li>`).join('');
+    const secrets = q.hints.map(([w, s, k]) => `<li><span class="t-icon">${TYPES[k].icon}</span><b>${esc(w)}</b>${s === w ? '' : k === 'spell' || k === 'sais' ? ` <s class="wrong">${esc(s)}</s> ✗` : ` → 소리 [${esc(s)}]`} <em>${TYPES[k].name}</em></li>`).join('');
+    const secretBox = secrets ? `<p class="small-note">이 문장에 숨은 비밀</p><ul class="secrets">${secrets}</ul>` : '';
     if (ok) {
       $('#paper').innerHTML = cells(q.t);
       maru($('#paper'));
       confetti();
       res.innerHTML = `<p class="yay">딩동댕! 또박또박 잘 썼어요! ⭐</p>
-        <p class="small-note">이 문장에 숨은 비밀</p><ul class="secrets">${secrets}</ul>
+        ${secretBox}
         <button class="btn primary next">다음 ➜</button>`;
       speak(LINES.dictOk);
     } else {
@@ -1419,7 +1430,7 @@ function dictQuestion(q, i, n, mark, next) {
       res.innerHTML = `
         ${reasons.length ? reasons.map((r) => `<div class="reason"><div class="typebadge"><span>${TYPES[r.k].icon}</span>${TYPES[r.k].name}</div><p>${r.text}</p><p class="small-note">${TYPES[r.k].why}</p></div>`).join('')
           : '<p>빨간 칸을 바른 글과 비교해 봐요.</p>'}
-        <p class="small-note">이 문장에 숨은 비밀</p><ul class="secrets">${secrets}</ul>
+        ${secretBox}
         <div class="row"><button class="btn primary" id="retry">✏️ 다시 써 볼래요</button><button class="btn next">다음 ➜</button></div>`;
       speak([LINES.dictWrong, q.t]);
       $('#retry').onclick = () => {
