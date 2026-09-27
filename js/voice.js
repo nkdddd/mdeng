@@ -23,12 +23,13 @@ const VOICE = (() => {
     const add = (s) => { const n = norm(s); if (n) out.add(n); };
     Object.values(LINES).forEach((v) => { if (typeof v === 'string') add(v); else if (Array.isArray(v)) v.forEach(add); else if (v && typeof v === 'object') Object.values(v).forEach(add); });
     Object.values(TYPES).forEach((t) => add(LINES.typeCard(t)));
-    const totals = new Set([...Object.values(QUIZ_SIZE), ...DICTATION.map((d) => Math.min(DICT_SIZE, d.items.length)), ...SCHOOL.map((d) => d.items.length)]);
+    const totals = new Set([...Object.values(QUIZ_SIZE), ...DICTATION.map((d) => Math.min(DICT_SIZE, d.items.length)), ...SCHOOL.map((d) => d.items.length), DICT_SIZE]);
     Object.values(DIFF_INFO).forEach((d) => add(LINES.perfect(d.bonus)));
     totals.forEach((t) => { for (let s = 0; s <= t; s++) add(LINES.score(t, s)); });
     BADGES.forEach(([b]) => add(LINES.badge(b)));
     DICTATION.forEach((d) => d.items.forEach((q) => add(q.t)));
     SCHOOL.forEach((d) => d.items.forEach((q) => add(q.t)));
+    GRADE_DICT.forEach((d) => d.items.forEach((q) => add(q.t)));
     SOUNDS.forEach((q) => { add(q.w); add(LINES.soundAnswer(q.s, q.w)); add(q.tip); });
     VOWELS.forEach((q) => add(q.w));
     SPACING.forEach((q) => add(q.t));

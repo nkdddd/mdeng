@@ -286,6 +286,8 @@ function finish(key, score, total, again, extra) {
 }
 
 /* 문제 풀이 틀: items를 하나씩 render로 넘기고 끝나면 결과 화면 */
+/* 1·2학년 받아쓰기(js/grade.js) 단계의 난이도 */
+GRADE_DICT.forEach((l) => { DIFFICULTY[l.id] = l.diff; });
 const diffOf = (key) => DIFFICULTY[key] || 2;
 const diffStars = (d) => '★'.repeat(d) + '☆'.repeat(4 - d);
 function runQuiz(key, items, render) {
@@ -705,7 +707,7 @@ function missionText(ms, noTimes) {
   return `${where}에서 ${what}${!noTimes && (ms.times || 1) > 1 ? ` ${ms.times}번` : ''}`;
 }
 function missionHits(ms, key, pct, maxStreak) {
-  const isDict = /^(d\d|s\d+)$/.test(key); /* 학교 시험 연습도 받아쓰기로 쳐요 */
+  const isDict = /^(d\d|s\d+|g\d+)$/.test(key); /* 학교 시험·1·2학년 받아쓰기도 받아쓰기로 쳐요 */
   if (ms.mode === 'dict' ? !isDict : ms.mode !== 'any' && ms.mode !== key) return false;
   if (ms.min != null && pct < ms.min) return false;
   if (ms.streak != null && maxStreak < ms.streak) return false;
@@ -1340,6 +1342,12 @@ SCREENS.dict = () => {
         <span class="l-name">${lv.name}</span><span class="l-sub">${lv.desc} · ${Math.min(DICT_SIZE, lv.items.length)}문제</span>
         ${diffTag(lv.id)}
         ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>
+    ${[1, 2].map((g) => `<h3 class="h3">📚 ${g}학년 받아쓰기 <small class="h-note">단계마다 ${DICT_SIZE}문제씩</small></h3>
+    <div class="levels grade">${GRADE_DICT.filter((lv) => lv.grade === g).map((lv) => `
+      <button class="level" data-id="${lv.id}"><span class="l-icon">${lv.icon}</span>
+        <span class="l-name">${lv.name}</span><span class="l-sub">${esc(lv.desc)} · ${lv.items.length}개 중</span>
+        ${diffTag(lv.id)}
+        ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>`).join('')}
     <h3 class="h3">📝 학교 받아쓰기 시험 <small class="h-note">1-2단계 · 급마다 10문제 차례대로</small></h3>
     <div class="levels school">${SCHOOL.map((lv) => `
       <button class="level" data-id="${lv.id}"><span class="l-grade">${lv.n}급</span>
@@ -1355,7 +1363,7 @@ let inputMode = 'tiles';
 function dictLevel(id) {
   const school = SCHOOL.find((l) => l.id === id);
   /* 학교 시험 연습은 시험처럼 10문제를 차례대로, 연습 단계는 5문제를 골라서 */
-  const items = school ? school.items : shuffle(DICTATION.find((l) => l.id === id).items).slice(0, DICT_SIZE);
+  const items = school ? school.items : shuffle([...DICTATION, ...GRADE_DICT].find((l) => l.id === id).items).slice(0, DICT_SIZE);
   runQuiz(id, items, (q, i, n, mark, next) => dictQuestion(q, i, n, mark, next));
   /* runQuiz의 '한 번 더'가 go(key)로 가므로 단계 화면을 등록 */
   SCREENS[id] = () => dictLevel(id);
@@ -1404,7 +1412,7 @@ function diagnose(user, answer, hints) {
     if (sw === w.replace(/ /g, '') || !un.includes(sw)) return;
     reasons.push(k === 'spell' || k === 'sais'
       ? { k, text: `<s>${esc(s)}</s>${josaPick(s, ['이', '가'])} 아니라 <b>${esc(w)}</b>${hasBatchim(w) ? '이에요' : '예요'}.` }
-      : { k, text: `<b>${esc(w)}</b>를 소리 나는 대로 <b>[${esc(s)}]</b>라고 썼어요.` });
+      : { k, text: `<b>${esc(w)}</b>${josaPick(w, ['을', '를'])} 소리 나는 대로 <b>[${esc(s)}]</b>라고 썼어요.` });
   });
   a.split(' ').forEach((word) => {
     [...word].forEach((ch, idx) => {
@@ -1544,6 +1552,7 @@ function dictQuestion(q, i, n, mark, next) {
 /* ---------- 🏆 스티커북 ---------- */
 SCREENS.book = () => {
   const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
+    ...GRADE_DICT.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '📚', name: `${d.grade}학년 ${d.name}` })),
     ...SCHOOL.map((d) => ({ id: d.id, icon: '📝', name: `시험 ${d.n}급` }))];
   const mine = POKEMON.filter((m) => dexHas(m[0]))
     .sort((a, b) => ((S.catches || {})[b[0]] || 1) - ((S.catches || {})[a[0]] || 1));
