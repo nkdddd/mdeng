@@ -34,6 +34,38 @@ function loadState() {
   S = Object.assign({ stars: 0, best: {} }, STORE.load());
   /* stars = 쓸 수 있는 별(포획 타임에 걸어요), earned = 지금까지 모은 별 전체(스티커 기준) */
   if (S.earned == null) S.earned = S.stars;
+  migrateEvo();
+}
+/* 🧬 진화: 같은 모습 EVO_NEED마리가 모이면 다음 단계 한 마리로 (여러 단계 연달아 가능) → [[전, 후], …] */
+function evolveFrom(name) {
+  const out = [];
+  let n = name;
+  for (;;) {
+    const line = EVOLUTION.find((l) => l.includes(n));
+    const next = line && line[line.indexOf(n) + 1];
+    if (!next || (S.catches[n] || 0) < EVO_NEED) return out;
+    while (S.catches[n] >= EVO_NEED) { /* 예전 기록은 한꺼번에: 캐터피 9 → 단데기 3 → 버터플 1 */
+      S.catches[n] -= EVO_NEED;
+      S.catches[next] = (S.catches[next] || 0) + 1;
+      out.push([n, next]);
+    }
+    if (!S.catches[n]) delete S.catches[n];
+    S.dex = S.dex || [];
+    if (!S.dex.includes(next)) S.dex.push(next);
+    n = next;
+  }
+}
+/* 진화 규칙이 생기기 전에 잡은 포켓몬도 3마리씩 모아 진화시켜요 (처음 한 번만) */
+function migrateEvo() {
+  if (S.evoV) return;
+  S.catches = S.catches || {};
+  (S.dex || []).forEach((n) => {
+    const m = POKEMON.find((x) => x[0] === n);
+    if (m && 'cr'.includes(m[5]) && !S.catches[n]) S.catches[n] = 1; /* 몇 번 잡았는지 모르면 한 마리 */
+  });
+  EVOLUTION.forEach((line) => line.forEach((n) => evolveFrom(n)));
+  S.evoV = 1;
+  STORE.save(S);
 }
 loadState();
 const save = () => STORE.save(S);
@@ -661,6 +693,39 @@ const TYPE_TONE = { 전기: 't3', 불꽃: 't1', 물: 't2', 풀: 't4', 에스퍼:
 const POKE_BY = Object.fromEntries(POKEMON.map((m) => [m[0], m]));
 const dexHas = (name) => (S.dex || []).includes(name);
 const hasShiny = (name) => (S.shinies || []).includes(name);
+const evoLine = (name) => EVOLUTION.find((l) => l.includes(name));
+/* 가족의 지금 모습: 도감에 있는 가장 높은 단계 (아직 없으면 1단계) */
+function evoNow(name) {
+  const line = evoLine(name);
+  if (!line) return name;
+  let cur = line[0];
+  line.forEach((n) => { if (dexHas(n)) cur = n; });
+  return cur;
+}
+/* 다음 진화까지 모은 수: ●●○ */
+const evoDots = (name) => `<span class="evo-dots" aria-hidden="true">${'●'.repeat(Math.min(EVO_NEED, (S.catches || {})[name] || 0)).padEnd(EVO_NEED, '○')}</span>`;
+/* 진화 장면: 빛나다가 새 모습으로 */
+async function evolveShow(evo, box) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (const [a, b] of evo) {
+    const m = POKE_BY[b];
+    box.insertAdjacentHTML('afterbegin', `<div class="evolve"><p class="evo-line">🧬 ${esc(a)} ${EVO_NEED}마리가 모였어요! 어라…?</p>
+      <div class="card-reveal evo-card">${pokeCard(m)}</div></div>`);
+    const el = box.firstElementChild;
+    sfx('pop');
+    speak(LINES.evolving(a, EVO_NEED));
+    await wait(reduceMotion ? 200 : 1600);
+    el.classList.add('done');
+    sfx('star');
+    confetti();
+    playCry(m[3]);
+    $('.evo-line', el).innerHTML = `<b>✨ ${esc(a)}${josaPick(a, ['이', '가'])} ${esc(b)}${ro(b)} 진화했어요!</b> 📖 도감에 ${esc(b)} 등록!`;
+    speak(LINES.evolved(a, b, josaPick(a, ['이', '가']), ro(b)));
+    await wait(1200);
+  }
+}
+const evoNext = (name) => { const l = evoLine(name); return l && l[l.indexOf(name) + 1]; };
+const ro = (w) => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c % 28 && c % 28 !== 8 ? '으로' : '로'; };
 function addDex(name) {
   S.dex = S.dex || [];
   if (dexHas(name)) return false;
@@ -775,7 +840,9 @@ function rollWild(streak, seen, diff) {
   const caughtBig = (S.dex || []).some((n) => POKE_BY[n] && 'lms'.includes(POKE_BY[n][5]));
   /* 어려운 섬일수록, 연속 정답이 길수록 희귀 확률이 올라가요 (예: 쉬움 0연속 8% · 도전 3연속 65%, 최대 75%) */
   const grade = Math.random() < Math.min(0.75, DIFF_INFO[diff].rare + 0.1 * streak) ? 'r' : 'c';
-  const pool = POKEMON.filter((m) => m[5] === grade && !seen.some((e) => e.name === m[0]));
+  /* 풀숲에는 가족마다 지금 모습만 나와요 (파이리 → 리자드를 얻으면 리자드가 나와요) */
+  const now = (g) => POKEMON.filter((m) => m[5] === g && evoNow(m[0]) === m[0] && !seen.some((e) => e.name === m[0]));
+  const pool = now(grade).length ? now(grade) : now(grade === 'r' ? 'c' : 'r');
   const fresh = pool.filter((m) => !dexHas(m[0]));
   const m = pick(fresh.length && Math.random() < 0.7 ? fresh : pool);
   /* ✨ 시크릿(이로치)은 전설·신화를 잡은 뒤에만, 연속 정답일수록 잘 나와요 */
@@ -959,6 +1026,8 @@ function catchScene(list, onEnd, notes) {
         const isNew = addDex(N);
         S.catches = S.catches || {};
         S.catches[N] = (S.catches[N] || 0) + 1;
+        const evo = q.legend ? [] : evolveFrom(N);
+        save();
         if (q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
         if (q.legend) badge = questCaught();
         const packKind = q.legend || q.shiny || 'lms'.includes(q.grade) ? 'l' : 'b';
@@ -971,8 +1040,10 @@ function catchScene(list, onEnd, notes) {
         $('#after').innerHTML = `
           <div class="card-reveal">${pokeCard(q.m, q.shiny)}</div>
           ${isNew ? `<p class="small-note">📖 새 카드! 도감에 ${N}${subj} 등록됐어요.</p>` : ''}
+          ${evo.length ? '' : evoNext(N) ? `<p class="small-note">🧬 ${esc(evoNext(N))}까지 ${evoDots(N)} ${S.catches[N]}/${EVO_NEED}</p>` : ''}
           <p class="pack-got">🎴 ${PACK_ODDS[packKind].name} 획득!</p>`;
         speak([LINES.caught(N, obj), LINES.packGot]);
+        if (evo.length) await evolveShow(evo, $('#after'));
       }
       const lastOne = k === list.length - 1;
       $('#after').insertAdjacentHTML('beforeend', `<button class="btn primary big" id="nextMon">${lastOne ? '결과 보기 ▶' : '다음 포켓몬 ▶'}</button>`);
@@ -1554,13 +1625,16 @@ SCREENS.book = () => {
   const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
     ...GRADE_DICT.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '📚', name: `${d.grade}학년 ${d.name}` })),
     ...SCHOOL.map((d) => ({ id: d.id, icon: '📝', name: `시험 ${d.n}급` }))];
-  const mine = POKEMON.filter((m) => dexHas(m[0]))
-    .sort((a, b) => ((S.catches || {})[b[0]] || 1) - ((S.catches || {})[a[0]] || 1));
+  /* 가방에는 지금 가진 포켓몬만 (진화하면 3마리가 1마리로 바뀌어요) */
+  const held = (n) => (S.catches || {})[n] || (dexHas(n) && 'lms'.includes(POKE_BY[n][5]) ? 1 : 0);
+  const mine = POKEMON.filter((m) => held(m[0]) > 0).sort((a, b) => held(b[0]) - held(a[0]));
   app.innerHTML = `
-    <h2 class="h">🎒 포켓몬 가방 <small class="h-note">${mine.length}마리</small></h2>
+    <h2 class="h">🎒 포켓몬 가방 <small class="h-note">${mine.reduce((a, m) => a + held(m[0]), 0)}마리</small></h2>
     ${bubble(mine.length ? LINES.bagBubble : LINES.bagEmpty)}
     <div class="bag">${mine.map((m) => `<button class="bag-mon g${m[5]}${hasShiny(m[0]) ? ' shiny' : ''}" data-id="${m[3]}" data-say="${sayAttr(m[0])}">
-      ${artImg(m, hasShiny(m[0]))}<b>${m[0]}</b>${((S.catches || {})[m[0]] || 1) > 1 ? `<span class="dup">×${S.catches[m[0]]}</span>` : ''}</button>`).join('')}</div>
+      ${artImg(m, hasShiny(m[0]))}<b>${m[0]}</b>${held(m[0]) > 1 ? `<span class="dup">×${held(m[0])}</span>` : ''}
+      ${evoNext(m[0]) ? `<small class="bag-evo" title="${esc(evoNext(m[0]))}까지">${evoDots(m[0])}</small>` : ''}</button>`).join('')}</div>
+    <p class="small-note">🧬 같은 포켓몬을 ${EVO_NEED}마리 모으면 다음 모습으로 진화해요!</p>
     <div class="row"><button class="btn primary" id="toAlbum">🗂️ 카드 앨범</button><button class="btn" id="toDex">📖 도감</button></div>
     <h3 class="h3">섬마다 최고 점수</h3>
     <ul class="bests">${all.map((x) => `<li><span>${x.icon} ${x.name}</span><b>${S.best[x.id] != null ? S.best[x.id] + '점' : '—'}</b></li>`).join('')}</ul>`;

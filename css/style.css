@@ -1038,3 +1038,12 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 .tcg.powerup { animation: powerup .7s cubic-bezier(.3, 1.6, .5, 1); }
 @keyframes powerup { 40% { transform: scale(1.12) rotate(-3deg); } }
 @media (prefers-reduced-motion: reduce) { .tcg.lv5, .tcg.powerup { animation: none; } }
+
+/* 🧬 진화 */
+.evo-dots { color: var(--red); letter-spacing: 1px; }
+.bag-evo { font-size: 11px; line-height: 1; }
+.evolve { display: grid; justify-items: center; gap: 6px; margin-bottom: 10px; }
+.evolve .evo-card { filter: brightness(6) saturate(0); animation: evo-pulse .4s ease-in-out infinite alternate; }
+.evolve.done .evo-card { filter: none; animation: powerup .7s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes evo-pulse { from { transform: scale(.94); } to { transform: scale(1.04); } }
+@media (prefers-reduced-motion: reduce) { .evolve .evo-card { animation: none; } }
