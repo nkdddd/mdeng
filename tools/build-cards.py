@@ -28,13 +28,14 @@ SPECIES = ROOT / 'data' / 'pokeapi_ko.csv'
 DATA_JS = ROOT / 'js' / 'data.js'
 SIMILAR_MAX = 120  # 비슷한 카드는 포켓몬마다 이만큼만
 IMG_PREFIX = 'https://cards.image.pokemonkorea.co.kr/data/'
-SKIP = ('서포트', '아이템', '스타디움', '포켓몬의 도구', '특수 에너지', '기본 에너지')
+SKIP = ('서포트', '서포터', '아이템', '스타디움', '포켓몬의 도구', '특수 에너지', '기본 에너지')
 
 # 희귀도 → 앱 등급: n 일반 · r 레어 · a 아트 레어 · s 슈퍼 레어 · u 스페셜
 CLASS = {
     'C': 'n', 'U': 'n',
     'R': 'r', 'RR': 'r', 'RRR': 'r', 'PR': 'r', 'K': 'r', 'A': 'r',
     'AR': 'a', 'CHR': 'a', 'S': 'a',
+    'TR': 'a',  # 트레이너스 레어 (지금은 트레이너스 카드뿐이라 빠져요)
     'SR': 's', 'HR': 's', 'SSR': 's', 'CSR': 's', 'BWR': 's', 'MA': 's',
     'SAR': 'u', 'UR': 'u', 'MUR': 'u',
 }
@@ -113,6 +114,9 @@ def main():
         if set_name not in sets:
             sets.append(set_name)
         kind = ' · '.join(p.strip() for p in kind.split('|') if p.strip())
+        # 종류에 섞인 표시 정리: '2진화 포켓몬토대부기[P]' → '2진화 포켓몬', '프리즘스타…[s]프리즘스타[/s]' → '프리즘스타'
+        kind = re.sub(r'\s+', ' ', re.sub(r'(포켓몬(?: EX)?)[^·]*?\[P\]', r'\1', kind))
+        kind = re.sub(r'프리즘스타\S*\[s\]프리즘스타\[/s\]', '프리즘스타', kind)
         # 카드 속 포켓몬의 타입 (카드를 뜯을 때 효과: 번개·불꽃·물보라 …)
         # 카드 속 포켓몬 (강화 끝에 같은 포켓몬의 상위 카드로 바꿀 때 써요)
         mon = next((n for n in base_names(name) if n in type_of), '')

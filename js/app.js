@@ -1162,7 +1162,7 @@ function evolveCard(c, target) {
   paintStars();
   return next;
 }
-/* 카드 목록(js/cards.js, 약 700KB)은 처음 필요할 때 한 번만 불러와요 */
+/* 카드 목록(js/cards.js, 약 1.3MB)은 처음 필요할 때 한 번만 불러와요 */
 let cardsLoading = null;
 function loadCards() {
   if (window.CARDS) return Promise.resolve();
