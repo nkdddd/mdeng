@@ -223,6 +223,7 @@ document.addEventListener('click', (e) => {
 const ISLANDS = [
   { id: 'dex',   icon: '📖', name: '포켓몬 도감', sub: '공부하면 포켓몬을 만나요!', tone: 'poke' },
   { id: 'dict',  icon: '🎧', name: '받아쓰기 섬', sub: '듣고 쓰기',          tone: 't1' },
+  { id: 'exam',  icon: '📝', name: '시험 대비',   sub: '학교 받아쓰기 1~10급', tone: 't5' },
   { id: 'josa',  icon: '🧩', name: '조사 마을',   sub: '이·가, 을·를',       tone: 't2' },
   { id: 'vowel', icon: '🦀', name: 'ㅐㅔ 바닷가', sub: '개 🐶 게 🦀',         tone: 't3' },
   { id: 'space', icon: '✂️', name: '띄어쓰기 숲', sub: '어디서 띄울까?',     tone: 't4' },
@@ -230,6 +231,16 @@ const ISLANDS = [
   { id: 'book',  icon: '🎒', name: '포켓몬 가방', sub: '잡은 포켓몬',        tone: 't6' },
   { id: 'friends', icon: '🤝', name: '친구 광장', sub: '카드 대결 · 카드 시장', tone: 'friends' },
 ];
+/* 🔢 수학 섬 (문제는 js/math.js) */
+const MATH_ISLANDS = [
+  { id: 'gugu',   icon: '✖️', name: '구구단 성',   sub: '2단 ~ 9단 · 구구단표',  tone: 't3' },
+  { id: 'plus',   icon: '➕', name: '덧셈 동산',   sub: '더하면 커져요',        tone: 't4' },
+  { id: 'minus',  icon: '➖', name: '뺄셈 계곡',   sub: '빼면 작아져요',        tone: 't2' },
+  { id: 'times',  icon: '🔢', name: '곱셈 공장',   sub: '묶어서 세기',          tone: 't1' },
+  { id: 'divide', icon: '➗', name: '나눗셈 빵집', sub: '똑같이 나누기',        tone: 't5' },
+  { id: 'mix',    icon: '🧮', name: '수학 왕 탑',  sub: '섞어서 도전',          tone: 't6' },
+];
+const SHARED_ISLANDS = ['book', 'friends'];
 const SCREENS = {};
 function go(name, ...args) {
   hush();
@@ -258,22 +269,45 @@ function dexHint() {
   return `카드 ${have}/${POKEMON.length}장 · 🧩 ${q.p}까지 조각 ${q.steps.length - (S.qstep || 0)}개`;
 }
 SCREENS.home = () => {
-  app.innerHTML = `
-    <h1 class="title">또박또박 <span>받아쓰기</span></h1>
-    ${bubble(LINES.home)}
-    <div class="map">
-      ${ISLANDS.map((s) => `
-        <button class="island ${s.tone}" data-go="${s.id}">
+  const math = S.subject === 'math';
+  const card = (s) => `
+        <button class="island ${s.tone}${SHARED_ISLANDS.includes(s.id) ? ' mini' : ''}" data-go="${s.id}">
           <span class="i-icon" aria-hidden="true">${s.icon}</span>
           <span class="i-name">${s.name}</span>
           <span class="i-sub">${s.id === 'dex' ? dexHint() : s.id === 'friends' ? friendsHint() : s.sub}</span>
-          ${DIFFICULTY[s.id] ? diffTag(s.id) : s.id === 'dict' ? '<span class="diff-tag">★★~★★★★</span>' : ''}
+          ${DIFFICULTY[s.id] ? diffTag(s.id) : ['dict', 'exam', ...MATH_ISLANDS.map((x) => x.id)].includes(s.id) ? `<span class="diff-tag">${rangeTag(s.id)}</span>` : ''}
           ${S.best[s.id] ? `<span class="i-best">최고 ${S.best[s.id]}점</span>` : ''}
-        </button>`).join('')}
+        </button>`;
+  const by = (id) => ISLANDS.find((x) => x.id === id);
+  const list = math ? MATH_ISLANDS : ISLANDS.filter((x) => !['dex', ...SHARED_ISLANDS].includes(x.id));
+  app.innerHTML = `
+    <h1 class="title">또박또박 <span>${math ? '수학' : '받아쓰기'}</span></h1>
+    ${bubble(math ? LINES.mathHome : LINES.home)}
+    <div class="map">
+      ${card(by('dex'))}
+      <div class="subject-tabs" role="tablist" aria-label="과목">
+        <button role="tab" data-subj="ko" aria-selected="${!math}">📚 국어</button>
+        <button role="tab" data-subj="math" aria-selected="${math}">🔢 수학</button>
+      </div>
+      ${list.map(card).join('')}
+      <div class="map-shared">${SHARED_ISLANDS.map((id) => card(by(id))).join('')}</div>
     </div>`;
   $$('.island', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); go(b.dataset.go); }));
-  speak(LINES.home);
+  $$('[data-subj]', app).forEach((b) => b.addEventListener('click', () => {
+    if ((S.subject || 'ko') === b.dataset.subj) return;
+    S.subject = b.dataset.subj; save(); sfx('pop'); SCREENS.home();
+  }));
+  speak(math ? LINES.mathHome : LINES.home);
 };
+/* 섬 안 단계들의 난이도 범위: ★~★★★★ */
+function rangeTag(id) {
+  const levels = id === 'dict' ? [...DICTATION, ...GRADE_DICT].map((l) => l.id) : id === 'exam' ? SCHOOL.map((l) => l.id) : MATH.ISLANDS[id].map((l) => l.id);
+  const ds = levels.map(diffOf);
+  const lo = Math.min(...ds), hi = Math.max(...ds);
+  return lo === hi ? diffStars(lo) : `${'★'.repeat(lo)}~${'★'.repeat(hi)}`;
+}
+/* 📝 시험 대비: 받아쓰기 섬의 시험 탭 */
+SCREENS.exam = () => { S.dictTab = 'test'; SCREENS.dict(); };
 
 /* ---------- 결과 ---------- */
 function finish(key, score, total, again, extra) {
@@ -314,6 +348,7 @@ function finish(key, score, total, again, extra) {
 /* 문제 풀이 틀: items를 하나씩 render로 넘기고 끝나면 결과 화면 */
 /* 1·2학년 받아쓰기(js/grade.js) 단계의 난이도 */
 GRADE_DICT.forEach((l) => { DIFFICULTY[l.id] = l.diff; });
+MATH.ALL.forEach((l) => { DIFFICULTY[l.id] = l.diff; }); /* 🔢 수학 단계 */
 const diffOf = (key) => DIFFICULTY[key] || 2;
 const diffStars = (d) => '★'.repeat(d) + '☆'.repeat(4 - d);
 function runQuiz(key, items, render) {
@@ -1745,8 +1780,9 @@ function dictQuestion(q, i, n, mark, next) {
 
 /* ---------- 🎒 포켓몬 가방 ---------- */
 SCREENS.book = () => {
-  const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex', 'friends'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
+  const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex', 'friends', 'exam'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
     ...GRADE_DICT.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '📚', name: `${d.grade}학년 ${d.name}` })),
+    ...MATH.ALL.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '🔢', name: `수학 ${d.name}` })),
     ...SCHOOL.map((d) => ({ id: d.id, icon: '📝', name: `시험 ${d.n}급` }))];
   /* 가방에는 지금 가진 포켓몬만 (진화하면 3마리가 1마리로 바뀌어요) */
   const held = (n) => (S.catches || {})[n] || (dexHas(n) && 'lms'.includes(POKE_BY[n][5]) ? 1 : 0);
@@ -1770,6 +1806,154 @@ SCREENS.book = () => {
   $('#toAlbum').onclick = () => go('album');
   $('#toDex').onclick = () => go('dex');
 };
+
+/* ---------- 🔢 수학 섬 (구구단 · 덧셈 · 뺄셈 · 곱셈 · 나눗셈 · 섞어서) ---------- */
+const MATH_LINE = {
+  gugu: '구구단 성이야! 단을 골라서 외워 보자. 구구단표에서 노래도 들을 수 있어.',
+  plus: '덧셈 동산이야! 더하면 수가 커져.', minus: '뺄셈 계곡이야! 빼면 수가 작아져.',
+  times: '곱셈 공장이야! 똑같은 묶음이 몇 개인지 세어 봐.', divide: '나눗셈 빵집이야! 똑같이 나누어 줘.',
+  mix: '수학 왕 탑이야! 모두 섞어서 도전해 봐.',
+};
+function mathIsland(isl) {
+  const meta = MATH_ISLANDS.find((x) => x.id === isl);
+  app.innerHTML = `
+    <h2 class="h">${meta.icon} ${meta.name}</h2>
+    ${bubble(MATH_LINE[isl], 'tight')}
+    ${isl === 'gugu' ? '<button class="btn gugu-table-btn" id="guguTable">📋 구구단표 보고 노래 듣기</button>' : ''}
+    <p class="small-note tab-note">단계마다 ${MATH.SIZE}문제 · 숫자 버튼으로 답해요</p>
+    <div class="levels ${isl === 'gugu' ? 'gugu' : 'grade'}">${MATH.ISLANDS[isl].map((lv) => `
+      <button class="level" data-id="${lv.id}"><span class="l-icon${isl === 'gugu' && /^\d$/.test(lv.icon) ? ' dan' : ''}">${lv.icon}</span>
+        <span class="l-name">${lv.name}</span><span class="l-sub">${esc(lv.desc)}</span>
+        ${diffTag(lv.id)}${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>`;
+  $$('.level', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); mathLevel(b.dataset.id); }));
+  $('#guguTable')?.addEventListener('click', () => { sfx('pop'); go('guguTable'); });
+  speak(MATH_LINE[isl]);
+}
+MATH_ISLANDS.forEach((m) => { SCREENS[m.id] = () => mathIsland(m.id); });
+function mathLevel(id) {
+  runQuiz(id, MATH.questions(id), mathQuestion);
+  SCREENS[id] = () => mathLevel(id); /* '한 번 더' */
+}
+
+/* 📋 구구단표: 칸을 누르면 "칠 팔 오십육", 단 이름을 누르면 그 단 노래 */
+SCREENS.guguTable = () => {
+  app.innerHTML = `<h2 class="h">📋 구구단표</h2>${bubble('칸을 누르면 읽어 주고, 위의 단 이름을 누르면 그 단을 노래해 줘!', 'tight')}
+    <div class="gugu-table">${[2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<div class="gt-col">
+      <button class="gt-head" data-dan="${d}">${d}단 🎵</button>
+      ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((b) => `<button class="gt-cell" data-say="${esc(MATH.chant(d, b))}" data-d="${d}" data-b="${b}">${d}×${b}=<b>${d * b}</b></button>`).join('')}
+    </div>`).join('')}</div>
+    <div class="row"><button class="btn primary" id="toGugu">✖️ 구구단 문제 풀기</button></div>`;
+  $$('.gt-head', app).forEach((h) => h.addEventListener('click', () => {
+    const d = +h.dataset.dan;
+    $$('.gt-cell', app).forEach((c) => c.classList.toggle('sing', +c.dataset.d === d));
+    speak([`${MATH.ko(d)}단`, ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((b) => MATH.chant(d, b))]);
+  }));
+  $$('.gt-cell', app).forEach((c) => c.addEventListener('click', () => { sfx('pop'); $$('.gt-cell.lit', app).forEach((x) => x.classList.remove('lit')); c.classList.add('lit'); }));
+  $('#toGugu').onclick = () => go('gugu');
+  speak('칸을 누르면 읽어 주고, 단 이름을 누르면 그 단을 노래해 줘!');
+};
+
+/* 문제 화면: 식 + (작은 수는 그림) + 숫자 버튼 */
+/* 숫자 뒤 조사는 읽는 소리로: 2(이)예요 · 21(이십일)이에요 · 1(일)을 · 2(이)를 */
+const nj = (n, j) => (MATH.eun(MATH.ko(n)) === '은' ? j[0] : j[1]);
+const MATH_EMOJI = ['🍎', '🍓', '🐟', '⭐', '🍪', '🎈', '🐥', '🍩'];
+const objs = (n, e, cls = '') => `<span class="objs ${cls}">${Array.from({ length: n }, (_, k) => `<i${k && k % 5 === 0 ? ' class="gap5"' : ''}>${e}</i>`).join('')}</span>`;
+function mathQuestion(q, i, n, mark, next) {
+  const slot = '<span class="slot" id="slot">?</span>';
+  const part = (v, isBlank) => (isBlank ? slot : `<span class="num">${v}</span>`);
+  const pic = (q.op === '+' || q.op === '-') && q.blank === 'ans' && q.a <= 10 && q.b <= 10;
+  const e = MATH_EMOJI[(q.a * 7 + q.b) % MATH_EMOJI.length];
+  app.innerHTML = `
+    ${dots(i, n)}
+    <div class="mq">
+      <button class="spk" data-say="${esc(q.say)}" aria-label="문제 읽어 주기">🔊</button>
+      <div class="eqn" aria-label="${esc(q.text)}">${part(q.a, q.blank === 'a')}<span class="op">${q.op}</span>${part(q.b, q.blank === 'b')}<span class="op">=</span>${part(q.ans, q.blank === 'ans')}</div>
+      ${pic ? `<div class="mpic">${q.op === '+' ? `${objs(q.a, e)}<b class="plus">+</b>${objs(q.b, e, 'b')}` : objs(q.a, e, 'minus-src')}</div>` : ''}
+    </div>
+    <div class="numpad" id="numpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<button data-k="${d}">${d}</button>`).join('')}
+      <button data-k="del" class="np-del" aria-label="지우기">⌫</button><button data-k="0">0</button><button data-k="ok" class="np-ok" aria-label="확인">✔</button></div>
+    <div class="explain" hidden></div>`;
+  let typed = '', done = false;
+  const paint = () => { const el = $('#slot'); el.textContent = typed || (q.blank === 'ans' ? '?' : '□'); el.classList.toggle('typing', !!typed); };
+  paint();
+  const check = () => {
+    if (done) return;
+    if (!typed) { toast('숫자 버튼으로 답을 눌러요! 🔢'); return; }
+    done = true;
+    const ok = +typed === q.want;
+    mark(ok);
+    sfx(ok ? 'ok' : 'no');
+    const el = $('#slot');
+    el.classList.add(ok ? 'right' : 'wrong');
+    el.innerHTML = ok ? `${q.want}` : `<s>${typed}</s> ${q.want}`;
+    if (ok) maru($('.mq', app));
+    $('#numpad').classList.add('used');
+    const ex = $('.explain', app);
+    ex.innerHTML = `${ok ? '<p class="yay">딩동댕! 정답이에요! ⭐</p>' : `<p class="oops">아쉬워요! 정답은 <b>${q.want}</b>${nj(q.want, ['이에요', '예요'])}.</p>`}
+      ${mathWhy(q)}<button class="btn primary next">다음 ➜</button>`;
+    ex.hidden = false;
+    if (pic && q.op === '-') $$('.minus-src i', app).slice(-q.b).forEach((x) => x.classList.add('gone'));
+    const full = `${MATH.ko(q.a)} ${MATH.OPW[q.op]} ${MATH.ko(q.b)}${MATH.eun(MATH.ko(q.b))} ${MATH.ko(q.ans)}`;
+    speak([ok ? LINES.ding : LINES.oops, q.op === '×' && q.a <= 9 && q.b <= 9 ? MATH.chant(q.a, q.b) : full]);
+    $('.next', ex).onclick = next;
+  };
+  $$('#numpad button', app).forEach((b) => b.addEventListener('click', () => {
+    if (done) return;
+    const k = b.dataset.k;
+    if (k === 'ok') return check();
+    sfx('click');
+    if (k === 'del') typed = typed.slice(0, -1);
+    else if (typed.length < 3) typed = (typed === '0' ? '' : typed) + k;
+    paint();
+  }));
+  /* 키보드로도: 숫자 · 지우기 · 엔터 */
+  const onKey = (ev) => {
+    if (!document.body.contains($('#numpad'))) { document.removeEventListener('keydown', onKey); return; }
+    if (/^\d$/.test(ev.key)) $(`#numpad [data-k="${ev.key}"]`)?.click();
+    else if (ev.key === 'Backspace') $('#numpad [data-k="del"]')?.click();
+    else if (ev.key === 'Enter') { if (done) $('.explain .next', app)?.click(); else check(); }
+  };
+  document.addEventListener('keydown', onKey);
+  speak(q.say);
+}
+/* 왜 그렇게 될까? 틀려도 맞아도 한 줄 설명 + 그림 */
+function mathWhy(q) {
+  const { a, b, op, ans } = q;
+  const eq = `<p class="m-eq">${a} ${op} ${b} = <b>${ans}</b></p>`;
+  const back = q.blank === 'ans' ? '' : `<p class="small-note">□ 문제는 거꾸로 생각해요: ${op === '×' ? `${ans} ÷ ${q.blank === 'a' ? b : a} = ${q.want}` : op === '÷' ? (q.blank === 'a' ? `${b} × ${ans} = ${a}` : `${a} ÷ ${ans} = ${b}`) : op === '+' ? `${ans} - ${q.blank === 'a' ? b : a} = ${q.want}` : q.blank === 'a' ? `${ans} + ${b} = ${a}` : `${a} - ${ans} = ${b}`}</p>`;
+  if (op === '×') {
+    const arr = a <= 9 && b <= 9 ? `<div class="dot-arr" style="--c:${a}" aria-hidden="true">${Array.from({ length: a * b }, () => '<i></i>').join('')}</div>` : '';
+    return `${eq}${a <= 9 && b <= 9 ? `<p>🎵 <b>${MATH.chant(a, b)}</b> · ${a}개씩 ${b}묶음이에요.</p>` : `<p>${a}${nj(a, ['을', '를'])} ${b}번 더해요: ${Array(b).fill(a).join(' + ')} = ${ans}</p>`}${arr}${back}`;
+  }
+  if (op === '÷') return `${eq}<p>🍕 ${a}개를 ${b}명에게 똑같이 나누면 한 명에 <b>${ans}</b>개! ${b}단에서 찾아요: <b>${b} × ${ans} = ${a}</b></p>${back}`;
+  const oa = a % 10, ob = b % 10;
+  if (op === '+') {
+    if (a < 10 && b < 10 && ans > 10) return `${eq}<p>🔟 10 만들기! ${a}에 <b>${10 - a}</b>${nj(10 - a, ['을', '를'])} 더하면 10, 남은 <b>${b - (10 - a)}</b>${nj(b - (10 - a), ['을', '를'])} 더하면 <b>${ans}</b></p>${back}`;
+    if (a >= 10 || b >= 10) return `${eq}${columnCalc(a, '+', b, ans)}<p class="small-note">${oa + ob >= 10 ? '일의 자리끼리 더해서 10이 넘으면, 10을 십의 자리로 올려요(받아올림)!' : '일의 자리끼리, 십의 자리끼리 더해요.'}</p>${back}`;
+  }
+  if (op === '-') {
+    if (a > 10 && a < 20 && b < 10 && oa < ob) return `${eq}<p>🪜 ${a}에서 먼저 <b>${oa}</b>${nj(oa, ['을', '를'])} 빼면 10, 남은 <b>${b - oa}</b>${nj(b - oa, ['을', '를'])} 더 빼면 <b>${ans}</b></p>${back}`;
+    if (a >= 10) return `${eq}${columnCalc(a, '-', b, ans)}<p class="small-note">${oa < ob ? '일의 자리에서 뺄 수 없으면, 십의 자리에서 10을 빌려 와요(받아내림)!' : '일의 자리끼리, 십의 자리끼리 빼요.'}</p>${back}`;
+  }
+  return `${eq}${back}`;
+}
+/* 세로셈: 받아올림은 작은 1, 받아내림은 빌려 온 수 */
+function columnCalc(a, op, b, ans) {
+  const w = Math.max(String(a).length, String(b).length, String(ans).length);
+  const dig = (n) => String(n).padStart(w, ' ').split('');
+  const A = dig(a), B = dig(b), marks = Array(w).fill(''), strike = Array(w).fill(false);
+  if (op === '+') {
+    let c = 0;
+    for (let i = w - 1; i >= 0; i--) { const s2 = (+A[i] || 0) + (+B[i] || 0) + c; c = s2 >= 10 ? 1 : 0; if (c && i > 0) marks[i - 1] = '1'; }
+  } else {
+    const d = A.map((x) => +x || 0);
+    for (let i = w - 1; i >= 0; i--) {
+      if (d[i] < (+B[i] || 0) && i > 0) { d[i] += 10; d[i - 1] -= 1; marks[i] = String(d[i]); marks[i - 1] = String(d[i - 1]); strike[i - 1] = true; strike[i] = true; }
+    }
+  }
+  const row = (cells, cls = '', opch = '') => `<div class="cc-row ${cls}"><span class="cc-op">${opch}</span>${cells.map((x, k) => `<span${cls === '' && strike[k] ? ' class="st"' : ''}>${x.trim() ? x : ''}</span>`).join('')}</div>`;
+  return `<div class="col-calc" aria-hidden="true">${row(marks, 'mk')}${row(A)}${row(B, 'b', op)}<div class="cc-line"></div>${row(dig(ans), 'res')}</div>`;
+}
 
 /* ---------- 🤝 친구 광장: 친구 · ⚔️ 카드 대결 · 🏪 카드 시장 (js/social.js) ---------- */
 function friendsHint() {

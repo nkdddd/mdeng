@@ -30,6 +30,13 @@ const VOICE = (() => {
     DICTATION.forEach((d) => d.items.forEach((q) => add(q.t)));
     SCHOOL.forEach((d) => d.items.forEach((q) => add(q.t)));
     GRADE_DICT.forEach((d) => d.items.forEach((q) => add(q.t)));
+    /* 🔢 구구단 노래·문제 (나머지 수학 문제는 기기 목소리로 읽어요) */
+    if (typeof MATH !== 'undefined') {
+      for (let a = 2; a <= 9; a++) {
+        add(`${MATH.ko(a)}단`);
+        for (let b = 1; b <= 9; b++) { add(MATH.chant(a, b)); add(MATH.make(a, '×', b).say); }
+      }
+    }
     SOUNDS.forEach((q) => { add(q.w); add(LINES.soundAnswer(q.s, q.w)); add(q.tip); });
     VOWELS.forEach((q) => add(q.w));
     SPACING.forEach((q) => add(q.t));

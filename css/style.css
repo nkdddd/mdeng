@@ -1159,6 +1159,28 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 @media (max-width: 560px) {
   .island.friends { padding: 6px 14px; column-gap: 10px; }
   .island.friends .i-icon { font-size: 32px; }
+  .subject-tabs button { min-height: 40px; font-size: 17px; }
+  .map-shared { gap: 8px; }
+  .island.mini { padding: 6px 10px; column-gap: 6px; }
+  .island.mini .i-icon { font-size: 28px; }
+  .island.mini .i-name { font-size: 16px; }
+  .island.mini .i-sub { font-size: 11px; }
+  .eqn { font-size: 44px; gap: 8px; }
+  .mq { padding: 12px 8px; gap: 8px; }
+  .objs { font-size: 22px; }
+  .numpad { gap: 6px; }
+  .numpad button { min-height: 50px; font-size: 26px; }
+  .gugu-table.gugu-table { grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .levels.levels.gugu { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .levels.gugu .l-sub { display: none; }
+  .levels.gugu .l-icon.dan { font-size: 26px; }
+  .levels.gugu .l-icon { font-size: 24px; }
+  .levels.gugu .l-name { font-size: 15px; }
+  .levels.gugu .diff-tag small { display: none; }
+  .island.mini { border-radius: 22px; }
+  .gt-cell { font-size: 12px; min-height: 26px; padding: 0 2px; }
+  .gt-head { font-size: 15px; min-height: 34px; }
+  .col-calc { font-size: 28px; }
   .market { grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .fighter .tcg { width: min(100%, 110px); }
   .die { font-size: 52px; width: 58px; height: 58px; }
@@ -1316,6 +1338,65 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 .album.gift-cards { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; width: 100%; }
 .gift-cards .album-card { min-width: 0; overflow: hidden; }
 .gift-cards .cimg-fallback, .gift-cards .tcg { font-size: 9px; }
+
+/* 📚 국어 · 🔢 수학 탭 + 함께 쓰는 섬 */
+.subject-tabs { grid-column: 1 / -1; display: flex; gap: 6px; }
+.subject-tabs button { flex: 1; min-height: 46px; font-family: var(--display); font-size: 20px; border: 3px solid var(--ink); border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }
+.subject-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); box-shadow: none; }
+.map-shared { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.island.mini { width: 100%; min-width: 0; justify-self: stretch; aspect-ratio: auto; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; text-align: left; padding: 8px 14px; border-radius: 999px; grid-column: auto; }
+.island.mini .i-icon { grid-row: 1 / span 2; font-size: 36px; }
+.island.mini .i-name { font-size: 20px; align-self: end; }
+.island.mini .i-sub { align-self: start; font-size: 13px; }
+.island.friends.mini { background: linear-gradient(90deg, var(--t4), var(--t2)); }
+
+/* 🔢 수학 */
+.levels.gugu { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.levels.gugu .level:nth-child(n) { background: var(--t3); }
+.l-icon.dan { font-family: var(--display); font-size: 40px; color: #fff; background: var(--red); width: 1.5em; height: 1.5em; border-radius: 50%; display: grid; place-items: center; line-height: 1; box-shadow: var(--shadow); }
+.gugu-table-btn { align-self: center; }
+.mq { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 12px; background: var(--card); border: 3px solid var(--ink); border-radius: 24px; box-shadow: var(--shadow); }
+.mq > .spk { position: absolute; right: 10px; top: 10px; width: 44px; height: 44px; font-size: 20px; }
+.eqn { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; font-family: var(--display); font-size: 56px; line-height: 1.1; }
+.eqn .op { color: var(--red); }
+.slot { min-width: 1.6em; padding: 0 10px; text-align: center; border: 4px dashed var(--sky); border-radius: 16px; color: var(--ink-soft); background: var(--grid-soft); }
+.slot.typing { border-style: solid; color: var(--ink); }
+.slot.right { border-color: var(--ok); background: #dcfce7; color: #166534; }
+.slot.wrong { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+.slot s { color: var(--ink-soft); font-size: .6em; }
+.mpic { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; }
+.mpic .plus { font-family: var(--display); font-size: 30px; color: var(--red); }
+.objs { display: inline-flex; flex-wrap: wrap; max-width: 11em; font-size: 26px; line-height: 1.15; }
+.objs i { font-style: normal; transition: opacity .4s, transform .4s; }
+.objs i.gap5 { margin-left: 8px; }
+.objs i.gone { opacity: .2; transform: scale(.7) rotate(-20deg); filter: grayscale(1); }
+.numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 340px; width: 100%; align-self: center; }
+.numpad button { min-height: 58px; font-family: var(--display); font-size: 30px; border: 3px solid var(--ink); border-radius: 18px; background: var(--card); box-shadow: var(--shadow); }
+.numpad button:active { transform: translateY(3px); box-shadow: none; }
+.numpad .np-ok { background: var(--red); color: #fff; }
+.numpad .np-del { background: var(--sun-soft); }
+.numpad.used { display: none; }
+.m-eq { font-family: var(--display); font-size: 30px; text-align: center; }
+.m-eq b { color: var(--red); font-weight: 400; }
+.oops { margin: 0; font-family: var(--display); font-size: 22px; color: var(--ink-soft); }
+.oops b { color: var(--red); font-weight: 400; }
+.dot-arr { display: grid; grid-template-columns: repeat(var(--c), 14px); gap: 5px; justify-content: center; padding: 6px; }
+.dot-arr i { width: 14px; height: 14px; border-radius: 50%; background: var(--sky); }
+.col-calc { display: flex; flex-direction: column; align-items: center; font-family: var(--display); font-size: 34px; line-height: 1.15; }
+.cc-row { display: flex; }
+.cc-row span { width: 1.1em; text-align: center; }
+.cc-row .cc-op { color: var(--red); }
+.cc-row.mk { font-size: 18px; color: var(--red); min-height: 1em; }
+.cc-row span.st { text-decoration: line-through; text-decoration-color: var(--red); color: var(--ink-soft); }
+.cc-row.res { color: var(--red); }
+.cc-line { width: 4.2em; border-top: 3px solid var(--ink); margin: 2px 0; }
+.gugu-table { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.gt-col { display: flex; flex-direction: column; gap: 3px; }
+.gt-head { font-family: var(--display); font-size: 18px; min-height: 40px; border: 3px solid var(--ink); border-radius: 12px; background: var(--t3); }
+.gt-cell { font-size: 15px; min-height: 30px; border: 1px solid var(--grid); border-radius: 8px; background: var(--card); }
+.gt-cell b { color: var(--red); font-weight: 700; }
+.gt-cell.sing { background: var(--sun-soft); }
+.gt-cell.lit { background: var(--sun); transform: scale(1.06); }
 
 /* ---------- 📱 휴대폰: 한 화면에 보이게 ----------
  * 윗줄·말풍선을 작게, 섬·단계 칸을 촘촘하게, 주요 버튼(시작·다 썼어요·다음)은 화면 아래에 붙여요. */
