@@ -28,7 +28,7 @@ const rate = opt('rate', '-8%');
 
 /* 앱과 똑같은 데이터·이름표 규칙을 불러와요 */
 const ctx = vm.createContext({});
-for (const f of ['js/data.js', 'js/voice.js']) vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx, { filename: f });
+for (const f of ['js/data.js', 'js/grade.js', 'js/voice.js']) vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx, { filename: f });
 const VOICE = vm.runInContext('VOICE', ctx);
 const phrases = VOICE.allPhrases();
 const outDir = path.join(root, 'audio');
