@@ -974,6 +974,15 @@ const BET_MAX = 5;
 const SWEEP_MS = [650, 950, 1300, 1750, 2300, 3000]; /* 별 0~5개: 고리가 커졌다 작아지는 반 바퀴 시간 */
 const SPEED_WORD = ['아주 빠름', '빠름', '보통', '느림', '아주 느림', '거북이 🐢'];
 const RING_COLOR = { c: '#4ade80', r: '#facc15', l: '#fb923c', m: '#f97316', s: '#ef4444' };
+/* 희귀도별 고리: thr 포획 고리 크기(이보다 작을 때 던지면 잡혀요) · speed 빠르기 · acc 작아질수록 빨라지는 정도 */
+const RING = {
+  c: { thr: 0.36, speed: 1, acc: 0 },
+  r: { thr: 0.33, speed: 1.2, acc: 0.8 },
+  l: { thr: 0.3, speed: 1.4, acc: 1.5 },
+  m: { thr: 0.29, speed: 1.5, acc: 1.8 },
+  s: { thr: 0.27, speed: 1.65, acc: 2.2 },
+};
+const RING_MIN = 0.16;
 const GO_TREES = [[4, 1.2], [14, 0.8], [24, 1.05], [70, 0.9], [82, 1.3], [93, 0.85]];
 
 function catchScene(list, onEnd, notes) {
@@ -987,14 +996,16 @@ function catchScene(list, onEnd, notes) {
   const scene = document.createElement('div');
   scene.className = 'go-scene';
   document.body.appendChild(scene);
-  const close = () => { scene.classList.add('out'); setTimeout(() => scene.remove(), 400); };
+  document.body.classList.add('scene-open'); /* 뒤 화면이 스크롤되지 않게 */
+  scene.addEventListener('touchmove', (e) => { if (!e.target.closest('.go-result')) e.preventDefault(); }, { passive: false });
+  const close = () => { scene.cleanupKeys?.(); document.body.classList.remove('scene-open'); scene.classList.add('out'); setTimeout(() => scene.remove(), 400); };
 
   const show = () => {
     const q = list[k];
     const N = q.name, obj = josaPick(N, ['을', '를']), subj = josaPick(N, ['이', '가']);
     const G = GRADES[q.grade];
-    const zone = G.zone - (q.shiny ? 1 : 0);
-    const thr = 0.3 + (0.75 * zone * 2.4) / 100; /* 고리가 이 크기보다 작을 때 던지면 성공 */
+    const R = RING[q.grade] || RING.c;
+    const thr = R.thr - (q.shiny ? 0.02 : 0); /* 색 고리가 포획 고리보다 작을 때 던지면 성공 */
     const bigName = { l: '전설의', m: '신화 속', s: '비밀의' }[q.grade];
     let bet = 0, ring = 1, dir = -1, raf = 0, last = 0, thrown = false;
     scene.className = `go-scene g${q.grade}${q.shiny ? ' shiny' : ''}${q.legend ? ' legend' : ''}`;
@@ -1010,7 +1021,7 @@ function catchScene(list, onEnd, notes) {
       <div class="go-mon" id="gm">
         <div class="go-shadow"></div>
         <div class="go-art" id="target">${artImg(q.m, q.shiny)}</div>
-        <div class="go-ring" id="ring" aria-hidden="true"><i class="go-ring-out"></i><i class="go-ring-in" style="--rc:${RING_COLOR[q.grade] || '#4ade80'}"></i></div>
+        <div class="go-ring" id="ring" aria-hidden="true"><i class="go-ring-out"></i><i class="go-ring-goal" style="transform:scale(${thr})"></i><i class="go-ring-in" style="--rc:${RING_COLOR[q.grade] || '#4ade80'}"></i></div>
       </div>
       <div class="go-banner" id="goBanner"><b>앗! 야생 ${esc(N)}${subj}</b><b>튀어나왔다!</b></div>
       <p class="go-msg" id="goMsg" aria-live="polite"></p>
@@ -1023,25 +1034,26 @@ function catchScene(list, onEnd, notes) {
         </div>
         <p class="go-note" id="betNote"></p>
         <button class="go-ball" id="throw" aria-label="${N}에게 몬스터볼 던지기">${ballSvg}</button>
-        <p class="go-hint" id="goHint">👆 고리가 작아질 때 볼을 위로 휙!</p>
+        <p class="go-hint" id="goHint">${matchMedia('(hover: hover) and (pointer: fine)').matches ? '⌨️ 스페이스바를 눌렀다 떼거나 🖱️ 볼을 위로 끌어 휙!' : '👆 고리가 금색 고리 안에 들어올 때 볼을 위로 휙!'}</p>
       </div>
       <div class="go-result" id="goResult" hidden></div>
       <div class="go-wipe" aria-hidden="true"></div>`;
     const ringEl = $('#ring', scene), ringIn = $('.go-ring-in', scene);
-    const halfMs = () => SWEEP_MS[bet] * G.speed;
+    const halfMs = () => (SWEEP_MS[bet] * 1.3) / R.speed;
     const paintBet = () => {
       $('#betStars', scene).innerHTML = Array.from({ length: BET_MAX }, (_, s2) => `<span class="${s2 < bet ? 'on' : ''}">⭐</span>`).join('');
       $('#betNote', scene).innerHTML = `⭐ <b>${bet}개</b> 걸기 · 고리 <b>${SPEED_WORD[bet]}</b> · 남은 별 ${thrown ? S.stars : S.stars - bet}개`;
       $('#betMinus', scene).disabled = thrown || bet === 0;
       $('#betPlus', scene).disabled = thrown || bet >= BET_MAX || bet >= S.stars;
     };
-    /* 고리: 1(크다) ↔ 0.25(작다) */
+    /* 고리: 1(크다) ↔ RING_MIN(작다). 희귀할수록 빠르고, 작아질수록 휙 빨라져요 */
     const tick = (t) => {
       if (!last) last = t;
       const dt = Math.min(t - last, 50);
       last = t;
-      ring += dir * ((0.75 * dt) / halfMs());
-      if (ring <= 0.25) { ring = 0.25 + (0.25 - ring); dir = 1; }
+      const boost = 1 + R.acc * (1 - ring) * (1 - ring);
+      ring += dir * (((1 - RING_MIN) * dt) / halfMs()) * boost;
+      if (ring <= RING_MIN) { ring = RING_MIN + (RING_MIN - ring); dir = 1; }
       if (ring >= 1) { ring = 1 - (ring - 1); dir = -1; }
       ringIn.style.transform = `scale(${ring})`;
       ringIn.classList.toggle('good', ring <= thr);
@@ -1089,7 +1101,26 @@ function catchScene(list, onEnd, notes) {
     };
     ball.addEventListener('pointerup', release);
     ball.addEventListener('pointercancel', () => { drag = null; ball.style.transform = ''; });
-    ball.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); throwBall(0); } });
+    /* ⌨️ 컴퓨터: 스페이스바를 누르고 있으면 볼을 치켜들고, 떼면 휙! (엔터는 바로 던지기) */
+    let charge = 0;
+    const keyDown = (e) => {
+      if (!document.body.contains(ball) || thrown) return;
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        if (!charge) { charge = performance.now(); ball.classList.add('charging'); sfx('click'); }
+      } else if (e.key === 'Enter') { e.preventDefault(); throwBall(0); }
+    };
+    const keyUp = (e) => {
+      if (!(e.code === 'Space' || e.key === ' ') || !charge) return;
+      e.preventDefault();
+      charge = 0;
+      ball.classList.remove('charging');
+      if (document.body.contains(ball)) throwBall(0);
+    };
+    document.addEventListener('keydown', keyDown);
+    document.addEventListener('keyup', keyUp);
+    scene.cleanupKeys?.();
+    scene.cleanupKeys = () => { document.removeEventListener('keydown', keyDown); document.removeEventListener('keyup', keyUp); };
 
     async function throwBall(curve) {
       if (thrown || !ringEl.classList.contains('on')) return;
@@ -1097,7 +1128,7 @@ function catchScene(list, onEnd, notes) {
       cancelAnimationFrame(raf);
       hush();
       const hit = ring <= thr;
-      const nice = ring <= 0.33 ? '최고야! Excellent!' : ring <= 0.45 ? '잘했어! Great!' : '좋아! Nice!';
+      const nice = ring <= thr * 0.7 ? '최고야! Excellent!' : ring <= thr * 0.86 ? '잘했어! Great!' : '좋아! Nice!';
       if (bet) { S.stars -= bet; save(); paintStars(); }
       paintBet();
       $('#betBox', scene).classList.add('gone');
