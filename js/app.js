@@ -284,7 +284,7 @@ function finish(key, score, total, again, extra) {
       <p class="diff-note">${diffStars(diffOf(key))} ${DIFF_INFO[diffOf(key)].name}</p>
       ${extra && extra.badge ? `<div class="badge-won"><span class="badge got big" style="--bc:${extra.badge[2]}"><i>${extra.badge[1]}</i></span><p><b>${extra.badge[0]}</b>를 받았어요!</p></div>` : ''}
       ${extra && extra.caught && extra.caught.length ? `<div class="caught-row" aria-label="이번에 잡은 포켓몬">${extra.caught.map((q) => `<span class="mini">${artImg(q.m, q.shiny)}<small>${q.name}</small></span>`).join('')}</div>` : ''}
-      ${bubble(great ? LINES.great : LINES.soso)}
+      ${bubble(great ? LINES.great : LINES.soso, 'tight')}
       ${packCount() ? `<button class="pack-cta" id="toPacks">${packArt(packList()[0].k, packList()[0].p)}<span><b>🎴 카드팩 뜯기!</b><small>${packCount()}팩이 기다려요</small></span></button>` : ''}
       ${questPanel(false)}
       <div class="row">
@@ -398,7 +398,7 @@ SCREENS.josa = (skipIntro) => {
     const pic = q.j[2] ? q.e : q.e + ' ' + q.other[1];
     app.innerHTML = `
       ${dots(i, n)}
-      ${bubble(LINES.josaAsk)}
+      ${bubble(LINES.josaAsk, 'tight')}
       <div class="qcard"><div class="pic" aria-hidden="true">${pic}</div>
         <p class="sentence"><b>${q.noun}</b><span class="blank">?</span>${esc(rest)}</p></div>
       <div class="choices">${shuffle([q.j[0], q.j[1]]).map((v) => `<button class="choice" data-v="${v}">${v}</button>`).join('')}</div>
@@ -469,7 +469,7 @@ SCREENS.vowel = (skipIntro) => {
     const shown = q.w.slice(0, q.i) + '?' + q.w.slice(q.i + 1);
     app.innerHTML = `
       ${dots(i, n)}
-      ${bubble(LINES.vowelAsk)}
+      ${bubble(LINES.vowelAsk, 'tight')}
       <div class="qcard"><div class="pic" aria-hidden="true">${q.e}</div>
         <div class="wordcells">${cells(shown, { [q.i]: 'q' })}</div>
         <button class="btn small" data-say="${esc(q.w)}">🔊 들어 보기</button></div>
@@ -519,7 +519,7 @@ SCREENS.space = (skipIntro) => {
     let tries = 0;
     app.innerHTML = `
       ${dots(i, n)}
-      ${bubble(LINES.spaceAsk)}
+      ${bubble(LINES.spaceAsk, 'tight')}
       <div class="qcard"><div class="pic" aria-hidden="true">${q.e}</div>
         <div class="spacer" id="spacer"></div>
         <button class="btn small" data-say="${esc(q.t)}" data-slow="1">🔊 천천히 들어 보기</button></div>
@@ -589,6 +589,7 @@ function spaceIntro() {
         </div>
         <div class="scene" aria-live="polite"><span class="scene-pic">❓</span><span class="scene-txt">어떤 뜻일까?</span></div>
       </div>`).join('')}</div>
+    <p class="small-note mobile-only swipe-hint">👉 옆으로 밀면 웃긴 문장이 ${FUNNY.length}개 있어요</p>
     <div class="rulecard"><p>${TYPES.space.why}</p></div>
     <button class="btn primary big" id="start">놀이 시작! ▶</button>`;
   $$('.fbtn', app).forEach((b) => b.addEventListener('click', () => {
@@ -619,7 +620,7 @@ SCREENS.sound = (skipIntro) => {
     const tp = TYPES[q.k];
     app.innerHTML = `
       ${dots(i, n)}
-      ${bubble(LINES.soundAsk)}
+      ${bubble(LINES.soundAsk, 'tight')}
       <div class="qcard"><div class="pic" aria-hidden="true">${q.e}</div>
         <p class="ear">👂 [${q.s}]</p>
         <button class="btn small" data-say="${esc(q.w)}">🔊 들어 보기</button></div>
@@ -692,6 +693,8 @@ const evoDots = (name) => `<span class="evo-dots" aria-hidden="true">${'●'.rep
 /* 진화 장면: 빛나다가 새 모습으로 */
 async function evolveShow(evo, box) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  /* 잡은 포켓몬 카드 자리에서 진화해요 (카드가 두 장 쌓이지 않게) */
+  box.querySelectorAll(':scope > .card-reveal, :scope > .evolve').forEach((el) => el.remove());
   for (const [a, b] of evo) {
     const m = POKE_BY[b];
     box.insertAdjacentHTML('afterbegin', `<div class="evolve"><p class="evo-line">🧬 ${esc(a)} ${EVO_NEED}마리가 모였어요! 어라…?</p>
@@ -901,7 +904,7 @@ function catchScene(list, onEnd, notes) {
     app.innerHTML = `
       <h2 class="h">🔴 포획 타임! <small class="h-note">${k + 1} / ${list.length}</small></h2>
       ${k === 0 && notes && notes.length ? `<div class="quest-notes">${notes.map((n) => `<p class="qn ${n.kind}">${n.text}</p>`).join('')}</div>` : ''}
-      ${bubble(q.legend ? LINES.bigAppear(bigName, N, subj) : LINES.throwAsk)}
+      ${bubble(q.legend ? LINES.bigAppear(bigName, N, subj) : LINES.throwAsk, 'tight')}
       <div class="field ${TYPE_TONE[q.type] || 'tn'}${q.shiny ? ' shiny' : ''} g${q.grade}">
         <span class="field-grade">${gradeChip(q.grade, q.shiny)}</span>
         <div class="target" id="target">${artImg(q.m, q.shiny)}</div>
@@ -963,6 +966,10 @@ function catchScene(list, onEnd, notes) {
       const dx = tr.left + tr.width / 2 - (b.left + b.width / 2);
       const dy = tr.top + tr.height / 2 - (b.top + b.height / 2);
       const off = hit ? 0 : (pos < 50 ? -1 : 1) * 70;
+      $('#betBox').hidden = true;
+      $('#betNote').hidden = true;
+      const tip = $('.say', app);
+      if (tip) tip.hidden = true;
       sfx('throw');
       await run(ball, [
         { transform: 'translate(0, 0) rotate(0) scale(1)' },
@@ -982,6 +989,7 @@ function catchScene(list, onEnd, notes) {
           { transform: 'translateX(-14px)', opacity: 1, offset: 0.25 },
           { transform: `translateX(${pos < 50 ? 300 : -300}px) rotate(${pos < 50 ? 20 : -20}deg)`, opacity: 0 },
         ], { duration: 700, easing: 'ease-in' });
+        field.classList.add('done'); /* 휴대폰에서는 풀밭을 작게 접어 결과가 한 화면에 보이게 */
         /* 전설은 사라지지 않고 다음 판에 다시 나와요 */
         msg.innerHTML = `<b class="missed">💨 ${LINES.fled(N, subj)}</b>${q.legend ? `<small>${LINES.legendAway}</small>` : ''}`;
         speak([LINES.missed, LINES.fled(N, subj), ...(q.legend ? [LINES.legendAway] : [])]);
@@ -1019,6 +1027,7 @@ function catchScene(list, onEnd, notes) {
         addPack(packKind, N, q.diff);
         caught.push(q);
         ball.classList.add('locked');
+        field.classList.add('done');
         sfx('catch');
         confetti();
         msg.innerHTML = `<b>딸깍! ${N}${obj} 잡았다!</b>`;
@@ -1238,7 +1247,7 @@ SCREENS.packs = (back) => {
   app.innerHTML = `
     <h2 class="h">🎴 카드팩 뜯기</h2>
     <p class="small-note">남은 팩 ${packCount()}개${hasGlowPack() ? ` · ✨ 빛나는 팩 ${packs.filter((x) => x.k === 'l').length}개` : ''}${pk.p ? ` · 이번 팩: ${esc(pk.p)}` : ''}</p>
-    ${bubble(LINES.packTap)}
+    ${bubble(LINES.packTap, 'tight')}
     <div class="pack-stage" id="stage">
       ${packArt(kind, pk.p)}
       <div class="flip" id="flip" hidden><div class="flip-in"><div class="face back"><span class="pack-ball">${ballSvg}</span></div><div class="face front" id="front"></div></div></div>
@@ -1283,8 +1292,8 @@ SCREENS.packs = (back) => {
       ${dup ? `<p class="small-note">이미 가진 카드예요 (${S.cards[card[0]]}장)</p>` : '<p class="small-note">🗂️ 새 카드! 앨범에 넣었어요.</p>'}`;
     speak([LINES.cardClass[card[5]], card[1]]);
     $('#packBtns').innerHTML = `
-      ${packCount() ? `<button class="btn primary big" id="more">🎴 한 팩 더 뜯기 (${packCount()})</button>` : ''}
-      <button class="btn" id="album">🗂️ 카드 앨범</button><button class="btn" id="back">돌아가기</button>`;
+      ${packCount() ? `<button class="btn primary big" id="more">🎴 한 팩 더<span class="wide-only"> 뜯기</span> (${packCount()})</button>` : ''}
+      <button class="btn" id="album">🗂️ <span class="wide-only">카드 </span>앨범</button><button class="btn" id="back">돌아가기</button>`;
     $('#more')?.addEventListener('click', () => SCREENS.packs(back));
     $('#album').onclick = () => go('album');
     $('#back').onclick = leave;
@@ -1389,30 +1398,30 @@ SCREENS.album = () => {
 };
 
 /* ---------- 🎧 받아쓰기 섬 ---------- */
-SCREENS.dict = () => {
+/* 받아쓰기 섬: 칸이 많아서 묶음(탭)으로 나눠 보여 줘요. 마지막에 본 묶음을 기억해요 */
+const DICT_TABS = [
+  { id: 'prac', label: '🎧 연습', note: `단계마다 ${DICT_SIZE}문제씩`, list: () => DICTATION },
+  { id: 'g1', label: '📚 1학년', note: `단계마다 ${DICT_SIZE}문제씩`, list: () => GRADE_DICT.filter((l) => l.grade === 1) },
+  { id: 'g2', label: '📚 2학년', note: `단계마다 ${DICT_SIZE}문제씩`, list: () => GRADE_DICT.filter((l) => l.grade === 2) },
+  { id: 'test', label: '📝 시험', note: '학교 받아쓰기 시험 1-2단계 · 급마다 10문제 차례대로', list: () => SCHOOL },
+];
+SCREENS.dict = (quiet) => {
+  const tab = DICT_TABS.find((t) => t.id === S.dictTab) || DICT_TABS[0];
+  const best = (id) => (S.best[id] ? `<span class="i-best">최고 ${S.best[id]}점</span>` : '');
+  const tile = (lv) => tab.id === 'test'
+    ? `<button class="level" data-id="${lv.id}"><span class="l-grade">${lv.n}급</span><span class="l-name">${lv.name}</span>${diffTag(lv.id)}${best(lv.id)}</button>`
+    : `<button class="level" data-id="${lv.id}"><span class="l-icon">${lv.icon}</span><span class="l-name">${lv.name}</span>
+        <span class="l-sub">${lv.grade ? `${esc(lv.desc)}` : `${lv.desc} · ${Math.min(DICT_SIZE, lv.items.length)}문제`}</span>${diffTag(lv.id)}${best(lv.id)}</button>`;
   app.innerHTML = `
     <h2 class="h">🎧 받아쓰기 섬</h2>
-    ${bubble(LINES.dictBubble)}
-    <div class="levels">${DICTATION.map((lv) => `
-      <button class="level" data-id="${lv.id}"><span class="l-icon">${lv.icon}</span>
-        <span class="l-name">${lv.name}</span><span class="l-sub">${lv.desc} · ${Math.min(DICT_SIZE, lv.items.length)}문제</span>
-        ${diffTag(lv.id)}
-        ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>
-    ${[1, 2].map((g) => `<h3 class="h3">📚 ${g}학년 받아쓰기 <small class="h-note">단계마다 ${DICT_SIZE}문제씩</small></h3>
-    <div class="levels grade">${GRADE_DICT.filter((lv) => lv.grade === g).map((lv) => `
-      <button class="level" data-id="${lv.id}"><span class="l-icon">${lv.icon}</span>
-        <span class="l-name">${lv.name}</span><span class="l-sub">${esc(lv.desc)} · ${lv.items.length}개 중</span>
-        ${diffTag(lv.id)}
-        ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>`).join('')}
-    <h3 class="h3">📝 학교 받아쓰기 시험 <small class="h-note">1-2단계 · 급마다 10문제 차례대로</small></h3>
-    <div class="levels school">${SCHOOL.map((lv) => `
-      <button class="level" data-id="${lv.id}"><span class="l-grade">${lv.n}급</span>
-        <span class="l-name">${lv.name}</span>
-        ${diffTag(lv.id)}
-        ${S.best[lv.id] ? `<span class="i-best">최고 ${S.best[lv.id]}점</span>` : ''}</button>`).join('')}</div>
+    ${bubble(LINES.dictBubble, 'tight')}
+    <div class="dex-tabs dict-tabs" role="tablist">${DICT_TABS.map((t) => `<button role="tab" aria-selected="${t.id === tab.id}" data-tab="${t.id}">${t.label}</button>`).join('')}</div>
+    <p class="small-note tab-note">${tab.note}</p>
+    <div class="levels ${tab.id === 'test' ? 'school' : tab.id === 'prac' ? '' : 'grade'}">${tab.list().map(tile).join('')}</div>
     ${hasTTS ? '' : '<p class="notice">이 기기에서는 소리가 나오지 않아요. 문제 화면의 👀 어른용 버튼을 눌러 어른이 읽어 주세요.</p>'}`;
+  $$('[data-tab]', app).forEach((b) => b.addEventListener('click', () => { S.dictTab = b.dataset.tab; save(); sfx('pop'); SCREENS.dict(true); }));
   $$('.level', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); dictLevel(b.dataset.id); }));
-  speak(LINES.dictBubble);
+  if (quiet !== true) speak(LINES.dictBubble);
 };
 
 let inputMode = 'tiles';
@@ -1486,6 +1495,7 @@ function diagnose(user, answer, hints) {
 }
 
 function dictQuestion(q, i, n, mark, next) {
+  app.classList.remove('dq-done');
   const target = clean(q.t);
   let typed = '';
   let stack = [];
@@ -1501,7 +1511,7 @@ function dictQuestion(q, i, n, mark, next) {
 
   app.innerHTML = `
     ${dots(i, n)}
-    ${bubble(LINES.dictAsk)}
+    ${bubble(LINES.dictAsk, 'tight')}
     <div class="listen">
       <button class="btn listen-big" data-say="${esc(q.t)}">🔊 듣기</button>
       <button class="btn" data-say="${esc(q.t)}" data-slow="1">🐢 천천히</button>
@@ -1513,7 +1523,7 @@ function dictQuestion(q, i, n, mark, next) {
       <button class="mode" role="tab" data-m="keys">⌨️ 키보드</button>
     </div>
     <div id="pad"></div>
-    <div class="row"><button class="btn primary big" id="check">다 썼어요! ✔</button></div>
+    <div class="row check-row"><span id="padKeys"></span><button class="btn primary big" id="check">다 썼어요! ✔</button></div>
     <div class="explain" id="result" hidden></div>`;
 
   const paintAns = () => {
@@ -1524,6 +1534,7 @@ function dictQuestion(q, i, n, mark, next) {
   const paintPad = () => {
     $$('.mode', app).forEach((b) => b.setAttribute('aria-selected', b.dataset.m === inputMode));
     const pad = $('#pad');
+    $('#padKeys').innerHTML = '';
     if (inputMode === 'keys') {
       pad.innerHTML = `<label class="sr" for="typed">여기에 써요</label>
         <input id="typed" class="typed" autocomplete="off" autocapitalize="off" spellcheck="false" lang="ko" placeholder="여기를 누르고 써요" value="${esc(typed)}">`;
@@ -1532,8 +1543,9 @@ function dictQuestion(q, i, n, mark, next) {
       inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) $('#check').click(); });
       inp.focus();
     } else {
-      pad.innerHTML = `<div class="tiles">${pieces.map((p, k) => `<button class="tile" data-k="${k}" ${p.used ? 'disabled' : ''}>${p.ch}</button>`).join('')}</div>
-        <div class="row"><button class="btn" id="spc">␣ 띄우기</button><button class="btn" id="bk">⌫ 지우기</button></div>`;
+      pad.innerHTML = `<div class="tiles">${pieces.map((p, k) => `<button class="tile" data-k="${k}" ${p.used ? 'disabled' : ''}>${p.ch}</button>`).join('')}</div>`;
+      /* 띄우기·지우기는 '다 썼어요' 옆에 (휴대폰에서 아래에 함께 붙어 있어요) */
+      $('#padKeys').innerHTML = '<button class="btn" id="spc">␣ 띄우기</button><button class="btn" id="bk">⌫ 지우기</button>';
       $$('.tile', pad).forEach((t) => t.addEventListener('click', () => {
         const p = pieces[+t.dataset.k];
         p.used = true; stack.push(+t.dataset.k); typed += p.ch; sfx('pop'); paintAns(); paintPad();
@@ -1592,6 +1604,7 @@ function dictQuestion(q, i, n, mark, next) {
         typed = ''; stack = []; pieces.forEach((p) => { p.used = false; });
         $('#paper').innerHTML = '<div id="ans"></div>';
         res.hidden = true;
+        app.classList.remove('dq-done');
         $('#check').disabled = false;
         paintAns(); paintPad();
         speak(q.t);
@@ -1599,6 +1612,7 @@ function dictQuestion(q, i, n, mark, next) {
     }
     $('#check').disabled = true;
     res.hidden = false;
+    app.classList.add('dq-done'); /* 다 쓰면 글자 조각 자리에 결과를 보여 줘요 (스크롤 없이) */
     $('.next', res).onclick = next;
     res.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
   };
@@ -1621,8 +1635,8 @@ SCREENS.book = () => {
       ${evoNext(m[0]) ? `<small class="bag-evo" title="${esc(evoNext(m[0]))}까지">${evoDots(m[0])}</small>` : ''}</button>`).join('')}</div>
     <p class="small-note">🧬 같은 포켓몬을 ${EVO_NEED}마리 모으면 다음 모습으로 진화해요!</p>
     <div class="row"><button class="btn primary" id="toAlbum">🗂️ 카드 앨범</button><button class="btn" id="toDex">📖 도감</button></div>
-    <h3 class="h3">섬마다 최고 점수</h3>
-    <ul class="bests">${all.map((x) => `<li><span>${x.icon} ${x.name}</span><b>${S.best[x.id] != null ? S.best[x.id] + '점' : '—'}</b></li>`).join('')}</ul>`;
+    <details class="bests-box"><summary class="h3">🏆 섬마다 최고 점수</summary>
+    <ul class="bests">${all.map((x) => `<li><span>${x.icon} ${x.name}</span><b>${S.best[x.id] != null ? S.best[x.id] + '점' : '—'}</b></li>`).join('')}</ul></details>`;
   speak(mine.length ? LINES.bagBubble : LINES.bagEmpty);
   $$('.bag-mon', app).forEach((b) => b.addEventListener('click', () => playCry(+b.dataset.id)));
   $('#toAlbum').onclick = () => go('album');

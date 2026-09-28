@@ -236,12 +236,12 @@ h1:focus, h2:focus { outline: none; }
 /* 소개 카드 */
 .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .cmp {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+  display: block; text-align: left;
   padding: 12px 16px; border: 3px solid var(--ink); border-radius: 20px; background: var(--card);
   font-family: var(--display); font-size: 24px; box-shadow: var(--shadow);
 }
 .cmp b { color: var(--red); font-weight: 400; }
-.cmp small { font-family: var(--body); font-size: 15px; color: var(--ink-soft); }
+.cmp small { display: block; font-family: var(--body); font-size: 15px; color: var(--ink-soft); }
 .cmp.bad { border-style: dashed; box-shadow: none; }
 .rulecard {
   display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center;
@@ -985,9 +985,7 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 .l-grade { font-family: var(--display); font-size: 22px; color: #fff; background: #2f5f86; border-radius: 10px 10px 10px 2px; padding: 0 12px; }
 .levels.school .l-name { font-size: 18px; text-align: center; line-height: 1.3; }
 .secrets s.wrong { color: var(--red); }
-@media (max-width: 480px) { .levels.grade .level:nth-child(n) { background: var(--card); }
-.levels.grade .l-sub { font-size: 13px; line-height: 1.35; }
-.levels.school { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .levels.school { grid-template-columns: repeat(2, 1fr); } }
 
 /* 🎒 포켓몬 가방 */
 .bag { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
@@ -1047,3 +1045,186 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 .evolve.done .evo-card { filter: none; animation: powerup .7s cubic-bezier(.3, 1.6, .5, 1); }
 @keyframes evo-pulse { from { transform: scale(.94); } to { transform: scale(1.04); } }
 @media (prefers-reduced-motion: reduce) { .evolve .evo-card { animation: none; } }
+
+.bests-box summary { cursor: pointer; list-style: none; }
+.bests-box summary::-webkit-details-marker { display: none; }
+.bests-box summary::after { content: ' ▾'; color: var(--ink-soft); }
+.bests-box[open] summary::after { content: ' ▴'; }
+
+/* 받아쓰기: 다 쓰면 입력 칸 대신 결과 */
+.dq-done .modes, .dq-done #pad, .dq-done .check-row { display: none; }
+.check-row #padKeys { display: contents; }
+
+.mobile-only { display: none; }
+
+/* ---------- 📱 휴대폰: 한 화면에 보이게 ----------
+ * 윗줄·말풍선을 작게, 섬·단계 칸을 촘촘하게, 주요 버튼(시작·다 썼어요·다음)은 화면 아래에 붙여요. */
+.dict-tabs { margin-top: -4px; }
+.tab-note { margin-top: -6px; }
+@media (max-width: 560px) {
+  main { padding: 10px 12px calc(24px + env(safe-area-inset-bottom)); gap: 12px; }
+  .bar { padding: 6px 10px; gap: 8px; }
+  .bar-btn, .stars { font-size: 17px; padding: 2px 11px; white-space: nowrap; }
+  .bar-txt { display: none; }
+  .who-chip { font-size: 17px; padding: 1px 10px 1px 6px; }
+  .who-chip #whoAvatar { font-size: 20px; }
+  .h { font-size: 26px; }
+  .h3 { font-size: 20px; margin: 0; }
+  .h-note { font-size: 14px; }
+  .title { font-size: 30px; margin: 0; }
+
+  /* 또박이 말풍선 */
+  .say { gap: 8px; }
+  .mascot { font-size: 32px; }
+  .say p { font-size: 16px; padding: 7px 12px; line-height: 1.4; border-radius: 16px; }
+  .spk { width: 42px; height: 42px; font-size: 19px; }
+  /* 문제·포획·카드팩 화면에서는 한두 줄로 (소리로 읽어 줘요) */
+  .say.tight .mascot { display: none; }
+  .say.tight p { font-size: 15px; padding: 5px 10px; }
+  .say.tight p::before { display: none; }
+  .say.tight .spk { width: 38px; height: 38px; font-size: 17px; }
+
+  /* 지도: 섬 칸을 작게 */
+  .map { gap: 10px; }
+  .island { padding: 8px 6px; gap: 0; }
+  .i-icon { font-size: 34px; }
+  .i-name { font-size: 18px; white-space: nowrap; }
+  .i-sub { font-size: 12px; line-height: 1.3; }
+  .island .diff-tag { margin-top: 2px; font-size: 11px; }
+  .island .diff-tag small { font-size: 10px; }
+  .island .i-best { position: absolute; top: -8px; right: -2px; font-size: 11px; padding: 0 6px; }
+
+  /* 받아쓰기 섬: 단계 칸 */
+  .dex-tabs { gap: 4px; }
+  .dex-tabs button { font-size: 15px; padding: 4px 8px; min-height: 40px; border-width: 2px; border-radius: 12px; }
+  .dict-tabs button { flex: 1; }
+  .levels, .levels.school { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .level { padding: 8px 6px; gap: 0; border-radius: 18px; }
+  .l-icon { font-size: 28px; }
+  .l-name { font-size: 17px; text-align: center; line-height: 1.25; }
+  .l-sub { font-size: 12px; text-align: center; line-height: 1.3; }
+  .levels.grade .l-sub { display: none; }
+  .l-grade { font-size: 16px; padding: 0 10px; }
+  .levels.school .level { padding: 8px 6px; }
+  .levels.school .l-name { font-size: 15px; }
+  .level .diff-tag { font-size: 11px; margin-top: 2px; }
+  .level .diff-tag small { font-size: 10px; }
+  .level .i-best { top: -8px; right: -2px; font-size: 11px; padding: 0 6px; }
+
+  /* 문제 화면 */
+  .dots span { width: 14px; height: 14px; border-width: 2px; }
+  .pic { font-size: 56px; }
+  .listen { gap: 8px; }
+  .listen .btn { min-height: 48px; padding: 4px 14px; font-size: 18px; }
+  .listen-big { font-size: 22px !important; }
+  .listen .btn.ghost { font-size: 14px; padding: 4px 10px; }
+
+  /* 설명 화면: 비교 카드 두 줄, 규칙 카드 작게 */
+  .compare { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cmp { font-size: 18px; padding: 8px 10px; border-radius: 16px; }
+  .cmp small { font-size: 12px; }
+  .rulecard { padding: 12px; gap: 8px; border-radius: 18px; }
+  .rule-q { font-size: 17px; }
+  .rule { font-size: 17px; }
+
+  .mobile-only { display: block; }
+  /* 띄어쓰기 숲: 웃긴 문장 카드를 옆으로 넘겨 봐요 */
+  .funny { flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px; padding: 2px 2px 8px; margin-inline: -12px; padding-inline: 12px; scrollbar-width: none; }
+  .funny::-webkit-scrollbar { display: none; }
+  .fcard { flex: 0 0 86%; scroll-snap-align: center; padding: 10px; gap: 8px; border-radius: 18px; }
+  .fbtn { font-size: 16px; min-height: 46px; padding: 4px 12px; }
+  .scene-pic { font-size: 30px; }
+  .scene-txt { font-size: 16px; }
+  .swipe-hint { text-align: center; margin-top: -6px; }
+  /* ㅐㅔ 바닷가: 개·게 카드 나란히 */
+  .pair { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .vcard { padding: 8px 4px; border-radius: 18px; gap: 2px; }
+  .vpic { font-size: 34px; }
+  .vword { font-size: 34px; }
+  .vcard .vsvg { width: 44px; height: 56px; }
+  .vtip { font-size: 13px; }
+  .vrow { gap: 8px; font-size: 15px; }
+  /* 소리 탐정: 소리 친구 카드 3칸 */
+  .types { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tcard { padding: 6px 4px; border-radius: 14px; }
+  .t-icon { font-size: 24px; }
+  .t-name { font-size: 14px; line-height: 1.2; }
+  .t-ex { font-size: 11px; }
+  /* 소리 탐정: 글자·소리 칸을 나란히, 칸은 작게 */
+  .why #fam { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px 10px; }
+  .why .cell, .explain .cell { width: 36px; height: 36px; font-size: 22px; }
+  .explain .twoline { flex-direction: row; justify-content: center; flex-wrap: wrap; gap: 6px 14px; }
+  .explain { gap: 8px; }
+  .explain .small-note { font-size: 14px; }
+  /* 정답 설명이 나오면 말풍선·그림은 접어요 */
+  #app:has(.explain:not([hidden])) .say, #app:has(.explain:not([hidden])) .qcard .pic { display: none; }
+
+  /* 주요 버튼은 화면 아래에 붙어 있어요 (스크롤하지 않아도 누를 수 있게) */
+  .dq-done .say { display: none; }
+  .explain .row { flex-wrap: nowrap; gap: 8px; }
+  .explain .row .btn { font-size: 17px; padding: 4px 12px; white-space: nowrap; }
+  .explain { padding: 12px; }
+  .tiles { gap: 7px; margin-bottom: 0; }
+  .tile { width: 50px; height: 50px; font-size: 26px; }
+  .check-row { gap: 6px; flex-wrap: nowrap; }
+  .check-row .btn { font-size: 16px; min-height: 52px; padding: 4px 10px; white-space: nowrap; }
+  .check-row .btn.big { font-size: 20px; padding-inline: 14px; }
+  .paper { min-height: 0; padding-block: 10px; }
+  .mode { min-height: 42px; font-size: 16px; }
+  #start, #nextMon, .explain .next, .row:has(> #check), .finish > .row {
+    position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 6;
+  }
+  .finish > .row { padding-top: 6px; background: linear-gradient(transparent, var(--paper) 35%); }
+  .btn.big { font-size: 22px; min-height: 56px; padding-inline: 24px; }
+
+  /* 🔴 포획 타임 */
+  .field { height: 300px; }
+  .target { width: 130px; height: 130px; margin-left: -65px; top: 10px; }
+  .aim { top: 150px; }
+  .field.done { transform: scale(.5); transform-origin: top center; margin-bottom: -150px; transition: transform .45s ease, margin .45s ease; }
+  .catch-msg { font-size: 22px; min-height: 30px; }
+  .bet { gap: 8px; }
+  .bet-btn { width: 46px; min-height: 46px; font-size: 24px; }
+  .bet-stars { font-size: 22px; }
+  .bet-note { font-size: 14px; margin-top: -4px; }
+  .card-reveal .pcard { width: 120px; }
+  #after { gap: 6px; }
+  .evolve { margin-bottom: 4px; }
+
+  /* 🎴 카드팩 */
+  .pack-stage { height: 280px; }
+  .pack { width: 150px; height: 230px; }
+  .flip { width: 172px; }
+  .tap-hint { font-size: 19px; }
+  .reveal-info { min-height: 0; gap: 2px; }
+  .reveal-info b { font-size: 21px; }
+  .reveal-info small { font-size: 12px; }
+  #packBtns { gap: 6px; flex-wrap: nowrap; }
+  #packBtns .btn { font-size: 16px; min-height: 48px; padding: 4px 10px; white-space: nowrap; }
+  #packBtns .btn.big { font-size: 18px; padding-inline: 14px; }
+  .wide-only { display: none; }
+  .dict-tabs button { white-space: nowrap; }
+
+  /* 지도의 도감 칸은 가로로 납작하게 */
+  .island.poke { padding: 8px 14px; column-gap: 10px; }
+  .island.poke .i-icon { font-size: 38px; }
+  .island.poke .i-name { font-size: 19px; }
+
+  /* 결과 */
+  .finish { gap: 10px; padding-top: 4px; }
+  .finish h2 { font-size: 24px; }
+  .finish-stars { font-size: 26px; }
+}
+/* 키가 작은 휴대폰(아이폰 SE 등): 조금 더 촘촘하게 */
+@media (max-width: 560px) and (max-height: 700px) {
+  .say:not(.tight) .mascot, .say:not(.tight) p::before { display: none; }
+  .field { height: 270px; }
+  .aim { top: 138px; }
+  .target { width: 118px; height: 118px; margin-left: -59px; }
+  .field.done { margin-bottom: -135px; }
+  .map { gap: 8px; }
+  .title { font-size: 26px; }
+  .pack-stage { height: 250px; }
+  .pack { width: 136px; height: 208px; }
+  .flip { width: 158px; }
+}
