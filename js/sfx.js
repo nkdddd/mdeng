@@ -34,7 +34,7 @@ window.SFX = (() => {
       wet.gain.value = 0.22;
       wet.connect(verb).connect(comp);
     }
-    if (ac.state === 'suspended') ac.resume();
+    if (ac.state !== 'running') ac.resume().catch(() => {}); /* 'suspended'·'interrupted'(아이폰 전화 등) 모두 */
     return ac;
   }
   /* 소리 하나를 버스(+울림)에 연결 */
@@ -193,6 +193,25 @@ window.SFX = (() => {
     },
     evolve: () => { for (let i = 0; i < 10; i++) bell(A5 * Math.pow(2, i / 6), { gain: 0.08, delay: i * 0.13, decay: 0.8 }); noise(1.4, { type: 'bandpass', from: 400, to: 5000, q: 2, gain: 0.1, attack: 0.6 }); },
   };
+
+  /* 📱 아이폰·아이패드: 첫 터치 때 소리 장치를 깨워요.
+   *  · 무음 스위치를 켜 둬도 효과음이 나오게 'playback' 모드로 (iOS 17 이상은 audioSession, 그 전은 조용한 소리 한 번)
+   *  · 소리 장치는 사용자가 누른 순간에만 켤 수 있어요 */
+  const SILENT = 'data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAACAgICAgICAgA==';
+  let unlocked = false;
+  function unlock() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 지원 안 함 */ }
+    try {
+      ctx();
+      const b = ac.createBuffer(1, 1, 22050), src = ac.createBufferSource();
+      src.buffer = b; src.connect(ac.destination); src.start(0);
+    } catch (e) { /* 소리 없이 */ }
+    if (!unlocked) {
+      unlocked = true;
+      try { const a = new Audio(SILENT); a.setAttribute('playsinline', ''); a.volume = 0.01; a.play().catch(() => {}); } catch (e) { /* 무시 */ }
+    }
+  }
+  ['pointerdown', 'touchend', 'keydown'].forEach((ev) => document.addEventListener(ev, () => { if (!ac || ac.state !== 'running' || !unlocked) unlock(); }, { capture: true, passive: true }));
 
   function play(kind, arg) {
     try {
