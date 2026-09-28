@@ -126,3 +126,5 @@ fs.writeFileSync(path.join(root, 'js/clips.js'),
 console.log(`\n\n새로 만듦 ${made} · 그대로 ${skipped} · 실패 ${failed.length}`);
 console.log(`js/clips.js에 ${keys.length}개를 적었어요. 브라우저를 새로고침하면 새 목소리로 들려요.`);
 if (failed.length) process.exitCode = 1;
+/* 음성 서버 연결이 남아 있어도 끝내요 (GitHub Actions에서 멈추지 않게) */
+process.exit(process.exitCode || 0);
