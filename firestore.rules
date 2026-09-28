@@ -7,11 +7,12 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function me() { return request.auth.uid; }
-    function pairId(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
-    function isFriend(a, b) {
-      let p = /databases/$(database)/documents/friends/$(pairId(a, b));
-      return exists(p) && get(p).data.status == 'ok';
+    // 친구 문서 id는 두 uid를 작은 것부터 '_'로 이은 것 (js/social.js의 pairId)
+    function friendOk(id) {
+      return exists(/databases/$(database)/documents/friends/$(id))
+        && get(/databases/$(database)/documents/friends/$(id)).data.status == 'ok';
     }
+    function isFriend(a, b) { return friendOk(a + '_' + b) || friendOk(b + '_' + a); }
 
     match /users/{uid}/kids/{kidId} {
       allow read, write: if signedIn() && me() == uid;
@@ -39,7 +40,8 @@ service cloud.firestore {
       allow list: if signedIn() && me() in resource.data.users;
       allow create: if signedIn() && request.resource.data.from == me()
         && request.resource.data.users.size() == 2 && me() in request.resource.data.users
-        && id == pairId(request.resource.data.users[0], request.resource.data.users[1])
+        && (id == request.resource.data.users[0] + '_' + request.resource.data.users[1]
+          || id == request.resource.data.users[1] + '_' + request.resource.data.users[0])
         && request.resource.data.status == 'pending';
       allow update: if signedIn() && me() in resource.data.users && resource.data.from != me()
         && request.resource.data.status == 'ok'
