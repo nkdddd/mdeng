@@ -966,12 +966,15 @@ function endRound(key, score, total, maxStreak, seen, again, stars) {
   if (list.length) catchScene(list, done, notes); else done([], null);
 }
 
-/* ---------- 🔴 포획 타임: 만난 포켓몬을 하나씩 던져서 잡아요 ----------
- * 화살표가 가운데(성공 칸)에 올 때 던지면 잡혀요. 등급이 높을수록 칸이 좁고 화살표가 빨라요.
- * 별을 걸수록 화살표가 느려져요 (건 별은 던질 때 써요). */
+/* ---------- 🔴 포획 타임: 만난 포켓몬을 하나씩 던져서 잡아요 (포켓몬 GO처럼) ----------
+ * 풀밭 무대 가득 포켓몬이 튀어나오고, 둘레의 색 고리가 작아졌다 커졌다 해요.
+ * 고리가 작을 때 몬스터볼을 위로 휙(또는 톡) 던지면 잡혀요. 등급이 높을수록 고리가 빠르고 성공 범위가 좁아요.
+ * 별을 걸수록 고리가 느려져요 (건 별은 던질 때 써요). */
 const BET_MAX = 5;
-const SWEEP_MS = [650, 950, 1300, 1750, 2300, 3000]; /* 별 0~5개: 한쪽 끝에서 끝까지 가는 시간 */
+const SWEEP_MS = [650, 950, 1300, 1750, 2300, 3000]; /* 별 0~5개: 고리가 커졌다 작아지는 반 바퀴 시간 */
 const SPEED_WORD = ['아주 빠름', '빠름', '보통', '느림', '아주 느림', '거북이 🐢'];
+const RING_COLOR = { c: '#4ade80', r: '#facc15', l: '#fb923c', m: '#f97316', s: '#ef4444' };
+const GO_TREES = [[4, 1.2], [14, 0.8], [24, 1.05], [70, 0.9], [82, 1.3], [93, 0.85]];
 
 function catchScene(list, onEnd, notes) {
   const caught = [];
@@ -980,163 +983,255 @@ function catchScene(list, onEnd, notes) {
   const wait = (ms) => new Promise((r) => setTimeout(r, fast ? Math.min(ms, 120) : ms));
   const run = (el, frames, opts) => el.animate(frames, { fill: 'forwards', ...opts, duration: fast ? 1 : opts.duration }).finished;
   let k = 0;
+  document.querySelectorAll('.go-scene').forEach((x) => x.remove());
+  const scene = document.createElement('div');
+  scene.className = 'go-scene';
+  document.body.appendChild(scene);
+  const close = () => { scene.classList.add('out'); setTimeout(() => scene.remove(), 400); };
 
   const show = () => {
     const q = list[k];
     const N = q.name, obj = josaPick(N, ['을', '를']), subj = josaPick(N, ['이', '가']);
     const G = GRADES[q.grade];
     const zone = G.zone - (q.shiny ? 1 : 0);
+    const thr = 0.3 + (0.75 * zone * 2.4) / 100; /* 고리가 이 크기보다 작을 때 던지면 성공 */
     const bigName = { l: '전설의', m: '신화 속', s: '비밀의' }[q.grade];
-    let bet = 0, pos = 50, dir = 1, raf = 0, last = 0, thrown = false;
-    app.innerHTML = `
-      <h2 class="h">🔴 포획 타임! <small class="h-note">${k + 1} / ${list.length}</small></h2>
-      ${k === 0 && notes && notes.length ? `<div class="quest-notes">${notes.map((n) => `<p class="qn ${n.kind}">${n.text}</p>`).join('')}</div>` : ''}
-      ${bubble(q.legend ? LINES.bigAppear(bigName, N, subj) : LINES.throwAsk, 'tight')}
-      <div class="field ${TYPE_TONE[q.type] || 'tn'}${q.shiny ? ' shiny' : ''} g${q.grade}">
-        <span class="field-grade">${gradeChip(q.grade, q.shiny)}</span>
-        <div class="target" id="target">${artImg(q.m, q.shiny)}</div>
-        <div class="flash" aria-hidden="true"></div>
-        <div class="aim" id="aim" aria-hidden="true">
-          <div class="aim-bar"><span class="aim-zone" style="left:${50 - zone}%;width:${zone * 2}%"></span></div>
-          <span class="aim-arrow" id="arrow">▼</span>
+    let bet = 0, ring = 1, dir = -1, raf = 0, last = 0, thrown = false;
+    scene.className = `go-scene g${q.grade}${q.shiny ? ' shiny' : ''}${q.legend ? ' legend' : ''}`;
+    scene.innerHTML = `
+      <div class="go-sky"></div><div class="go-mtn m1"></div><div class="go-mtn m2"></div>
+      <div class="go-trees">${GO_TREES.map(([x, sz]) => `<span style="left:${x}%;font-size:${sz * 64}px">🌳</span>`).join('')}</div>
+      <div class="go-grass"><span style="left:8%;bottom:14%">🍀</span><span style="left:78%;bottom:22%">🌿</span><span style="left:30%;bottom:6%">🌿</span><span style="left:88%;bottom:5%">🍀</span></div>
+      <div class="go-top">
+        <span class="go-count">${k + 1} / ${list.length}</span>
+        <div class="go-name"><b>${esc(N)}</b>${gradeChip(q.grade, q.shiny)}</div>
+      </div>
+      ${k === 0 && notes && notes.length ? `<div class="go-notes">${notes.map((n) => `<p class="qn ${n.kind}">${n.text}</p>`).join('')}</div>` : ''}
+      <div class="go-mon" id="gm">
+        <div class="go-shadow"></div>
+        <div class="go-art" id="target">${artImg(q.m, q.shiny)}</div>
+        <div class="go-ring" id="ring" aria-hidden="true"><i class="go-ring-out"></i><i class="go-ring-in" style="--rc:${RING_COLOR[q.grade] || '#4ade80'}"></i></div>
+      </div>
+      <div class="go-banner" id="goBanner"><b>앗! 야생 ${esc(N)}${subj}</b><b>튀어나왔다!</b></div>
+      <p class="go-msg" id="goMsg" aria-live="polite"></p>
+      <div class="go-flash" aria-hidden="true"></div><div class="go-burst" aria-hidden="true"></div>
+      <div class="go-bottom">
+        <div class="go-bet" id="betBox">
+          <button class="go-bet-btn" id="betMinus" aria-label="별 하나 덜 걸기">−</button>
+          <div class="bet-stars" id="betStars" aria-live="polite"></div>
+          <button class="go-bet-btn" id="betPlus" aria-label="별 하나 더 걸기">＋</button>
         </div>
-        <button class="throwball" id="throw" aria-label="${N}에게 몬스터볼 던지기">${ballSvg}</button>
+        <p class="go-note" id="betNote"></p>
+        <button class="go-ball" id="throw" aria-label="${N}에게 몬스터볼 던지기">${ballSvg}</button>
+        <p class="go-hint" id="goHint">👆 고리가 작아질 때 볼을 위로 휙!</p>
       </div>
-      <div class="bet" id="betBox">
-        <button class="btn bet-btn" id="betMinus" aria-label="별 하나 덜 걸기">−</button>
-        <div class="bet-stars" id="betStars" aria-live="polite"></div>
-        <button class="btn bet-btn" id="betPlus" aria-label="별 하나 더 걸기">＋</button>
-      </div>
-      <p class="bet-note" id="betNote"></p>
-      <p class="catch-msg" aria-live="polite"></p>
-      <div class="row" id="after"></div>`;
-    const arrow = $('#arrow');
-    const sweep = () => SWEEP_MS[bet] * G.speed;
+      <div class="go-result" id="goResult" hidden></div>
+      <div class="go-wipe" aria-hidden="true"></div>`;
+    const ringEl = $('#ring', scene), ringIn = $('.go-ring-in', scene);
+    const halfMs = () => SWEEP_MS[bet] * G.speed;
     const paintBet = () => {
-      $('#betStars').innerHTML = Array.from({ length: BET_MAX }, (_, s) => `<span class="${s < bet ? 'on' : ''}">⭐</span>`).join('');
-      $('#betNote').innerHTML = `⭐ <b>${bet}개</b> 걸기 · 화살표 <b>${SPEED_WORD[bet]}</b> · 남은 별 ${thrown ? S.stars : S.stars - bet}개`;
-      $('#betMinus').disabled = thrown || bet === 0;
-      $('#betPlus').disabled = thrown || bet >= BET_MAX || bet >= S.stars;
+      $('#betStars', scene).innerHTML = Array.from({ length: BET_MAX }, (_, s2) => `<span class="${s2 < bet ? 'on' : ''}">⭐</span>`).join('');
+      $('#betNote', scene).innerHTML = `⭐ <b>${bet}개</b> 걸기 · 고리 <b>${SPEED_WORD[bet]}</b> · 남은 별 ${thrown ? S.stars : S.stars - bet}개`;
+      $('#betMinus', scene).disabled = thrown || bet === 0;
+      $('#betPlus', scene).disabled = thrown || bet >= BET_MAX || bet >= S.stars;
     };
+    /* 고리: 1(크다) ↔ 0.25(작다) */
     const tick = (t) => {
       if (!last) last = t;
       const dt = Math.min(t - last, 50);
       last = t;
-      pos += dir * (100 * dt / sweep());
-      if (pos >= 100) { pos = 200 - pos; dir = -1; }
-      if (pos <= 0) { pos = -pos; dir = 1; }
-      arrow.style.left = pos + '%';
+      ring += dir * ((0.75 * dt) / halfMs());
+      if (ring <= 0.25) { ring = 0.25 + (0.25 - ring); dir = 1; }
+      if (ring >= 1) { ring = 1 - (ring - 1); dir = -1; }
+      ringIn.style.transform = `scale(${ring})`;
+      ringIn.classList.toggle('good', ring <= thr);
       raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
     paintBet();
-    $('#betPlus').onclick = () => { bet++; sfx('pop'); paintBet(); };
-    $('#betMinus').onclick = () => { bet--; sfx('pop'); paintBet(); };
-    playCry(q.id);
-    if (q.legend) { sfx('star'); confetti(); }
-    const intro = q.legend ? [LINES.bigAppear(bigName, N, subj), LINES.throwAsk]
-      : k === 0 ? [...(notes || []).filter((n) => n.say).map((n) => n.say), LINES.catchIntro, LINES.throwAsk] : [LINES.throwAsk];
-    setTimeout(() => { if (!thrown) speak(intro); }, 900);
+    $('#betPlus', scene).onclick = () => { bet++; sfx('pop'); paintBet(); };
+    $('#betMinus', scene).onclick = () => { bet--; sfx('pop'); paintBet(); };
 
-    $('#throw').addEventListener('click', async () => {
+    /* 등장: 하얀 원 전환 → "앗! 야생 ○○이 튀어나왔다!" → 포켓몬 뿅 */
+    (async () => {
+      sfx(q.legend ? 'star' : 'rustle');
+      await wait(450);
+      $('.go-wipe', scene)?.remove();
+      $('#gm', scene).classList.add('in');
+      playCry(q.id);
+      if (q.legend) confetti();
+      const intro = q.legend ? [LINES.bigAppear(bigName, N, subj), LINES.throwAsk]
+        : [LINES.appear(N, subj), ...(k === 0 ? [...(notes || []).filter((n) => n.say).map((n) => n.say), LINES.catchIntro] : []), LINES.throwAsk];
+      speak(intro);
+      await wait(1500);
+      $('#goBanner', scene)?.classList.add('gone');
+      ringEl.classList.add('on');
+      raf = requestAnimationFrame(tick);
+    })();
+
+    /* 던지기: 볼을 위로 휙 밀거나 톡 누르기 */
+    const ball = $('#throw', scene);
+    let drag = null;
+    ball.addEventListener('pointerdown', (e) => {
       if (thrown) return;
+      drag = { x: e.clientX, y: e.clientY, t: performance.now() };
+      try { ball.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+    });
+    ball.addEventListener('pointermove', (e) => {
+      if (!drag || thrown) return;
+      ball.style.transform = `translate(${(e.clientX - drag.x) * 0.6}px, ${Math.min(0, e.clientY - drag.y) * 0.6}px)`;
+    });
+    const release = (e) => {
+      if (!drag || thrown) return;
+      const dy = e.clientY - drag.y, dx = e.clientX - drag.x;
+      drag = null;
+      ball.style.transform = '';
+      if (dy < -30 || Math.hypot(dx, dy) < 12) throwBall(Math.max(-1, Math.min(1, dx / 160)));
+    };
+    ball.addEventListener('pointerup', release);
+    ball.addEventListener('pointercancel', () => { drag = null; ball.style.transform = ''; });
+    ball.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); throwBall(0); } });
+
+    async function throwBall(curve) {
+      if (thrown || !ringEl.classList.contains('on')) return;
       thrown = true;
       cancelAnimationFrame(raf);
       hush();
-      const hit = Math.abs(pos - 50) <= zone;
+      const hit = ring <= thr;
+      const nice = ring <= 0.33 ? '최고야! Excellent!' : ring <= 0.45 ? '잘했어! Great!' : '좋아! Nice!';
       if (bet) { S.stars -= bet; save(); paintStars(); }
       paintBet();
-      $('#aim').classList.add(hit ? 'hit' : 'miss');
-      const ball = $('#throw'), target = $('#target'), field = $('.field', app), msg = $('.catch-msg', app);
-      ball.disabled = true;
+      $('#betBox', scene).classList.add('gone');
+      $('#betNote', scene).classList.add('gone');
+      $('#goHint', scene).classList.add('gone');
+      ringEl.classList.add(hit ? 'hit' : 'miss');
+      const target = $('#target', scene), gm = $('#gm', scene), msg = $('#goMsg', scene);
       const b = ball.getBoundingClientRect(), tr = target.getBoundingClientRect();
       const dx = tr.left + tr.width / 2 - (b.left + b.width / 2);
-      const dy = tr.top + tr.height / 2 - (b.top + b.height / 2);
-      const off = hit ? 0 : (pos < 50 ? -1 : 1) * 70;
-      $('#betBox').hidden = true;
-      $('#betNote').hidden = true;
-      const tip = $('.say', app);
-      if (tip) tip.hidden = true;
+      const dy = tr.top + tr.height * 0.55 - (b.top + b.height / 2);
+      const off = hit ? 0 : (curve >= 0 ? 1 : -1) * (tr.width * 0.7);
       sfx('throw');
       await run(ball, [
         { transform: 'translate(0, 0) rotate(0) scale(1)' },
-        { transform: `translate(${(dx + off) * 0.5}px, ${dy - 90}px) rotate(-400deg) scale(.85)`, offset: 0.55 },
-        { transform: `translate(${dx + off}px, ${dy}px) rotate(-720deg) scale(.7)` },
-      ], { duration: 650, easing: 'cubic-bezier(.3,.6,.5,1)' });
+        { transform: `translate(${(dx + off) * 0.45 + curve * 40}px, ${dy - 140}px) rotate(-540deg) scale(.7)`, offset: 0.55 },
+        { transform: `translate(${dx + off}px, ${dy}px) rotate(-1080deg) scale(.45)` },
+      ], { duration: 700, easing: 'cubic-bezier(.25,.6,.45,1)' });
 
       if (!hit) {
+        /* 빗나감: 볼은 튕겨 나가고, 포켓몬은 폴짝 피했다가 도망가요 */
         sfx('miss');
         run(ball, [
-          { transform: `translate(${dx + off}px, ${dy}px) rotate(-720deg) scale(.7)`, opacity: 1 },
-          { transform: `translate(${dx + off * 3}px, ${dy + 260}px) rotate(-1000deg) scale(.6)`, opacity: 0 },
+          { transform: `translate(${dx + off}px, ${dy}px) rotate(-1080deg) scale(.45)`, opacity: 1 },
+          { transform: `translate(${dx + off * 2.2}px, ${dy + 320}px) rotate(-1400deg) scale(.4)`, opacity: 0 },
         ], { duration: 700, easing: 'ease-in' });
-        await wait(250);
-        await run(target, [
-          { transform: 'translateX(0)', opacity: 1 },
-          { transform: 'translateX(-14px)', opacity: 1, offset: 0.25 },
-          { transform: `translateX(${pos < 50 ? 300 : -300}px) rotate(${pos < 50 ? 20 : -20}deg)`, opacity: 0 },
-        ], { duration: 700, easing: 'ease-in' });
-        field.classList.add('done'); /* 휴대폰에서는 풀밭을 작게 접어 결과가 한 화면에 보이게 */
-        /* 전설은 사라지지 않고 다음 판에 다시 나와요 */
-        msg.innerHTML = `<b class="missed">💨 ${LINES.fled(N, subj)}</b>${q.legend ? `<small>${LINES.legendAway}</small>` : ''}`;
+        await run(target, [{ transform: 'translateY(0)' }, { transform: 'translateY(-60px) rotate(-8deg)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 520, easing: 'ease-out' });
+        msg.innerHTML = '<b class="miss-word">앗, 빗나갔다!</b>';
+        await wait(500);
+        scene.classList.add('puff');
+        await run(gm, [{ transform: 'translateX(0) scale(1)', opacity: 1 }, { transform: `translateX(${off >= 0 ? -260 : 260}px) scale(.6)`, opacity: 0 }], { duration: 650, easing: 'ease-in' });
+        msg.innerHTML = `<b class="miss-word">💨 ${LINES.fled(N, subj)}</b>${q.legend ? `<small>${LINES.legendAway}</small>` : ''}`;
         speak([LINES.missed, LINES.fled(N, subj), ...(q.legend ? [LINES.legendAway] : [])]);
-      } else {
-        field.classList.add('flashing');
-        sfx('hit');
-        await run(target, [
-          { transform: 'scale(1)', filter: 'brightness(1)', opacity: 1 },
-          { transform: 'scale(1.08)', filter: 'brightness(4)', opacity: 1, offset: 0.35 },
-          { transform: 'scale(0)', filter: 'brightness(4)', opacity: 0 },
-        ], { duration: 520, easing: 'ease-in' });
+        await wait(900);
+        result(false);
+        return;
+      }
+      /* 명중: 번쩍! 포켓몬이 빨간 빛이 되어 볼 속으로 → 볼이 떨어져 세 번 흔들 → 딸깍! */
+      msg.innerHTML = `<b class="nice-word">${nice}</b>`;
+      sfx('hit');
+      scene.classList.add('flashing');
+      await run(target, [
+        { transform: 'scale(1)', filter: 'brightness(1)', opacity: 1 },
+        { transform: 'scale(1.08)', filter: 'brightness(2) sepia(1) saturate(8) hue-rotate(-40deg)', opacity: 1, offset: 0.35 },
+        { transform: `translate(0, ${tr.height * 0.05}px) scale(0)`, filter: 'brightness(3) sepia(1) saturate(10) hue-rotate(-40deg)', opacity: 0 },
+      ], { duration: 650, easing: 'ease-in' });
+      $('.go-shadow', scene).classList.add('gone');
+      const ground = tr.height * 0.42;
+      sfx('wobble');
+      await run(ball, [
+        { transform: `translate(${dx}px, ${dy}px) rotate(-1080deg) scale(.45)` },
+        { transform: `translate(${dx}px, ${dy + ground}px) rotate(-1080deg) scale(.5)`, offset: 0.55 },
+        { transform: `translate(${dx}px, ${dy + ground - 30}px) rotate(-1080deg) scale(.5)`, offset: 0.78 },
+        { transform: `translate(${dx}px, ${dy + ground}px) rotate(-1080deg) scale(.5)` },
+      ], { duration: 520, easing: 'ease-in' });
+      msg.innerHTML = '';
+      ball.classList.add('shaking');
+      for (let w = 1; w <= 3; w++) {
+        await wait(380);
+        sfx('wobble');
         await run(ball, [
-          { transform: `translate(${dx}px, ${dy}px) rotate(-720deg) scale(.7)` },
-          { transform: `translate(${dx}px, ${dy + 60}px) rotate(-720deg) scale(.7)` },
-        ], { duration: 280, easing: 'cubic-bezier(.5,0,1,1)' });
-        for (let w = 1; w <= 3; w++) {
-          msg.textContent = '…'.repeat(w);
-          sfx('wobble');
-          await run(ball, [
-            { transform: `translate(${dx}px, ${dy + 60}px) rotate(0deg) scale(.7)` },
-            { transform: `translate(${dx}px, ${dy + 60}px) rotate(-22deg) scale(.7)`, offset: 0.3 },
-            { transform: `translate(${dx}px, ${dy + 60}px) rotate(22deg) scale(.7)`, offset: 0.7 },
-            { transform: `translate(${dx}px, ${dy + 60}px) rotate(0deg) scale(.7)` },
-          ], { duration: 520, easing: 'ease-in-out' });
-          await wait(260);
-        }
-        const isNew = addDex(N);
+          { transform: `translate(${dx}px, ${dy + ground}px) rotate(0deg) scale(.5)` },
+          { transform: `translate(${dx}px, ${dy + ground}px) rotate(-28deg) scale(.5)`, offset: 0.3 },
+          { transform: `translate(${dx}px, ${dy + ground}px) rotate(24deg) scale(.5)`, offset: 0.7 },
+          { transform: `translate(${dx}px, ${dy + ground}px) rotate(0deg) scale(.5)` },
+        ], { duration: 560, easing: 'ease-in-out' });
+      }
+      await wait(300);
+      /* 딸깍! 별이 팡 + 초록 고리 */
+      ball.classList.remove('shaking');
+      ball.classList.add('locked');
+      const burst = $('.go-burst', scene);
+      const bb = ball.getBoundingClientRect(), sb = scene.getBoundingClientRect();
+      burst.style.left = `${bb.left - sb.left + bb.width / 2}px`;
+      burst.style.top = `${bb.top - sb.top + bb.height / 2}px`;
+      burst.innerHTML = `<i class="wave"></i>${[0, 72, 144, 216, 288].map((d) => `<span style="--d:${d}deg">⭐</span>`).join('')}`;
+      burst.classList.add('go');
+      sfx('catch');
+      msg.innerHTML = '<b class="yay-word">신난다~!</b>';
+      await wait(1000);
+      msg.innerHTML = `<b class="yay-word">${esc(N)}${obj} 잡았다!</b>`;
+      speak(LINES.caught(N, obj));
+      confetti();
+      await wait(1100);
+      result(true);
+    }
+
+    /* 결과 카드 (GO의 보상 창처럼) */
+    function result(ok) {
+      const lastOne = k === list.length - 1;
+      const box = $('#goResult', scene);
+      let isNew = false, packKind = null;
+      if (ok) {
+        isNew = addDex(N);
         S.catches = S.catches || {};
         S.catches[N] = (S.catches[N] || 0) + 1;
+        if (q.shiny && !hasShiny(N)) S.shinies = [...(S.shinies || []), N];
         save();
-        if (q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
         if (q.legend) badge = questCaught();
-        const packKind = q.legend || q.shiny || 'lms'.includes(q.grade) ? 'l' : 'b';
+        packKind = q.legend || q.shiny || 'lms'.includes(q.grade) ? 'l' : 'b';
         addPack(packKind, N, q.diff);
         caught.push(q);
-        ball.classList.add('locked');
-        field.classList.add('done');
-        sfx('catch');
-        confetti();
-        msg.innerHTML = `<b>딸깍! ${N}${obj} 잡았다!</b>`;
-        $('#after').innerHTML = `
-          <div class="card-reveal">${pokeCard(q.m, q.shiny)}</div>
-          ${isNew ? `<p class="small-note">📖 새 카드! 도감에 ${N}${subj} 등록됐어요.</p>` : ''}
-          ${!q.legend && canEvolve(N) ? `<button class="btn primary evo-cta" id="evoNow">🧬 ${N} ${EVO_NEED}마리가 모였어요! 눌러서 진화!</button>`
-            : evoNext(N) ? `<p class="small-note">🧬 ${esc(evoNext(N))}까지 ${evoDots(N)} ${S.catches[N]}/${EVO_NEED}</p>` : ''}
-          <p class="pack-got">🎴 ${PACK_ODDS[packKind].name} 획득!</p>`;
-        speak([LINES.caught(N, obj), LINES.packGot, ...(!q.legend && canEvolve(N) ? [LINES.canEvolve(N)] : [])]);
-        $('#evoNow')?.addEventListener('click', async (e) => {
-          e.currentTarget.remove();
-          const b = await evolvePokemon(N);
-          if (!b) return;
-          const rv = $('#after .card-reveal');
-          if (rv) rv.innerHTML = pokeCard(POKE_BY[b]);
-          rv?.insertAdjacentHTML('afterend', `<p class="small-note">✨ ${esc(b)}${ro(b)} 진화! 📖 도감에 ${esc(b)} 등록</p>`);
-        });
       }
-      const lastOne = k === list.length - 1;
-      $('#after').insertAdjacentHTML('beforeend', `<button class="btn primary big" id="nextMon">${lastOne ? '결과 보기 ▶' : '다음 포켓몬 ▶'}</button>`);
-      $('#nextMon').onclick = () => { k++; if (k < list.length) show(); else onEnd(caught, badge); };
-    });
+      box.innerHTML = ok ? `
+        <p class="gr-title">🎉 ${esc(N)}${obj} 잡았다!</p>
+        <div class="gr-card">${pokeCard(q.m, q.shiny)}</div>
+        <ul class="gr-list">
+          ${isNew ? `<li><span>📖 도감 새로 등록</span><b>NEW!</b></li>` : ''}
+          ${q.shiny ? '<li><span>✨ 색이 다른 포켓몬</span><b>대박!</b></li>' : ''}
+          <li><span>🎴 ${PACK_ODDS[packKind].name}</span><b>+1</b></li>
+          ${bet ? `<li><span>⭐ 건 별</span><b>−${bet}</b></li>` : ''}
+          ${!q.legend && evoNext(N) && !canEvolve(N) ? `<li><span>🧬 ${esc(evoNext(N))}까지</span><b>${evoDots(N)} ${S.catches[N]}/${EVO_NEED}</b></li>` : ''}
+        </ul>
+        ${!q.legend && canEvolve(N) ? `<button class="btn evo-cta" id="evoNow">🧬 ${N} ${EVO_NEED}마리 모였어요! 눌러서 진화!</button>` : ''}
+        <button class="btn primary big gr-ok" id="nextMon">${lastOne ? '확인 ▶' : '다음 포켓몬 ▶'}</button>`
+        : `<p class="gr-title miss">💨 ${esc(N)}${subj} 도망쳤어요</p>
+        <p class="small-note">${q.legend ? LINES.legendAway : '다음엔 고리가 작을 때 던져 봐요!'}</p>
+        <button class="btn primary big gr-ok" id="nextMon">${lastOne ? '확인 ▶' : '다음 포켓몬 ▶'}</button>`;
+      box.hidden = false;
+      requestAnimationFrame(() => box.classList.add('in'));
+      if (ok) speak([LINES.packGot, ...(!q.legend && canEvolve(N) ? [LINES.canEvolve(N)] : [])]);
+      $('#evoNow', box)?.addEventListener('click', async (e) => {
+        e.currentTarget.remove();
+        const b2 = await evolvePokemon(N);
+        if (!b2) return;
+        $('.gr-card', box).innerHTML = pokeCard(POKE_BY[b2]);
+        $('.gr-list', box).insertAdjacentHTML('afterbegin', `<li><span>✨ ${esc(b2)}${ro(b2)} 진화!</span><b>📖 등록</b></li>`);
+      });
+      $('#nextMon', box).onclick = () => {
+        sfx('pop');
+        k++;
+        if (k < list.length) show();
+        else { close(); onEnd(caught, badge); }
+      };
+    }
   };
   show();
 }
