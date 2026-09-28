@@ -225,6 +225,7 @@ const ISLANDS = [
   { id: 'space', icon: '✂️', name: '띄어쓰기 숲', sub: '어디서 띄울까?',     tone: 't4' },
   { id: 'sound', icon: '🔍', name: '소리 탐정',   sub: '소리랑 글자가 달라!', tone: 't5' },
   { id: 'book',  icon: '🎒', name: '포켓몬 가방', sub: '잡은 포켓몬',        tone: 't6' },
+  { id: 'friends', icon: '🤝', name: '친구 광장', sub: '카드 대결 · 카드 시장', tone: 'friends' },
 ];
 const SCREENS = {};
 function go(name, ...args) {
@@ -262,7 +263,7 @@ SCREENS.home = () => {
         <button class="island ${s.tone}" data-go="${s.id}">
           <span class="i-icon" aria-hidden="true">${s.icon}</span>
           <span class="i-name">${s.name}</span>
-          <span class="i-sub">${s.id === 'dex' ? dexHint() : s.sub}</span>
+          <span class="i-sub">${s.id === 'dex' ? dexHint() : s.id === 'friends' ? friendsHint() : s.sub}</span>
           ${DIFFICULTY[s.id] ? diffTag(s.id) : s.id === 'dict' ? '<span class="diff-tag">★★~★★★★</span>' : ''}
           ${S.best[s.id] ? `<span class="i-best">최고 ${S.best[s.id]}점</span>` : ''}
         </button>`).join('')}
@@ -1218,7 +1219,7 @@ const cardImgUrl = (c) => CARD_IMG + c[6];
 const cardDetailUrl = (c) => 'https://pokemoncard.co.kr/cards/detail/' + c[0];
 const classChip = (cls) => `<span class="class-chip c${cls}">${CARD_CLASS[cls].icon} ${CARD_CLASS[cls].name}</span>`;
 /* 카드 그림. 못 불러오면 이름이 적힌 카드로 바꿔요 */
-const cardFace = (c, lazy) => `<span class="tcg c${c[5]}${cardLv(c[0]) ? ` lv lv${cardLv(c[0])}` : ''}">${cardLv(c[0]) ? `<i class="lv-badge">+${cardLv(c[0])}</i>` : ''}<img class="cimg" src="${cardImgUrl(c)}" alt="${esc(c[1])} 카드"${lazy ? ' loading="lazy"' : ''} referrerpolicy="no-referrer" data-name="${esc(c[1])}" data-kind="${esc(c[2])}"></span>`;
+const cardFace = (c, lazy, lv = cardLv(c[0])) => `<span class="tcg c${c[5]}${lv ? ` lv lv${lv}` : ''}">${lv ? `<i class="lv-badge">+${lv}</i>` : ''}<img class="cimg" src="${cardImgUrl(c)}" alt="${esc(c[1])} 카드"${lazy ? ' loading="lazy"' : ''} referrerpolicy="no-referrer" data-name="${esc(c[1])}" data-kind="${esc(c[2])}"></span>`;
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || !img.classList.contains('cimg')) return;
@@ -1626,7 +1627,7 @@ function dictQuestion(q, i, n, mark, next) {
 
 /* ---------- 🎒 포켓몬 가방 ---------- */
 SCREENS.book = () => {
-  const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
+  const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex', 'friends'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
     ...GRADE_DICT.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '📚', name: `${d.grade}학년 ${d.name}` })),
     ...SCHOOL.map((d) => ({ id: d.id, icon: '📝', name: `시험 ${d.n}급` }))];
   /* 가방에는 지금 가진 포켓몬만 (진화하면 3마리가 1마리로 바뀌어요) */
@@ -1647,6 +1648,433 @@ SCREENS.book = () => {
   $('#toAlbum').onclick = () => go('album');
   $('#toDex').onclick = () => go('dex');
 };
+
+/* ---------- 🤝 친구 광장: 친구 · ⚔️ 카드 대결 · 🏪 카드 시장 (js/social.js) ---------- */
+function friendsHint() {
+  if (!STORE.cloud.user) return '부모님 로그인이 필요해요';
+  const list = SOCIAL.friendList();
+  const req = list.filter((f) => f.incoming).length;
+  const on = list.reduce((a, f) => a + f.kids.filter((k) => k.online).length, 0);
+  return req ? `📩 친구 신청 ${req}개` : on ? `🟢 지금 온라인 친구 ${on}명` : '카드 대결 · 카드 시장';
+}
+/* 카드 한 장 내보내기·받기 (강화 단계도 함께) */
+function takeCard(id) {
+  const n = (S.cards || {})[id] || 0;
+  if (!n) return null;
+  let lv = 0;
+  if (n <= 1) { lv = cardLv(id); delete S.cards[id]; if (S.cardLv) delete S.cardLv[id]; } else S.cards[id] = n - 1; /* 겹친 카드는 +0짜리를 보내요 */
+  return { id, lv };
+}
+function giveCard(id, lv) {
+  S.cards = S.cards || {};
+  S.cards[id] = (S.cards[id] || 0) + 1;
+  if (lv) { S.cardLv = S.cardLv || {}; S.cardLv[id] = Math.max(S.cardLv[id] || 0, lv); }
+}
+const cardInfo = (c, lv) => ({ id: c[0], name: c[1], cls: c[5], type: c[7] || '', lv: lv || 0 });
+const kidInfo = () => { const p = STORE.current(); return { id: p.id, name: p.name, avatar: p.avatar }; };
+const PRICE_HINT = { n: 2, r: 6, a: 12, s: 25, u: 50 };
+
+/* 받을 것 정리: 이긴 카드·돌려받을 카드·판 값 (지금 공부하는 아이 것만) */
+let battleId = null;
+function settleSocial() {
+  if (!SOCIAL.ready) return;
+  const me = SOCIAL.uid, kid = STORE.current().id;
+  S.social = S.social || { escrow: {}, done: {} };
+  const book = S.social;
+  let changed = false;
+  const notes = [];
+  for (const m of SOCIAL.matches()) {
+    if (!m.kids || m.kids[me] !== kid) continue;
+    const other = m.users.find((u) => u !== me);
+    /* 이미 정리한 대결: 표시를 남기고, 둘 다 끝났으면 기록을 지워요 */
+    if (book.done[m.id]) { const done = m.settled || {}; if (!done[me] || done[other]) SOCIAL.settled(m.id); continue; }
+    const them = (m.who || {})[other] || { name: '친구' };
+    const mine = book.escrow[m.id];
+    const expired = m.status === 'invite' && !SOCIAL.fresh(m);
+    if (m.status === 'done') {
+      if (m.winner === me) {
+        if (m.stake) {
+          const got = m.picks[other];
+          if (mine) giveCard(mine.id, mine.lv);
+          giveCard(got.id, got.lv);
+          notes.push(`⚔️ ${esc(them.name)}${josaPick(them.name, ['과', '와'])}의 대결에서 이겨서 <b>${esc(got.name)}</b> 카드를 받았어요!`);
+        } else { S.stars += 1; S.earned += 1; notes.push(`🤝 ${esc(them.name)}${josaPick(them.name, ['과', '와'])}의 친선 대결에서 이겨서 ⭐1!`); }
+      } else if (m.stake && mine) notes.push(`⚔️ ${esc(them.name)}에게 <b>${esc(mine.name)}</b> 카드를 보냈어요. 다음엔 이길 거야!`);
+    } else if (m.status === 'cancel' || m.status === 'declined' || expired) {
+      if (mine) giveCard(mine.id, mine.lv);
+      if (expired && m.host === me) SOCIAL.cancel(m.id).catch(() => {});
+    } else continue;
+    delete book.escrow[m.id];
+    book.done[m.id] = 1;
+    changed = true;
+    SOCIAL.settled(m.id);
+  }
+  for (const l of SOCIAL.myListings()) {
+    if (l.sellerKid !== kid) continue;
+    const key = 'L' + l.id;
+    if (book.done[key]) { SOCIAL.removeListing(l.id); continue; }
+    if (l.status === 'sold') {
+      S.stars += l.price;
+      notes.push(`🏪 ${esc(l.buyerName || '친구')}${josaPick(l.buyerName || '친구', ['이', '가'])} <b>${esc(l.card.name)}</b> 카드를 사서 별 ${l.price}개를 받았어요!`);
+    } else if (l.status === 'cancel') giveCard(l.card.id, l.card.lv);
+    else continue;
+    book.done[key] = 1;
+    changed = true;
+    SOCIAL.removeListing(l.id);
+  }
+  if (!changed) return;
+  const keys = Object.keys(book.done);
+  if (keys.length > 300) keys.slice(0, keys.length - 300).forEach((k) => delete book.done[k]);
+  save();
+  paintStars();
+  /* 대결 화면에서 결과를 보고 있으면 알림은 그 화면이 보여 줘요 */
+  notes.forEach((n, i) => setTimeout(() => { if (app.className !== 'screen-battle') toast(n, 3800); }, i * 3900));
+}
+
+/* 떠 있는 창 (대결 신청·카드 고르기·값 정하기) */
+function sheet(html, cls = '') {
+  closeSheet();
+  const el = document.createElement('div');
+  el.className = 'zoom sheet ' + cls;
+  el.id = 'sheet';
+  el.innerHTML = `<div class="zoom-in">${html}</div>`;
+  el.addEventListener('click', (e) => { if (e.target === el) closeSheet(); });
+  document.body.appendChild(el);
+  return el;
+}
+const closeSheet = () => $('#sheet')?.remove();
+
+/* 친구가 대결을 신청하면 어느 화면에서든 떠요 */
+let inviteShown = null;
+const dismissed = new Set();
+function checkInvites() {
+  if (!SOCIAL.ready) return;
+  const me = SOCIAL.uid, kid = STORE.current().id;
+  const m = SOCIAL.matches().find((x) => x.status === 'invite' && x.host !== me && x.kids[me] === kid && SOCIAL.fresh(x) && !dismissed.has(x.id));
+  if (inviteShown && (!m || m.id !== inviteShown)) { if ($('#sheet.invite')) closeSheet(); inviteShown = null; }
+  if (!m || inviteShown === m.id || app.className === 'screen-battle') return;
+  inviteShown = m.id;
+  const them = m.who[m.host];
+  const el = sheet(`<p class="inv-av">${them.avatar}</p>
+    <p class="inv-t"><b>${esc(them.name)}</b>${josaPick(them.name, ['이', '가'])} 카드 대결을 신청했어요!</p>
+    <p class="small-note">${m.stake ? '🎴 카드 걸기 대결: 이기면 친구 카드를 가져오고, 지면 내 카드가 친구에게 가요.' : '🤝 친선 대결: 카드는 그대로, 이기면 ⭐1'}</p>
+    <div class="row"><button class="btn primary" id="invYes">⚔️ 좋아!</button><button class="btn" id="invNo">다음에</button></div>`, 'invite');
+  sfx('star');
+  speak(`${them.name}${josaPick(them.name, ['이', '가'])} 카드 대결을 신청했어!`);
+  $('#invYes', el).onclick = async () => {
+    closeSheet(); inviteShown = null; dismissed.add(m.id);
+    try { await SOCIAL.respond(m.id, true); go('battle', m.id); } catch (e) { toast('대결이 이미 끝났어요'); }
+  };
+  $('#invNo', el).onclick = () => { closeSheet(); inviteShown = null; dismissed.add(m.id); SOCIAL.respond(m.id, false).catch(() => {}); };
+}
+
+SOCIAL.on((what) => {
+  if (what === 'matches' || what === 'listings') settleSocial();
+  if (what === 'matches') checkInvites();
+  if (app.className === 'screen-battle' && what === 'matches') renderBattle();
+  const typing = document.activeElement && document.activeElement.tagName === 'INPUT';
+  if (app.className === 'screen-friends' && (what === 'friends' || what === 'listings') && !typing && !$('#sheet')) SCREENS.friends(null, true);
+  if (app.className === 'screen-home' && what === 'friends') { const sub = $('[data-go="friends"] .i-sub'); if (sub) sub.textContent = friendsHint(); }
+});
+setInterval(() => { if (app.className === 'screen-friends' && friendsTab === 'fr' && !$('#sheet')) SCREENS.friends(null, true); checkInvites(); }, 20000);
+
+let friendsTab = 'fr';
+SCREENS.friends = (tab, quiet) => {
+  if (tab) friendsTab = tab;
+  const c = STORE.cloud;
+  const head = '<h2 class="h">🤝 친구 광장</h2>';
+  if (!c.enabled || !c.user) {
+    app.innerHTML = `${head}${bubble('친구와 카드 대결을 하고 카드를 사고팔려면, 부모님이 가족 계정으로 로그인해야 해요.')}
+      <div class="setbox"><p class="small-note">한 이메일(Google 계정)이 우리 가족 계정이에요. 로그인한 뒤 친구 부모님의 이메일로 친구를 맺어요.</p>
+      ${c.enabled ? `<button class="btn primary" id="frSignIn" ${c.ready ? '' : 'disabled'}>👨‍👩‍👧 부모님 로그인</button>` : '<p class="small-note">가족 계정 설정(js/firebase-config.js)이 필요해요.</p>'}
+      ${authError ? `<p class="auth-error" role="alert">⚠️ ${authError}</p>` : ''}</div>`;
+    $('#frSignIn')?.addEventListener('click', async () => { await doSignIn(); if (app.className === 'screen-friends') SCREENS.friends(); });
+    if (!quiet) speak('친구와 놀려면 부모님이 로그인해야 해요.');
+    return;
+  }
+  if (!SOCIAL.ready) { SOCIAL.start(); app.innerHTML = `${head}<p class="small-note">친구 광장에 연결하는 중…</p>`; return; }
+  app.innerHTML = `${head}
+    <div class="dex-tabs dict-tabs" role="tablist">
+      <button role="tab" data-ftab="fr" aria-selected="${friendsTab === 'fr'}">👫 친구 · ⚔️ 대결</button>
+      <button role="tab" data-ftab="mk" aria-selected="${friendsTab === 'mk'}">🏪 카드 시장</button>
+    </div>
+    <div id="fbody"></div>`;
+  $$('[data-ftab]', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); SCREENS.friends(b.dataset.ftab); }));
+  if (friendsTab === 'mk') marketTab(quiet); else friendsBody(quiet);
+};
+
+let frMsg = '';
+function friendsBody(quiet) {
+  const box = $('#fbody');
+  const list = SOCIAL.friendList();
+  const ok = list.filter((f) => f.status === 'ok');
+  const incoming = list.filter((f) => f.incoming);
+  const outgoing = list.filter((f) => f.status === 'pending' && !f.incoming);
+  box.innerHTML = `
+    ${ok.length ? `<div class="fam-list">${ok.map((f) => `<div class="fam-card">
+      <div class="fam-head"><b>${esc(f.name)}</b> <small>가족</small></div>
+      <div class="fam-kids">${f.kids.length ? f.kids.map((k) => `<div class="fk${k.online ? ' on' : ''}">
+        <span class="fk-av">${k.avatar}</span><span class="fk-name">${esc(k.name)}</span>
+        <span class="fk-dot">${k.online ? '🟢 온라인' : '⚪ 쉬는 중'}</span>
+        ${k.online ? `<button class="btn small primary" data-fight="${f.uid}|${k.id}">⚔️ 대결</button>` : ''}</div>`).join('') : '<p class="small-note">아직 아이가 없어요</p>'}</div>
+    </div>`).join('')}</div>` : `${bubble('아직 친구가 없어요. 부모님께 친구를 맺어 달라고 해 봐요!', 'tight')}`}
+    ${incoming.length ? `<div class="req-list">${incoming.map((f) => `<div class="req">📩 <span><b>${esc(f.name)}</b> <small>${esc(f.email)}</small><br>친구 신청이 왔어요</span>
+      <button class="btn small primary" data-accept="${f.pid}">수락</button><button class="btn small" data-drop="${f.pid}">거절</button></div>`).join('')}</div>` : ''}
+    <details class="parent-box"${ok.length ? '' : ' open'}><summary>👨‍👩‍👧 부모님: 친구 맺기</summary>
+      <p class="small-note">우리 가족 계정: <b>${esc(SOCIAL.email)}</b><br>친구 부모님께 이 이메일을 알려 주고, 아래에 친구 부모님의 이메일을 써서 신청하세요. 상대 부모님이 수락하면 친구가 돼요.</p>
+      <form id="addFriend" class="add-friend"><label class="sr" for="frEmail">친구 부모님 이메일</label>
+        <input id="frEmail" class="typed small" type="email" inputmode="email" autocomplete="off" placeholder="친구 부모님 이메일">
+        <button class="btn small primary" type="submit">친구 신청</button></form>
+      <p class="small-note" id="frMsg" role="status">${frMsg}</p>
+      ${outgoing.map((f) => `<div class="req">⏳ <span>${esc(f.email || f.name)}<br><small>수락을 기다려요</small></span><button class="btn small" data-drop="${f.pid}">취소</button></div>`).join('')}
+      ${ok.map((f) => `<div class="req">👫 <span>${esc(f.name)} <small>${esc(f.email)}</small></span><button class="btn small" data-drop="${f.pid}" data-confirm="1">친구 끊기</button></div>`).join('')}
+    </details>`;
+  $$('[data-fight]', box).forEach((b) => b.addEventListener('click', () => { const [uid, kidId] = b.dataset.fight.split('|'); askFight(uid, kidId); }));
+  $$('[data-accept]', box).forEach((b) => b.addEventListener('click', async () => { b.disabled = true; await SOCIAL.acceptFriend(b.dataset.accept).catch(() => toast('수락하지 못했어요')); sfx('star'); }));
+  $$('[data-drop]', box).forEach((b) => b.addEventListener('click', async () => {
+    if (b.dataset.confirm && b.textContent !== '정말 끊을까요?') { b.textContent = '정말 끊을까요?'; return; }
+    b.disabled = true; await SOCIAL.removeFriend(b.dataset.drop).catch(() => toast('처리하지 못했어요'));
+  }));
+  $('#addFriend').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = $('#frMsg');
+    msg.textContent = frMsg = '찾는 중…';
+    const MSG = {
+      sent: '✉️ 친구 신청을 보냈어요. 상대 부모님이 수락하면 친구가 돼요.', accepted: '🎉 친구가 됐어요!', already: '이미 친구예요.',
+      pending: '벌써 신청했어요. 수락을 기다려요.', self: '우리 가족 이메일이에요.', bad: '이메일을 다시 확인해 주세요.',
+      notfound: '그 이메일로 로그인한 가족이 없어요. 친구 부모님이 먼저 이 앱에서 한 번 로그인해야 해요.',
+    };
+    try { frMsg = MSG[await SOCIAL.requestFriend($('#frEmail').value)] || ''; } catch (err) { console.error(err); frMsg = '⚠️ 신청하지 못했어요. Firestore 규칙(README "친구 광장")을 확인해 주세요.'; }
+    if ($('#frMsg')) $('#frMsg').textContent = frMsg;
+  });
+  if (!quiet) speak(ok.some((f) => f.kids.some((k) => k.online)) ? '온라인 친구에게 카드 대결을 신청해 봐!' : '친구가 앱을 켜면 초록불이 들어와요.');
+}
+
+/* 대결 신청: 카드를 걸까, 친선으로 할까 */
+function askFight(uid, kidId) {
+  const f = SOCIAL.friendList().find((x) => x.uid === uid);
+  const k = f && f.kids.find((x) => x.id === kidId);
+  if (!k) return;
+  if (!Object.keys(S.cards || {}).length) { toast('카드가 있어야 대결할 수 있어요. 카드팩을 뜯어 봐요!'); return; }
+  const el = sheet(`<p class="inv-av">${k.avatar}</p><p class="inv-t"><b>${esc(k.name)}</b>${josaPick(k.name, ['과', '와'])} 대결!</p>
+    <button class="btn primary" id="fStake">🎴 카드 걸기 대결<small>이기면 친구 카드를 가져와요 (지면 내 카드가 가요)</small></button>
+    <button class="btn" id="fFriendly">🤝 친선 대결<small>카드는 그대로, 이기면 ⭐1</small></button>
+    <button class="btn ghost" id="fClose">취소</button>`, 'fight');
+  const send = async (stake) => {
+    closeSheet();
+    try { const id = await SOCIAL.invite(uid, kidInfo(), { id: k.id, name: k.name, avatar: k.avatar }, stake); sfx('pop'); go('battle', id); } catch (e) { console.error(e); toast('대결을 신청하지 못했어요'); }
+  };
+  $('#fStake', el).onclick = () => send(true);
+  $('#fFriendly', el).onclick = () => send(false);
+  $('#fClose', el).onclick = closeSheet;
+}
+
+/* ---------- ⚔️ 대결 화면 ---------- */
+const battleSeen = new Set();
+SCREENS.battle = (id) => {
+  battleId = id;
+  app.innerHTML = '<h2 class="h">⚔️ 카드 대결</h2><p class="small-note">카드를 불러오는 중…</p>';
+  loadCards().then(() => { if (app.className === 'screen-battle' && battleId === id) renderBattle(); })
+    .catch(() => { app.innerHTML = '<h2 class="h">⚔️ 카드 대결</h2><p class="auth-error">⚠️ 카드 목록을 불러오지 못했어요.</p>'; });
+};
+const battleCache = {}; /* 끝난 대결 기록은 곧 지워져서, 보고 있는 동안은 여기 남겨 둬요 */
+function renderBattle() {
+  if (!window.CARD_BY) return;
+  const m = SOCIAL.match(battleId) || battleCache[battleId];
+  if (m) battleCache[battleId] = m;
+  const back = '<div class="row"><button class="btn primary" id="bBack">🤝 친구 광장으로</button></div>';
+  const wireBack = () => { $('#bBack')?.addEventListener('click', () => go('friends', 'fr')); };
+  if (!m) { app.innerHTML = `<h2 class="h">⚔️ 카드 대결</h2><p class="small-note">이 대결은 끝났어요.</p>${back}`; wireBack(); return; }
+  if (m.status === 'done' && battleSeen.has(m.id)) return; /* 결과 화면은 그대로 둬요 */
+  const me = SOCIAL.uid, other = m.users.find((u) => u !== me);
+  const mine = m.who[me], them = m.who[other];
+  const top = `<h2 class="h">⚔️ 카드 대결</h2>
+    <div class="vs"><span class="vs-kid">${mine.avatar}<b>${esc(mine.name)}</b></span><span class="vs-x">VS</span><span class="vs-kid">${them.avatar}<b>${esc(them.name)}</b></span></div>
+    <p class="small-note center-note">${m.stake ? '🎴 카드 걸기 대결 · 이기면 친구 카드를 가져와요' : '🤝 친선 대결 · 카드는 그대로, 이기면 ⭐1'}</p>`;
+  const quit = '<button class="btn ghost" id="bQuit">그만하기</button>';
+  const wireQuit = () => { $('#bQuit')?.addEventListener('click', async () => { await SOCIAL.cancel(m.id).catch(() => {}); go('friends', 'fr'); }); };
+  if (m.status === 'invite') {
+    app.innerHTML = `${top}<div class="wait">⏳ <b>${esc(them.name)}</b>의 대답을 기다려요…</div><div class="row">${quit}</div>`;
+    wireQuit();
+    return;
+  }
+  if (m.status === 'declined' || m.status === 'cancel') {
+    app.innerHTML = `${top}<div class="wait">${m.status === 'declined' ? `🙅 ${esc(them.name)}${josaPick(them.name, ['이', '가'])} 다음에 하재요.` : '대결을 그만했어요. 건 카드는 돌아와요.'}</div>${back}`;
+    wireBack();
+    return;
+  }
+  if (m.status === 'pick') {
+    const myPick = (m.picks || {})[me];
+    if (myPick) {
+      const c = CARD_BY[myPick.id];
+      app.innerHTML = `${top}<div class="bt-pick">${c ? cardFace(c, false, myPick.lv) : ''}<p>내 카드: <b>${esc(myPick.name)}</b> · ⚡ ${SOCIAL.power(myPick)}</p></div>
+        <div class="wait">⏳ ${esc(them.name)}${josaPick(them.name, ['이', '가'])} 카드를 고르는 중…</div><div class="row">${quit}</div>`;
+      wireQuit();
+      return;
+    }
+    const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean)
+      .map((c) => ({ c, p: SOCIAL.power(cardInfo(c, cardLv(c[0]))) })).sort((a, b) => b.p - a.p);
+    app.innerHTML = `${top}${bubble(m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
+      <p class="small-note center-note">⚡ 힘 = 등급 + 강화 · 타입 상성이 맞으면 +8 · 주사위 운도 있어요</p>
+      <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}</button>`).join('')}</div>
+      <div class="row">${quit}</div>`;
+    wireQuit();
+    $$('[data-pick]', app).forEach((b) => b.addEventListener('click', () => confirmPick(m, CARD_BY[b.dataset.pick])));
+    speak(m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라!');
+    return;
+  }
+  if (m.status === 'done') { battleSeen.add(m.id); playBattle(m, top); }
+}
+function confirmPick(m, c) {
+  const info = cardInfo(c, cardLv(c[0]));
+  const el = sheet(`${cardFace(c)}<p class="inv-t"><b>${esc(c[1])}</b> · ⚡ ${SOCIAL.power(info)}</p>
+    <p class="small-note">${m.stake ? '이 카드로 할까요? 지면 친구에게 가요.' : '이 카드로 할까요?'}</p>
+    <div class="row"><button class="btn primary" id="pYes">⚔️ 이 카드로!</button><button class="btn" id="pNo">다시 고를래</button></div>`);
+  $('#pNo', el).onclick = closeSheet;
+  $('#pYes', el).onclick = async () => {
+    closeSheet();
+    S.social = S.social || { escrow: {}, done: {} };
+    let card = info;
+    if (m.stake) { /* 이 카드를 맡겨 둬요 (이기면 돌아와요) */
+      const t = takeCard(c[0]);
+      if (!t) return;
+      card = cardInfo(c, t.lv);
+      S.social.escrow[m.id] = { ...t, name: c[1] };
+      save();
+    }
+    sfx('pop');
+    try { await SOCIAL.pick(m.id, card); } catch (e) {
+      if (m.stake && S.social.escrow[m.id]) { const t = S.social.escrow[m.id]; giveCard(t.id, t.lv); delete S.social.escrow[m.id]; save(); }
+      toast('대결이 이미 끝났어요');
+    }
+  };
+}
+/* 3판 2선승: 주사위를 굴려서 힘을 겨뤄요 */
+async function playBattle(m, top) {
+  const me = SOCIAL.uid, other = m.users.find((u) => u !== me);
+  const A = m.picks[me], B = m.picks[other];
+  const ca = CARD_BY[A.id], cb = CARD_BY[B.id];
+  const them = m.who[other];
+  const meFirst = m.users[0] === me; /* rounds는 users[0] 기준이라 내 쪽으로 돌려요 */
+  const rounds = (m.rounds || []).map((r) => (meFirst ? r : { da: r.db, db: r.da, sa: r.sb, sb: r.sa, w: r.w === -1 ? -1 : 1 - r.w }));
+  app.innerHTML = `${top}
+    <div class="arena"><div class="fighter" id="fA">${ca ? cardFace(ca, false, A.lv) : ''}<b>${esc(A.name)}</b><span class="pw">⚡${SOCIAL.power(A)}${SOCIAL.edge(A, B) ? ' +8 상성!' : ''}</span></div>
+      <div class="score" id="bScore">0 : 0</div>
+      <div class="fighter" id="fB">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}${SOCIAL.edge(B, A) ? ' +8 상성!' : ''}</span></div></div>
+    <div class="rounds" id="bRounds" aria-live="polite"></div>
+    <div id="bEnd"></div>`;
+  const wait = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? 60 : ms));
+  let wa = 0, wb = 0;
+  await wait(700);
+  for (const [i, r] of rounds.entries()) {
+    sfx('click');
+    $('#bRounds').insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: 🎲${r.da} → <b>${r.sa}</b> vs <b>${r.sb}</b> ← 🎲${r.db} ${r.w === -1 ? '🤝 비겼어요, 다시!' : r.w === 0 ? '👍 내가 이겼어!' : '💥 친구가 이겼어!'}</p>`);
+    if (r.w === 0) { wa++; $('#fA').classList.remove('hit'); void $('#fA').offsetWidth; $('#fA').classList.add('hit'); sfx('ok'); }
+    if (r.w === 1) { wb++; $('#fB').classList.remove('hit'); void $('#fB').offsetWidth; $('#fB').classList.add('hit'); sfx('no'); }
+    $('#bScore').textContent = `${wa} : ${wb}`;
+    await wait(1300);
+  }
+  const won = m.winner === me;
+  if (won) { await CardFX.play(A.type, A.cls, $('#fA')).catch(() => {}); confetti(); sfx('catch'); }
+  $('#bEnd').innerHTML = `<p class="bt-result ${won ? 'win' : 'lose'}">${won ? '🏆 이겼어요!' : '😢 아쉽게 졌어요'}</p>
+    <p class="small-note center-note">${m.stake ? (won ? `🎴 <b>${esc(B.name)}</b> 카드를 가져왔어요! (내 카드도 돌아와요)` : `🎴 <b>${esc(A.name)}</b> 카드가 ${esc(them.name)}에게 갔어요. 다음엔 이길 거야!`) : won ? '🤝 친선 대결 승리! ⭐1' : '🤝 친선 대결이라 카드는 그대로예요.'}</p>
+    <div class="row"><button class="btn primary" id="bAgain">⚔️ 한 번 더</button><button class="btn" id="bBack">🤝 친구 광장</button></div>`;
+  speak(won ? (m.stake ? `이겼어! ${B.name} 카드를 가져왔어!` : '이겼어! 별 하나!') : '아쉽게 졌어. 다음엔 이길 거야!');
+  $('#bBack').onclick = () => go('friends', 'fr');
+  $('#bAgain').onclick = () => askFight(other, m.kids[other]);
+}
+
+/* ---------- 🏪 카드 시장 ---------- */
+async function marketTab(quiet) {
+  const box = $('#fbody');
+  box.innerHTML = '<p class="small-note">시장을 둘러보는 중…</p>';
+  let list = [];
+  try { await loadCards(); list = await SOCIAL.market(); } catch (e) { console.error(e); box.innerHTML = '<p class="auth-error">⚠️ 시장을 불러오지 못했어요.</p>'; return; }
+  if (app.className !== 'screen-friends' || friendsTab !== 'mk') return;
+  const kid = STORE.current().id;
+  const mine = SOCIAL.myListings().filter((l) => l.sellerKid === kid && l.status === 'open');
+  const item = (l, own) => {
+    const c = CARD_BY[l.card.id];
+    return `<div class="mk-item">${c ? `<button class="album-card" data-view="${l.card.id}|${l.card.lv}">${cardFace(c, true, l.card.lv)}</button>` : ''}
+      <b>${esc(l.card.name)}</b><small>${own ? '내가 내놓음' : `${l.sellerAvatar || ''} ${esc(l.sellerName || '')}`}</small>
+      ${own ? `<button class="btn small" data-unlist="${l.id}">⭐${l.price} · 내리기</button>`
+        : `<button class="btn small primary" data-buy="${l.id}" ${S.stars < l.price ? 'disabled' : ''}>⭐ ${l.price}에 사기</button>`}</div>`;
+  };
+  box.innerHTML = `
+    <div class="mk-top"><span>⭐ 내 별 <b>${S.stars}</b>개</span><button class="btn small primary" id="sellBtn">🏷️ 카드 팔기</button><button class="btn small" id="mkRefresh" aria-label="새로 보기">🔄</button></div>
+    <p class="small-note">별은 앱 안에서만 쓰는 놀이 돈이에요. 친구 가족들끼리만 사고팔아요.</p>
+    <h3 class="h3">친구들이 내놓은 카드</h3>
+    ${list.length ? `<div class="market">${list.map((l) => item(l)).join('')}</div>` : '<p class="small-note">아직 내놓은 카드가 없어요.</p>'}
+    ${mine.length ? `<h3 class="h3">내가 내놓은 카드</h3><div class="market">${mine.map((l) => item(l, true)).join('')}</div>` : ''}`;
+  $('#mkRefresh').onclick = () => marketTab(true);
+  $('#sellBtn').onclick = sellFlow;
+  $$('[data-view]', box).forEach((b) => b.addEventListener('click', () => { const [id, lv] = b.dataset.view.split('|'); const c = CARD_BY[id]; const el = sheet(`${cardFace(c, false, +lv)}<p class="inv-t"><b>${esc(c[1])}</b></p>${classChip(c[5])}<button class="btn" id="vClose">닫기</button>`); $('#vClose', el).onclick = closeSheet; }));
+  $$('[data-buy]', box).forEach((b) => b.addEventListener('click', () => buyFlow(list.find((l) => l.id === b.dataset.buy))));
+  $$('[data-unlist]', box).forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    const ok = await SOCIAL.unlist(b.dataset.unlist).catch(() => false);
+    toast(ok ? '카드를 내렸어요. 앨범으로 돌아와요.' : '이미 팔렸어요!');
+    setTimeout(() => marketTab(true), 600);
+  }));
+  if (!quiet) speak('별로 친구 카드를 사거나, 내 카드를 팔 수 있어!');
+}
+function buyFlow(l) {
+  if (!l) return;
+  const c = CARD_BY[l.card.id];
+  const el = sheet(`${cardFace(c, false, l.card.lv)}<p class="inv-t"><b>${esc(l.card.name)}</b></p>
+    <p class="small-note">${l.sellerAvatar || ''} ${esc(l.sellerName || '')}의 카드 · 내 별 ${S.stars}개</p>
+    <div class="row"><button class="btn primary" id="bYes" ${S.stars < l.price ? 'disabled' : ''}>⭐ ${l.price}개로 사기</button><button class="btn" id="bNo">안 살래</button></div>`);
+  $('#bNo', el).onclick = closeSheet;
+  $('#bYes', el).onclick = async () => {
+    $('#bYes', el).disabled = true;
+    try {
+      await SOCIAL.buy(l.id, kidInfo());
+      S.stars -= l.price;
+      giveCard(l.card.id, l.card.lv);
+      save();
+      paintStars();
+      closeSheet();
+      sfx('catch');
+      confetti();
+      toast(`🎴 <b>${esc(l.card.name)}</b> 카드를 샀어요! 앨범에 넣었어요.`, 3000);
+      marketTab(true);
+    } catch (e) { closeSheet(); toast('앗, 벌써 팔렸어요!'); marketTab(true); }
+  };
+}
+function sellFlow() {
+  const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean).sort((a, b) => 'nrasu'.indexOf(b[5]) - 'nrasu'.indexOf(a[5]));
+  if (!owned.length) { toast('팔 카드가 없어요. 카드팩을 뜯어 봐요!'); return; }
+  const el = sheet(`<p class="inv-t">🏷️ 어떤 카드를 팔까요?</p>
+    <div class="album picker">${owned.map((c) => `<button class="album-card" data-sell="${c[0]}">${cardFace(c, true)}${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}</button>`).join('')}</div>
+    <button class="btn" id="sClose">닫기</button>`, 'wide');
+  $('#sClose', el).onclick = closeSheet;
+  $$('[data-sell]', el).forEach((b) => b.addEventListener('click', () => priceFlow(CARD_BY[b.dataset.sell])));
+}
+function priceFlow(c) {
+  const lvNow = S.cards[c[0]] > 1 ? 0 : cardLv(c[0]);
+  let price = PRICE_HINT[c[5]] + lvNow * 3;
+  const el = sheet(`${cardFace(c, false, lvNow)}<p class="inv-t"><b>${esc(c[1])}</b></p>
+    <p class="small-note">얼마에 팔까요? (보통 ${CARD_CLASS[c[5]].name} 카드는 ⭐${PRICE_HINT[c[5]]}쯤)</p>
+    <div class="bet"><button class="btn bet-btn" id="pm">−</button><b class="price">⭐ <span id="pv">${price}</span></b><button class="btn bet-btn" id="pp">＋</button></div>
+    <div class="row"><button class="btn primary" id="sYes">🏷️ 시장에 내놓기</button><button class="btn" id="sNo">취소</button></div>`);
+  const paint = () => { $('#pv', el).textContent = price; };
+  $('#pm', el).onclick = () => { price = Math.max(1, price - (price > 20 ? 5 : 1)); sfx('pop'); paint(); };
+  $('#pp', el).onclick = () => { price = Math.min(999, price + (price >= 20 ? 5 : 1)); sfx('pop'); paint(); };
+  $('#sNo', el).onclick = closeSheet;
+  $('#sYes', el).onclick = async () => {
+    $('#sYes', el).disabled = true;
+    const t = takeCard(c[0]); /* 팔릴 때까지 시장에 맡겨 둬요 */
+    if (!t) return;
+    save();
+    try {
+      await SOCIAL.sell(kidInfo(), cardInfo(c, t.lv), price);
+      closeSheet();
+      sfx('star');
+      toast(`🏷️ ${esc(c[1])} 카드를 ⭐${price}에 내놓았어요. 팔리면 별이 들어와요!`, 3000);
+      marketTab(true);
+    } catch (e) { console.error(e); giveCard(t.id, t.lv); save(); closeSheet(); toast('내놓지 못했어요'); }
+  };
+}
 
 /* ---------- ⚙️ 목소리 설정 (어른용) ---------- */
 SCREENS.voice = () => {
@@ -1710,6 +2138,8 @@ function paintWho() {
 function switchTo(id) {
   STORE.use(id);
   loadState();
+  SOCIAL.setKid(id);
+  settleSocial();
   pickVoice();
   paintStars();
   paintWho();
@@ -1863,7 +2293,9 @@ function paintSplashAcct() {
 STORE.on((what) => {
   paintSplashAcct();
   if (what === 'status') { const el = $('#cloudStatus'); if (el) el.textContent = CLOUD_TEXT[STORE.cloud.status] || ''; return; }
-  if (what === 'current') { loadState(); pickVoice(); paintStars(); }
+  if (what === 'current') { loadState(); pickVoice(); paintStars(); SOCIAL.setKid(STORE.current().id); settleSocial(); }
+  if (what === 'user') SOCIAL.start();
+  if (what === 'profiles' || what === 'current') SOCIAL.publish();
   paintWho();
   const list = $('#whoList');
   if (list && !$('#splash').hidden && !$('#kidForm')) { list.innerHTML = whoButtons(); wireWho(list, startAfterWho); }
@@ -1884,5 +2316,6 @@ go('home');
 $('#whoList').innerHTML = whoButtons();
 wireWho($('#whoList'), startAfterWho);
 paintSplashAcct();
+SOCIAL.setKid(STORE.current().id);
 STORE.init();
 })();

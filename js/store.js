@@ -195,6 +195,8 @@ const STORE = (() => {
       }
     },
     signOut: () => auth && auth.signOut(),
+    /* 친구·대결·시장(js/social.js)이 같은 Firebase 연결을 써요 */
+    fb: () => ({ db, auth, user: cloud.user }),
     sync: pullAll,
     init: initCloud,
   };

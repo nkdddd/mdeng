@@ -1,9 +1,83 @@
 rules_version = '2';
-// 또박또박 받아쓰기: 부모님 계정은 자기 아이들 기록만 읽고 쓸 수 있어요.
+// 또박또박 받아쓰기
+//  · 부모님 계정은 자기 아이들 기록만 읽고 써요.
+//  · 🤝 친구 광장: 이메일로 친구 맺기 · 카드 대결 · 카드 시장 (js/social.js)
+//    각 가족은 자기 아이 기록만 고치고, 대결·시장 기록(matches, listings)은 함께 봐요.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function pairId(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+    function isFriend(a, b) {
+      let p = /databases/$(database)/documents/friends/$(pairId(a, b));
+      return exists(p) && get(p).data.status == 'ok';
+    }
+
     match /users/{uid}/kids/{kidId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if signedIn() && me() == uid;
+    }
+
+    // 이메일 → 가족 계정 찾기: 정확한 이메일로만 찾을 수 있고, 목록은 볼 수 없어요.
+    match /emails/{email} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if signedIn() && request.resource.data.uid == me()
+        && request.auth.token.email != null && email == request.auth.token.email.lower();
+      allow delete: if signedIn() && resource.data.uid == me();
+    }
+
+    // 가족 프로필: 부모님 이름, 아이 이름·얼굴, 온라인 시각 (주소를 아는 사람만, 목록은 안 돼요)
+    match /profiles/{uid} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow write: if signedIn() && me() == uid;
+    }
+
+    // 친구: 신청한 쪽이 만들고, 받은 쪽이 수락해요. 둘 다 끊을 수 있어요.
+    match /friends/{id} {
+      allow get: if signedIn() && (resource == null || me() in resource.data.users);
+      allow list: if signedIn() && me() in resource.data.users;
+      allow create: if signedIn() && request.resource.data.from == me()
+        && request.resource.data.users.size() == 2 && me() in request.resource.data.users
+        && id == pairId(request.resource.data.users[0], request.resource.data.users[1])
+        && request.resource.data.status == 'pending';
+      allow update: if signedIn() && me() in resource.data.users && resource.data.from != me()
+        && request.resource.data.status == 'ok'
+        && request.resource.data.users == resource.data.users && request.resource.data.from == resource.data.from;
+      allow delete: if signedIn() && me() in resource.data.users;
+    }
+
+    // ⚔️ 카드 대결: 친구끼리만 만들고, 두 사람만 보고 고쳐요.
+    match /matches/{id} {
+      allow read: if signedIn() && me() in resource.data.users;
+      allow create: if signedIn() && request.resource.data.host == me()
+        && request.resource.data.users.size() == 2 && me() in request.resource.data.users
+        && request.resource.data.status == 'invite'
+        && isFriend(request.resource.data.users[0], request.resource.data.users[1]);
+      allow update: if signedIn() && me() in resource.data.users
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.host == resource.data.host
+        && request.resource.data.seed == resource.data.seed
+        && request.resource.data.stake == resource.data.stake;
+      allow delete: if signedIn() && me() in resource.data.users;
+    }
+
+    // 🏪 카드 시장: 판 사람만 내놓고 내려요. 친구만 '팔렸어요'로 바꿀 수 있어요 (값·카드는 못 바꿔요).
+    match /listings/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.seller == me()
+        && request.resource.data.status == 'open'
+        && request.resource.data.price is int && request.resource.data.price > 0 && request.resource.data.price <= 999;
+      allow update: if signedIn() && (
+        (resource.data.seller == me() && request.resource.data.seller == me()
+          && request.resource.data.price == resource.data.price && request.resource.data.card == resource.data.card)
+        || (resource.data.status == 'open' && request.resource.data.status == 'sold'
+          && request.resource.data.buyer == me()
+          && request.resource.data.seller == resource.data.seller
+          && request.resource.data.price == resource.data.price
+          && request.resource.data.card == resource.data.card
+          && isFriend(resource.data.seller, me())));
+      allow delete: if signedIn() && resource.data.seller == me();
     }
   }
 }
