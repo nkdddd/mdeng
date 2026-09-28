@@ -1310,6 +1310,13 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 @keyframes rainFall { to { transform: translateY(120vh); } }
 @media (prefers-reduced-motion: reduce) { .rain, .dice-fly.shaking, .bt-get, .dice-stage.tension .dice-label, .dice-pane.secret .dice-fly { animation: none !important; } }
 
+.gift-mons { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.gift-mons .mini { width: 58px; }
+.gift-mons .mini .art { width: 50px; height: 50px; }
+.album.gift-cards { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; width: 100%; }
+.gift-cards .album-card { min-width: 0; overflow: hidden; }
+.gift-cards .cimg-fallback, .gift-cards .tcg { font-size: 9px; }
+
 /* ---------- 📱 휴대폰: 한 화면에 보이게 ----------
  * 윗줄·말풍선을 작게, 섬·단계 칸을 촘촘하게, 주요 버튼(시작·다 썼어요·다음)은 화면 아래에 붙여요. */
 .dict-tabs { margin-top: -4px; }

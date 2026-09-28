@@ -1853,6 +1853,52 @@ function settleSocial() {
   notes.forEach((n, i) => setTimeout(() => { if (app.className !== 'screen-battle') toast(n, 3800); }, i * 3900));
 }
 
+/* 🎁 부모님이 부탁한 선물: 그 가족 계정(이메일)의 첫 번째 아이에게 한 번만 들어가요.
+ * 이메일은 코드에 남기지 않고 SHA-256 해시로만 맞춰 봐요. 클라우드와 맞춘 뒤(synced)에 넣어서 다른 기기 기록을 덮지 않아요. */
+const GIFTS = [
+  {
+    id: 'gift-2026-09-first', to: 'bb3a10b83767db61904d93849d0a0d50df6b0b3b641f43027c1fd78722cd7731',
+    pokemon: ['리자몽', '거북왕', '이상해꽃', '라이츄', '망나뇽', '루카리오', '갸라도스', '팬텀', '개굴닌자', '피카츄'],
+    shiny: ['피카츄'],
+    cards: ['BS2024017136', 'BS2023015134', 'BS2025015246', 'BS2023001226', 'BS2024007090', 'BS2025015240', 'BS2019005057', 'BS2014001061', 'BS2017012051', 'BS2017010074'],
+  },
+];
+let giftBusy = false;
+async function claimGifts() {
+  const u = STORE.cloud.user;
+  if (giftBusy || !u || !u.email || !window.crypto || !crypto.subtle || STORE.cloud.status !== 'synced') return;
+  const first = STORE.profiles()[0];
+  if (!first || STORE.current().id !== first.id) return;
+  const todo = GIFTS.filter((g) => !(S.gifts || {})[g.id]);
+  if (!todo.length) return;
+  giftBusy = true;
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(u.email.trim().toLowerCase()));
+    const h = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    for (const g of todo.filter((x) => x.to === h)) {
+      S.gifts = { ...(S.gifts || {}), [g.id]: Date.now() };
+      S.catches = S.catches || {};
+      g.pokemon.forEach((n) => { addDexQuiet(n); S.catches[n] = (S.catches[n] || 0) + 1; });
+      (g.shiny || []).forEach((n) => { if (!hasShiny(n)) S.shinies = [...(S.shinies || []), n]; });
+      g.cards.forEach((id) => giveCard(id, 0));
+      save();
+      paintStars();
+      await loadCards().catch(() => {});
+      const el = sheet(`<p class="inv-av">🎁</p><p class="inv-t"><b>선물이 도착했어요!</b></p>
+        <div class="gift-mons">${g.pokemon.map((n) => `<span class="mini">${artImg(POKE_BY[n], (g.shiny || []).includes(n))}<small>${n}</small></span>`).join('')}</div>
+        <div class="album gift-cards">${g.cards.map((id) => window.CARD_BY && CARD_BY[id] ? `<span class="album-card">${cardFace(CARD_BY[id], true)}</span>` : '').join('')}</div>
+        <p class="small-note">포켓몬 ${g.pokemon.length}마리 · 카드 ${g.cards.length}장이 가방과 앨범에 들어갔어요!</p>
+        <button class="btn primary big" id="giftOk">와! 고마워요 🎉</button>`, 'wide');
+      sfx('victory');
+      confetti();
+      setTimeout(confetti, 800);
+      speak('선물이 도착했어! 멋진 포켓몬과 카드가 들어왔어!');
+      $('#giftOk', el).onclick = () => { closeSheet(); if (app.className === 'screen-home') go('home'); };
+    }
+  } catch (e) { console.error(e); } finally { giftBusy = false; }
+}
+function addDexQuiet(name) { S.dex = S.dex || []; if (POKE_BY[name] && !S.dex.includes(name)) S.dex.push(name); }
+
 /* 떠 있는 창 (대결 신청·카드 고르기·값 정하기) */
 function sheet(html, cls = '') {
   closeSheet();
@@ -2465,6 +2511,7 @@ function switchTo(id) {
   loadState();
   SOCIAL.setKid(id);
   settleSocial();
+  claimGifts();
   pickVoice();
   paintStars();
   paintWho();
@@ -2617,7 +2664,7 @@ function paintSplashAcct() {
 /* 다른 기기에서 바뀐 기록이 오면 다시 그려요 */
 STORE.on((what) => {
   paintSplashAcct();
-  if (what === 'status') { const el = $('#cloudStatus'); if (el) el.textContent = CLOUD_TEXT[STORE.cloud.status] || ''; return; }
+  if (what === 'status') { const el = $('#cloudStatus'); if (el) el.textContent = CLOUD_TEXT[STORE.cloud.status] || ''; if (STORE.cloud.status === 'synced') claimGifts(); return; }
   if (what === 'current') { loadState(); pickVoice(); paintStars(); SOCIAL.setKid(STORE.current().id); settleSocial(); }
   if (what === 'user') SOCIAL.start();
   if (what === 'profiles' || what === 'current') SOCIAL.publish();
