@@ -36,8 +36,9 @@ function loadState() {
   if (S.earned == null) S.earned = S.stars;
   migrateEvo();
 }
-/* 🧬 진화: 같은 모습 EVO_NEED마리가 모이면 다음 단계 한 마리로 (여러 단계 연달아 가능) → [[전, 후], …] */
-function evolveFrom(name) {
+/* 🧬 진화: 같은 모습 EVO_NEED마리가 모이면 다음 단계 한 마리로 → [[전, 후], …]
+ * one: 아이가 눌러서 한 단계만 (예전 기록 정리는 한꺼번에) */
+function evolveFrom(name, one) {
   const out = [];
   let n = name;
   for (;;) {
@@ -48,10 +49,12 @@ function evolveFrom(name) {
       S.catches[n] -= EVO_NEED;
       S.catches[next] = (S.catches[next] || 0) + 1;
       out.push([n, next]);
+      if (one) break;
     }
     if (!S.catches[n]) delete S.catches[n];
     S.dex = S.dex || [];
     if (!S.dex.includes(next)) S.dex.push(next);
+    if (one) return out;
     n = next;
   }
 }
@@ -696,27 +699,70 @@ function evoNow(name) {
 }
 /* 다음 진화까지 모은 수: ●●○ */
 const evoDots = (name) => `<span class="evo-dots" aria-hidden="true">${'●'.repeat(Math.min(EVO_NEED, (S.catches || {})[name] || 0)).padEnd(EVO_NEED, '○')}</span>`;
-/* 진화 장면: 빛나다가 새 모습으로 */
-async function evolveShow(evo, box) {
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  /* 잡은 포켓몬 카드 자리에서 진화해요 (카드가 두 장 쌓이지 않게) */
-  box.querySelectorAll(':scope > .card-reveal, :scope > .evolve').forEach((el) => el.remove());
-  for (const [a, b] of evo) {
-    const m = POKE_BY[b];
-    box.insertAdjacentHTML('afterbegin', `<div class="evolve"><p class="evo-line">🧬 ${esc(a)} ${EVO_NEED}마리가 모였어요! 어라…?</p>
-      <div class="card-reveal evo-card">${pokeCard(m)}</div></div>`);
-    const el = box.firstElementChild;
-    sfx('evolve');
-    speak(LINES.evolving(a, EVO_NEED));
-    await wait(reduceMotion ? 200 : 1600);
-    el.classList.add('done');
-    sfx('star');
-    confetti();
-    playCry(m[3]);
-    $('.evo-line', el).innerHTML = `<b>✨ ${esc(a)}${josaPick(a, ['이', '가'])} ${esc(b)}${ro(b)} 진화했어요!</b> 📖 도감에 ${esc(b)} 등록!`;
-    speak(LINES.evolved(a, b, josaPick(a, ['이', '가']), ro(b)));
-    await wait(1200);
+const canEvolve = (name) => !!evoNext(name) && ((S.catches || {})[name] || 0) >= EVO_NEED;
+/* 🎬 진화 장면: 화면 가득 클로즈업 → 하얗게 빛나며 두 모습이 번갈아 → 번쩍! → 새 모습
+ * from/to: 그림 HTML (포켓몬 그림이나 카드) */
+async function evoCinema({ from, to, before, after, fromCry, toCry, card }) {
+  const w = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? Math.min(ms, 80) : ms));
+  hush();
+  const el = document.createElement('div');
+  el.className = 'evo-cine';
+  el.innerHTML = `<div class="evo-rays" aria-hidden="true"></div>
+    <div class="evo-stage${card ? ' card' : ''}"><div class="evo-a">${from}</div><div class="evo-b">${to}</div></div>
+    <p class="evo-cap" aria-live="polite">${before}</p><div class="evo-flash" aria-hidden="true"></div>
+    <button class="btn primary big evo-ok" hidden>와! 멋지다 👏</button>`;
+  document.body.appendChild(el);
+  const A = $('.evo-a', el), B = $('.evo-b', el), stage = $('.evo-stage', el);
+  await w(30);
+  el.classList.add('in'); /* 어두워지면서 가까이 다가가요 */
+  if (fromCry) playCry(fromCry);
+  speak(before.replace(/<[^>]+>/g, ''));
+  await w(1500);
+  el.classList.add('glow');
+  sfx('evolve');
+  await w(1000);
+  /* 두 모습이 점점 빠르게 번갈아 */
+  let t = 480, flip = false;
+  while (t > 45) {
+    flip = !flip;
+    A.style.opacity = flip ? 0 : 1;
+    B.style.opacity = flip ? 1 : 0;
+    stage.style.transform = `scale(${flip ? 1.08 : 0.94})`;
+    if (flip) sfx('click');
+    await w(t);
+    t *= 0.8;
   }
+  A.style.opacity = 0; B.style.opacity = 1; stage.style.transform = '';
+  el.classList.add('burst');
+  sfx('catch');
+  await w(420);
+  el.classList.remove('glow');
+  el.classList.add('reveal');
+  confetti();
+  if (toCry) playCry(toCry);
+  $('.evo-cap', el).innerHTML = after;
+  setTimeout(() => speak(after.replace(/<[^>]+>/g, '')), 600);
+  const ok = $('.evo-ok', el);
+  await w(900);
+  ok.hidden = false;
+  ok.focus({ preventScroll: true });
+  await new Promise((r) => { ok.onclick = r; });
+  el.classList.add('out');
+  await w(350);
+  el.remove();
+}
+/* 아이가 눌러서 포켓몬 진화 (한 단계) → 새 이름 */
+async function evolvePokemon(name) {
+  if (!canEvolve(name)) return null;
+  const [[a, b]] = evolveFrom(name, true);
+  save();
+  const ma = POKE_BY[a], mb = POKE_BY[b];
+  await evoCinema({
+    from: artImg(ma), to: artImg(mb), fromCry: ma[3], toCry: mb[3],
+    before: `어라…? <b>${esc(a)}</b>의 모습이…!`,
+    after: `축하해! <b>${esc(a)}</b>${josaPick(a, ['은', '는'])} <b>${esc(b)}</b>${ro(b)} 진화했다! 🎉`,
+  });
+  return b;
 }
 const evoNext = (name) => { const l = evoLine(name); return l && l[l.indexOf(name) + 1]; };
 const ro = (w) => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c % 28 && c % 28 !== 8 ? '으로' : '로'; };
@@ -1025,7 +1071,6 @@ function catchScene(list, onEnd, notes) {
         const isNew = addDex(N);
         S.catches = S.catches || {};
         S.catches[N] = (S.catches[N] || 0) + 1;
-        const evo = q.legend ? [] : evolveFrom(N);
         save();
         if (q.shiny && !hasShiny(N)) { S.shinies = [...(S.shinies || []), N]; save(); }
         if (q.legend) badge = questCaught();
@@ -1040,10 +1085,18 @@ function catchScene(list, onEnd, notes) {
         $('#after').innerHTML = `
           <div class="card-reveal">${pokeCard(q.m, q.shiny)}</div>
           ${isNew ? `<p class="small-note">📖 새 카드! 도감에 ${N}${subj} 등록됐어요.</p>` : ''}
-          ${evo.length ? '' : evoNext(N) ? `<p class="small-note">🧬 ${esc(evoNext(N))}까지 ${evoDots(N)} ${S.catches[N]}/${EVO_NEED}</p>` : ''}
+          ${!q.legend && canEvolve(N) ? `<button class="btn primary evo-cta" id="evoNow">🧬 ${N} ${EVO_NEED}마리가 모였어요! 눌러서 진화!</button>`
+            : evoNext(N) ? `<p class="small-note">🧬 ${esc(evoNext(N))}까지 ${evoDots(N)} ${S.catches[N]}/${EVO_NEED}</p>` : ''}
           <p class="pack-got">🎴 ${PACK_ODDS[packKind].name} 획득!</p>`;
-        speak([LINES.caught(N, obj), LINES.packGot]);
-        if (evo.length) await evolveShow(evo, $('#after'));
+        speak([LINES.caught(N, obj), LINES.packGot, ...(!q.legend && canEvolve(N) ? [LINES.canEvolve(N)] : [])]);
+        $('#evoNow')?.addEventListener('click', async (e) => {
+          e.currentTarget.remove();
+          const b = await evolvePokemon(N);
+          if (!b) return;
+          const rv = $('#after .card-reveal');
+          if (rv) rv.innerHTML = pokeCard(POKE_BY[b]);
+          rv?.insertAdjacentHTML('afterend', `<p class="small-note">✨ ${esc(b)}${ro(b)} 진화! 📖 도감에 ${esc(b)} 등록</p>`);
+        });
       }
       const lastOne = k === list.length - 1;
       $('#after').insertAdjacentHTML('beforeend', `<button class="btn primary big" id="nextMon">${lastOne ? '결과 보기 ▶' : '다음 포켓몬 ▶'}</button>`);
@@ -1220,6 +1273,65 @@ const cardDetailUrl = (c) => 'https://pokemoncard.co.kr/cards/detail/' + c[0];
 const classChip = (cls) => `<span class="class-chip c${cls}">${CARD_CLASS[cls].icon} ${CARD_CLASS[cls].name}</span>`;
 /* 카드 그림. 못 불러오면 이름이 적힌 카드로 바꿔요 */
 const cardFace = (c, lazy, lv = cardLv(c[0])) => `<span class="tcg c${c[5]}${lv ? ` lv lv${lv}` : ''}">${lv ? `<i class="lv-badge">+${lv}</i>` : ''}<img class="cimg" src="${cardImgUrl(c)}" alt="${esc(c[1])} 카드"${lazy ? ' loading="lazy"' : ''} referrerpolicy="no-referrer" data-name="${esc(c[1])}" data-kind="${esc(c[2])}"></span>`;
+/* 🌀 카드를 옆으로 밀면 회전문처럼 빙글빙글 (놓으면 관성으로 돌다가 앞면에서 멈춰요) */
+function makeSpin(tcg) {
+  if (!tcg || tcg.closest('.spin3d')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'spin3d';
+  const rot = document.createElement('div');
+  rot.className = 'spin-rot';
+  tcg.replaceWith(wrap);
+  wrap.appendChild(rot);
+  rot.appendChild(tcg);
+  tcg.classList.add('spin-front');
+  rot.insertAdjacentHTML('beforeend', `<div class="spin-back" aria-hidden="true"><span class="pack-ball">${ballSvg}</span></div><div class="spin-shine" aria-hidden="true"></div>`);
+  wrap.insertAdjacentHTML('beforeend', '<small class="spin-hint">👆 옆으로 쓱 밀면 빙글빙글!</small>');
+  let angle = 0, vel = 0, drag = null, raf = 0, lastX = 0, lastT = 0, half = 0;
+  const paint = () => {
+    rot.style.transform = `rotateY(${angle}deg)`;
+    rot.style.setProperty('--shine', `${50 + Math.sin((angle * Math.PI) / 180) * 60}%`);
+    const h = Math.floor((angle + 90) / 180);
+    if (h !== half) { half = h; sfx('click'); } /* 반 바퀴마다 착착 */
+  };
+  wrap.addEventListener('pointerdown', (e) => {
+    cancelAnimationFrame(raf);
+    drag = { x: e.clientX, a: angle, moved: false };
+    lastX = e.clientX; lastT = performance.now(); vel = 0;
+    try { wrap.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+  });
+  wrap.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const t = performance.now();
+    if (Math.abs(e.clientX - drag.x) > 4) { drag.moved = true; wrap.querySelector('.spin-hint')?.remove(); }
+    angle = drag.a + (e.clientX - drag.x) * 0.9;
+    vel = ((e.clientX - lastX) * 0.9 * 16) / Math.max(8, t - lastT);
+    lastX = e.clientX; lastT = t;
+    paint();
+  });
+  const release = () => {
+    if (!drag) return;
+    const flung = drag.moved && Math.abs(vel) > 6;
+    drag = null;
+    if (flung) sfx('whoosh');
+    const step = () => {
+      vel *= 0.975;
+      angle += vel;
+      if (Math.abs(vel) > 0.5) { paint(); raf = requestAnimationFrame(step); return; }
+      /* 앞면으로 부드럽게 멈춰요 */
+      const from = angle, to = Math.round(angle / 360) * 360, t0 = performance.now();
+      const settle = (t) => {
+        const k = Math.min(1, (t - t0) / 450), ease = 1 - Math.pow(1 - k, 3);
+        angle = from + (to - from) * ease;
+        paint();
+        if (k < 1) raf = requestAnimationFrame(settle); else { angle = to % 360; paint(); }
+      };
+      raf = requestAnimationFrame(settle);
+    };
+    raf = requestAnimationFrame(step);
+  };
+  wrap.addEventListener('pointerup', release);
+  wrap.addEventListener('pointercancel', release);
+}
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || !img.classList.contains('cimg')) return;
@@ -1365,6 +1477,7 @@ SCREENS.album = () => {
         <a class="small-note" href="${cardDetailUrl(c)}" target="_blank" rel="noopener">카드 자세히 보기 ↗</a></div>
         <button class="btn" id="zoomClose">닫기</button></div>`;
       z.hidden = false;
+      makeSpin($('.zoom-in > .tcg', z));
       if (!quiet) speak(c[1]);
       $('#zoomClose').onclick = () => { z.hidden = true; SCREENS.album(); };
       z.onclick = (e) => { if (e.target === z) { z.hidden = true; SCREENS.album(); } };
@@ -1388,13 +1501,18 @@ SCREENS.album = () => {
         e.stopPropagation();
         if (S.stars < EVOLVE_COST) return;
         $('#evolve').disabled = true;
+        const fromFace = cardFace(c, false, UPGRADE_COST.length);
         const next = evolveCard(c, evo);
-        await CardFX.play(next[7] || c[7], next[5], $('.zoom-in .tcg', z));
-        sfx('star');
+        z.hidden = true;
+        await evoCinema({
+          card: true, from: fromFace, to: cardFace(next, false, 0),
+          before: `어라…? <b>${esc(c[1])}</b> 카드가 빛나기 시작했어!`,
+          after: `${CARD_CLASS[next[5]].icon} <b>${esc(next[1])}</b> 카드로 진화했어! 🎉`,
+        });
         albumTab = 'all';
+        z.hidden = false;
         openZoom(next, true, c);
         $('.zoom-in .tcg', z).classList.add('powerup');
-        speak(LINES.evolve);
       });
     };
     $$('.album-card', app).forEach((b) => b.addEventListener('click', () => openZoom(CARD_BY[b.dataset.id])));
@@ -1636,15 +1754,19 @@ SCREENS.book = () => {
   app.innerHTML = `
     <h2 class="h">🎒 포켓몬 가방 <small class="h-note">${mine.reduce((a, m) => a + held(m[0]), 0)}마리</small></h2>
     ${bubble(mine.length ? LINES.bagBubble : LINES.bagEmpty)}
-    <div class="bag">${mine.map((m) => `<button class="bag-mon g${m[5]}${hasShiny(m[0]) ? ' shiny' : ''}" data-id="${m[3]}" data-say="${sayAttr(m[0])}">
+    <div class="bag">${mine.map((m) => `<button class="bag-mon g${m[5]}${hasShiny(m[0]) ? ' shiny' : ''}${canEvolve(m[0]) ? ' can-evo' : ''}" data-id="${m[3]}" data-name="${m[0]}"${canEvolve(m[0]) ? '' : ` data-say="${sayAttr(m[0])}"`}>
+      ${canEvolve(m[0]) ? '<span class="evo-badge">🧬 진화!</span>' : ''}
       ${artImg(m, hasShiny(m[0]))}<b>${m[0]}</b>${held(m[0]) > 1 ? `<span class="dup">×${held(m[0])}</span>` : ''}
       ${evoNext(m[0]) ? `<small class="bag-evo" title="${esc(evoNext(m[0]))}까지">${evoDots(m[0])}</small>` : ''}</button>`).join('')}</div>
-    <p class="small-note">🧬 같은 포켓몬을 ${EVO_NEED}마리 모으면 다음 모습으로 진화해요!</p>
+    <p class="small-note">🧬 같은 포켓몬을 ${EVO_NEED}마리 모으면 진화할 수 있어요! <b>🧬 진화!</b>가 붙은 포켓몬을 눌러 봐요.</p>
     <div class="row"><button class="btn primary" id="toAlbum">🗂️ 카드 앨범</button><button class="btn" id="toDex">📖 도감</button></div>
     <details class="bests-box"><summary class="h3">🏆 섬마다 최고 점수</summary>
     <ul class="bests">${all.map((x) => `<li><span>${x.icon} ${x.name}</span><b>${S.best[x.id] != null ? S.best[x.id] + '점' : '—'}</b></li>`).join('')}</ul></details>`;
   speak(mine.length ? LINES.bagBubble : LINES.bagEmpty);
-  $$('.bag-mon', app).forEach((b) => b.addEventListener('click', () => playCry(+b.dataset.id)));
+  $$('.bag-mon', app).forEach((b) => b.addEventListener('click', async () => {
+    if (b.classList.contains('can-evo')) { if (await evolvePokemon(b.dataset.name)) SCREENS.book(); return; }
+    playCry(+b.dataset.id);
+  }));
   $('#toAlbum').onclick = () => go('album');
   $('#toDex').onclick = () => go('dex');
 };
@@ -1740,6 +1862,7 @@ function sheet(html, cls = '') {
   el.innerHTML = `<div class="zoom-in">${html}</div>`;
   el.addEventListener('click', (e) => { if (e.target === el) closeSheet(); });
   document.body.appendChild(el);
+  makeSpin($('.zoom-in > .tcg', el));
   return el;
 }
 const closeSheet = () => $('#sheet')?.remove();

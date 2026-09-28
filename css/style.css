@@ -1167,6 +1167,65 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
   .rd { font-size: 13px; }
 }
 
+/* 🌀 빙글빙글 카드 */
+.spin3d { width: min(100%, 260px); perspective: 1100px; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.spin3d:active { cursor: grabbing; }
+.sheet .spin3d { width: min(60%, 200px); }
+.spin-rot { position: relative; width: 100%; transform-style: preserve-3d; will-change: transform; }
+.spin3d .tcg { width: 100%; }
+.spin-front { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.spin-back {
+  position: absolute; inset: 0; transform: rotateY(180deg); backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  display: grid; place-items: center; border-radius: 4.5% / 3.2%; border: 6px solid #f4c64a;
+  background: radial-gradient(circle, #5a8de8 0 30%, #2a4fa8 31% 60%, #1b2f6e 61%);
+}
+.spin-back .pack-ball { width: 42%; aspect-ratio: 1; }
+.spin-shine {
+  position: absolute; inset: 0; pointer-events: none; border-radius: 4.5% / 3.2%; mix-blend-mode: screen;
+  background: linear-gradient(105deg, transparent calc(var(--shine, 50%) - 18%), rgba(255, 255, 255, .45) var(--shine, 50%), transparent calc(var(--shine, 50%) + 18%));
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+.spin-hint { font-size: 13px; color: var(--ink-soft); animation: bob 1.6s ease-in-out infinite; }
+
+/* 🎬 진화 장면 */
+.evo-cine {
+  position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; align-content: center; gap: 22px; overflow: hidden;
+  background: radial-gradient(circle at 50% 42%, #1e3a8a 0, #0b1026 72%); opacity: 0; transition: opacity .45s;
+}
+.evo-cine.in { opacity: 1; }
+.evo-cine.out { opacity: 0; }
+.evo-rays {
+  position: absolute; inset: -60%; opacity: 0; transition: opacity .8s;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, .09) 0 9deg, transparent 9deg 18deg);
+  animation: raysSpin 14s linear infinite;
+}
+.evo-cine.glow .evo-rays { opacity: 1; animation-duration: 5s; }
+.evo-cine.reveal .evo-rays { opacity: 1; animation-duration: 9s; background: repeating-conic-gradient(from 0deg, rgba(255, 214, 90, .22) 0 9deg, transparent 9deg 18deg); }
+@keyframes raysSpin { to { transform: rotate(360deg); } }
+.evo-stage { position: relative; width: min(74vw, 360px); aspect-ratio: 1; transform: scale(.4); transition: transform 1.4s cubic-bezier(.2, .8, .2, 1); }
+.evo-cine.in .evo-stage { transform: scale(1); }
+.evo-stage.card { width: min(62vw, 290px); aspect-ratio: 63 / 88; }
+.evo-a, .evo-b { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity .06s, filter .6s; }
+.evo-a .art, .evo-b .art { width: 100%; height: 100%; }
+.evo-a .art-fallback, .evo-b .art-fallback { font-size: 150px; }
+.evo-a .tcg, .evo-b .tcg { width: 100%; }
+.evo-b { opacity: 0; }
+.evo-cine.glow .evo-a, .evo-cine.glow .evo-b { filter: brightness(0) invert(1) drop-shadow(0 0 14px #fff) drop-shadow(0 0 40px #93c5fd); }
+.evo-cine.glow .evo-stage { animation: evoPulse .45s ease-in-out infinite alternate; }
+@keyframes evoPulse { to { filter: drop-shadow(0 0 30px #dbeafe); } }
+.evo-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.evo-cine.burst .evo-flash { animation: evoFlash .8s ease-out; }
+@keyframes evoFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+.evo-cine.reveal .evo-b { animation: evoPop .9s cubic-bezier(.3, 1.6, .5, 1); filter: drop-shadow(0 0 24px rgba(255, 214, 90, .8)); }
+@keyframes evoPop { 0% { transform: scale(.6); } 60% { transform: scale(1.12); } }
+.evo-cap { position: relative; margin: 0; padding: 0 20px; max-width: 30ch; text-align: center; color: #fff; font-family: var(--display); font-size: 26px; line-height: 1.35; text-shadow: 0 2px 0 rgba(0, 0, 0, .4); }
+.evo-cap b { color: #fcd34d; font-weight: 400; }
+.evo-ok { position: relative; }
+.evo-cta { animation: pop 1.1s ease-in-out infinite; }
+.bag-mon.can-evo { box-shadow: 0 0 0 3px var(--sun), 0 0 18px var(--sun); animation: pop 1.4s ease-in-out infinite; }
+.evo-badge { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--display); font-size: 12px; background: var(--red); color: #fff; border-radius: 999px; padding: 1px 8px; z-index: 2; }
+@media (prefers-reduced-motion: reduce) { .evo-rays, .evo-cta, .bag-mon.can-evo, .spin-hint { animation: none; } }
+
 /* ---------- 📱 휴대폰: 한 화면에 보이게 ----------
  * 윗줄·말풍선을 작게, 섬·단계 칸을 촘촘하게, 주요 버튼(시작·다 썼어요·다음)은 화면 아래에 붙여요. */
 .dict-tabs { margin-top: -4px; }
