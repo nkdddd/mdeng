@@ -1855,8 +1855,8 @@ function settleSocial() {
 
 /* 🎁 부모님이 부탁한 선물 상자: 받을 사람마다 한 번만 들어가요.
  * 이메일·이름은 코드에 남기지 않고 SHA-256 해시로만 맞춰 봐요.
- *   to:   가족 계정 이메일 → 그 가족의 첫 번째 아이
- *   kid:  아이 프로필 이름 → 그 아이 / acct: Google 계정 이름 → 그 가족의 첫 번째 아이
+ *   to만: 그 가족 계정(이메일)의 첫 번째 아이
+ *   to + kid: 그 가족 계정에서 그 이름의 아이 (둘 다 맞아야 해요)
  * 로그인했으면 클라우드와 맞춘 뒤(synced)에 넣어서 다른 기기 기록을 덮지 않아요. */
 const GIFT_BOX = {
   pokemon: ['리자몽', '거북왕', '이상해꽃', '라이츄', '망나뇽', '루카리오', '갸라도스', '팬텀', '개굴닌자', '피카츄'],
@@ -1865,14 +1865,15 @@ const GIFT_BOX = {
 };
 const GIFTS = [
   { id: 'gift-2026-09-first', to: 'bb3a10b83767db61904d93849d0a0d50df6b0b3b641f43027c1fd78722cd7731', ...GIFT_BOX },
-  { id: 'gift-2026-09-kd', kid: 'ad8a3bd54cb27c7a118710ec3ed0a1a065398d783efe48fbdbad97d3aacdb8a3', acct: 'ad8a3bd54cb27c7a118710ec3ed0a1a065398d783efe48fbdbad97d3aacdb8a3', ...GIFT_BOX },
+  { id: 'gift-2026-09-kd', to: 'bb3a10b83767db61904d93849d0a0d50df6b0b3b641f43027c1fd78722cd7731', kid: 'ad8a3bd54cb27c7a118710ec3ed0a1a065398d783efe48fbdbad97d3aacdb8a3', ...GIFT_BOX },
 ];
 const sha256 = async (text) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('');
 let giftBusy = false;
 async function claimGifts() {
   const u = STORE.cloud.user;
   if (giftBusy || !window.crypto || !crypto.subtle) return;
-  if (u && STORE.cloud.status !== 'synced') return; /* 로그인했으면 클라우드와 맞춘 뒤에 */
+  if (!u || !u.email || STORE.cloud.status !== 'synced') return; /* 가족 계정으로 로그인해서 클라우드와 맞춘 뒤에 */
+  if (!$('#splash').hidden) return; /* '누가 공부할까?'에서 아이를 고른 다음에 */
   const todo = GIFTS.filter((g) => !(S.gifts || {})[g.id]);
   if (!todo.length) return;
   giftBusy = true;
@@ -1880,8 +1881,7 @@ async function claimGifts() {
     const isFirst = STORE.profiles()[0] && STORE.current().id === STORE.profiles()[0].id;
     const kidH = await sha256(STORE.current().name.replace(/\s+/g, ''));
     const mailH = u && u.email ? await sha256(u.email.trim().toLowerCase()) : '';
-    const acctH = u && u.displayName ? await sha256(u.displayName.replace(/\s+/g, '')) : '';
-    const mine = (g) => (g.kid && g.kid === kidH) || (isFirst && ((g.to && g.to === mailH) || (g.acct && g.acct === acctH)));
+    const mine = (g) => g.to === mailH && (g.kid ? g.kid === kidH : isFirst);
     for (const g of todo.filter(mine)) {
       S.gifts = { ...(S.gifts || {}), [g.id]: Date.now() };
       S.catches = S.catches || {};
@@ -2688,6 +2688,7 @@ function startAfterWho(cancel) {
   if (cancel) { list.innerHTML = whoButtons(); wireWho(list, startAfterWho); return; }
   $('#splash').hidden = true;
   go('home');
+  claimGifts();
 }
 paintStars();
 paintWho();
