@@ -1129,6 +1129,20 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 .fighter b { font-family: var(--display); font-weight: 400; font-size: 16px; }
 .fighter .pw { font-size: 13px; color: var(--ink-soft); }
 .fighter.hit .tcg { animation: powerup .6s cubic-bezier(.3, 1.6, .5, 1); box-shadow: 0 0 18px 4px var(--sun); }
+.die { font-size: 64px; line-height: 1; display: inline-grid; place-items: center; width: 72px; height: 72px; transition: transform .2s; }
+.die svg { width: 100%; height: 100%; filter: drop-shadow(0 3px 0 rgba(34, 54, 92, .25)); }
+.die-body { fill: #fff; stroke: var(--ink); stroke-width: 5; }
+.pip { fill: var(--ink); }
+.pip.one { fill: var(--red); }
+.die.spin { animation: dieSpin .18s linear infinite; }
+.die.land { animation: dieLand .4s cubic-bezier(.3, 1.8, .5, 1); }
+@keyframes dieSpin { 50% { transform: rotate(180deg) scale(.85); } 100% { transform: rotate(360deg); } }
+@keyframes dieLand { 0% { transform: scale(1.5) rotate(-20deg); } }
+.die-note { font-size: 13px; color: var(--ok); min-height: 1.2em; }
+.roll-ctl { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 60px; }
+.roll-ctl .wait { padding: 8px; font-size: 19px; }
+.roll-btn { animation: pop 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .die.spin, .die.land, .roll-btn { animation: none; } }
 .score { font-family: var(--display); font-size: 34px; color: var(--red); white-space: nowrap; }
 .rounds { display: flex; flex-direction: column; gap: 4px; text-align: center; min-height: 60px; }
 .rd { margin: 0; font-size: 15px; animation: rise .35s ease-out; }
@@ -1146,7 +1160,8 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
   .island.friends { padding: 6px 14px; column-gap: 10px; }
   .island.friends .i-icon { font-size: 32px; }
   .market { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .fighter .tcg { width: min(100%, 120px); }
+  .fighter .tcg { width: min(100%, 110px); }
+  .die { font-size: 52px; width: 58px; height: 58px; }
   .score { font-size: 26px; }
   .vs { font-size: 26px; }
   .rd { font-size: 13px; }

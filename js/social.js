@@ -187,18 +187,33 @@ const SOCIAL = (() => {
       const picks = { ...(d.picks || {}), [st.uid]: card };
       const upd = { picks, updatedAt: now() };
       if (picks[d.users[0]] && picks[d.users[1]]) {
+        /* 주사위 값은 seed로 미리 정해져요 (누르는 순간을 바꿔도 결과는 같아서 공평해요). 아이가 눌러야 하나씩 보여요 */
         const r = battle(d.seed, picks[d.users[0]], picks[d.users[1]]);
-        Object.assign(upd, { status: 'done', winner: d.users[r.winner], rounds: r.rounds });
+        Object.assign(upd, { status: 'roll', winner: d.users[r.winner], rounds: r.rounds, rolled: {} });
       }
       t.update(ref, upd);
       return upd.status || 'pick';
+    });
+  }
+  /* 🎲 한 판 굴렸어요 (who: 나, 또는 기다리다 지쳐서 친구 대신). 두 사람 다 끝까지 굴리면 대결 끝 */
+  function roll(id, who, n) {
+    const ref = db.collection('matches').doc(id);
+    return db.runTransaction(async (t) => {
+      const d = (await t.get(ref)).data();
+      if (!d || d.status !== 'roll') return false;
+      const rolled = { ...(d.rolled || {}) };
+      rolled[who] = Math.max(rolled[who] || 0, n);
+      const upd = { rolled, updatedAt: now() };
+      if (d.users.every((u) => (rolled[u] || 0) >= d.rounds.length)) upd.status = 'done';
+      t.update(ref, upd);
+      return true;
     });
   }
   function cancel(id) {
     const ref = db.collection('matches').doc(id);
     return db.runTransaction(async (t) => {
       const d = (await t.get(ref)).data();
-      if (!d || !['invite', 'pick'].includes(d.status)) return false;
+      if (!d || !['invite', 'pick'].includes(d.status)) return false; /* 주사위를 굴리기 시작하면 끝까지 해요 */
       t.update(ref, { status: 'cancel', updatedAt: now() });
       return true;
     });
@@ -257,7 +272,7 @@ const SOCIAL = (() => {
     myListings: () => Object.values(st.mine),
     start, stop, publish, setKid,
     friendList, requestFriend, acceptFriend, removeFriend,
-    invite, respond, pick, cancel, settled,
+    invite, respond, pick, roll, cancel, settled,
     sell, market, buy, unlist, removeListing,
   };
 })();
