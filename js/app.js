@@ -32,7 +32,7 @@ const swapVowel = (ch) => {
 let S;
 function loadState() {
   S = Object.assign({ stars: 0, best: {} }, STORE.load());
-  /* stars = 쓸 수 있는 별(포획 타임에 걸어요), earned = 지금까지 모은 별 전체(스티커 기준) */
+  /* stars = 쓸 수 있는 별(포획 타임에 걸고, 카드 강화에 써요), earned = 지금까지 모은 별 전체 */
   if (S.earned == null) S.earned = S.stars;
   migrateEvo();
 }
@@ -278,15 +278,20 @@ function finish(key, score, total, again, extra) {
   const great = pct >= 70;
   app.innerHTML = `
     <div class="finish">
-      <div class="stamp ${great ? '' : 'soft'}">${great ? '참<br>잘했어요' : '잘<br>했어요'}</div>
-      <h2>${total}문제 중에 <b>${score}</b>개 맞혔어요!</h2>
-      ${extra && extra.stars ? `<p class="finish-stars" aria-label="별 ${extra.stars.gained}개 받음">⭐ <b>+${extra.stars.gained}</b>${extra.stars.bonus ? ` <small>(다 맞힘 보너스 +${extra.stars.bonus})</small>` : ''}</p>` : ''}
-      <p class="diff-note">${diffStars(diffOf(key))} ${DIFF_INFO[diffOf(key)].name}</p>
+      <div class="fin-top">
+        <div class="stamp ${great ? '' : 'soft'}">${great ? '참<br>잘했어요' : '잘<br>했어요'}</div>
+        <div class="fin-sum">
+          <h2>${total}문제 중에 <b>${score}</b>개 맞혔어요!</h2>
+          ${extra && extra.stars ? `<p class="finish-stars" aria-label="별 ${extra.stars.gained}개 받음">⭐ <b>+${extra.stars.gained}</b>${extra.stars.bonus ? ` <small>(다 맞힘 보너스 +${extra.stars.bonus})</small>` : ''}</p>` : ''}
+          <p class="diff-note">${diffStars(diffOf(key))} ${DIFF_INFO[diffOf(key)].name}</p>
+        </div>
+      </div>
+      ${extra && extra.caught && extra.caught.length ? `<div class="caught-row" aria-label="이번에 잡은 포켓몬"><small>이번에 잡은 포켓몬</small>${extra.caught.map((q) => `<span class="mini">${artImg(q.m, q.shiny)}<small>${q.name}</small></span>`).join('')}</div>` : ''}
       ${extra && extra.badge ? `<div class="badge-won"><span class="badge got big" style="--bc:${extra.badge[2]}"><i>${extra.badge[1]}</i></span><p><b>${extra.badge[0]}</b>를 받았어요!</p></div>` : ''}
-      ${extra && extra.caught && extra.caught.length ? `<div class="caught-row" aria-label="이번에 잡은 포켓몬">${extra.caught.map((q) => `<span class="mini">${artImg(q.m, q.shiny)}<small>${q.name}</small></span>`).join('')}</div>` : ''}
-      ${bubble(great ? LINES.great : LINES.soso, 'tight')}
-      ${packCount() ? `<button class="pack-cta" id="toPacks">${packArt(packList()[0].k, packList()[0].p)}<span><b>🎴 카드팩 뜯기!</b><small>${packCount()}팩이 기다려요</small></span></button>` : ''}
-      ${questPanel(false)}
+      <div class="fin-grid">
+        ${packCount() ? `<button class="pack-cta" id="toPacks">${packArt(packList()[0].k, packList()[0].p)}<span><b>🎴 카드팩 뜯기!</b><small>${packCount()}팩이 기다려요</small></span></button>` : ''}
+        ${questPanel(false)}
+      </div>
       <div class="row">
         <button class="btn primary" id="again">🔁 한 번 더</button>
         <button class="btn" id="toDex">📖 도감</button>
@@ -1619,7 +1624,7 @@ function dictQuestion(q, i, n, mark, next) {
   setTimeout(() => speak(q.t), 350);
 }
 
-/* ---------- 🏆 스티커북 ---------- */
+/* ---------- 🎒 포켓몬 가방 ---------- */
 SCREENS.book = () => {
   const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
     ...GRADE_DICT.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '📚', name: `${d.grade}학년 ${d.name}` })),

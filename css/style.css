@@ -373,7 +373,7 @@ h1:focus, h2:focus { outline: none; }
 .stamp.soft { color: var(--sky); border-color: var(--sky); }
 @keyframes stampin { from { transform: scale(2.4) rotate(-30deg); opacity: 0; } }
 
-/* 스티커북 */
+/* 진행 막대 */
 .meter {
   position: relative; height: 40px; border: 3px solid var(--ink); border-radius: 999px; background: var(--card); overflow: hidden;
 }
@@ -1057,6 +1057,25 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 
 .mobile-only { display: none; }
 
+/* 결과: 도장 옆에 점수, 카드팩·퀘스트는 나란히 (빈 공간 없이) */
+.fin-top { display: flex; align-items: center; justify-content: center; gap: 22px; }
+.fin-top .stamp { width: 120px; height: 120px; font-size: 26px; border-width: 6px; flex: none; }
+.fin-sum { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
+.fin-sum .finish-stars { font-size: 28px; letter-spacing: 2px; }
+.fin-sum .diff-note { margin: 0; }
+.finish .caught-row { align-items: center; gap: 6px 10px; }
+.finish .caught-row > small { width: 100%; color: var(--ink-soft); font-size: 13px; }
+.finish .mini { width: 60px; }
+.finish .mini .art { width: 52px; height: 52px; }
+.fin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; width: 100%; }
+.fin-grid:empty { display: none; }
+.fin-grid .pack-cta, .fin-grid .quest { width: 100%; max-width: none; height: 100%; margin: 0; }
+.fin-grid .quest { padding: 8px 12px; gap: 10px; }
+.fin-grid .quest-art { width: 64px; height: 64px; }
+.fin-grid .quest-body > b { font-size: 20px; }
+.fin-grid .quest-body p { font-size: 14px; }
+.fin-grid .pieces { font-size: 20px; }
+
 /* ---------- 📱 휴대폰: 한 화면에 보이게 ----------
  * 윗줄·말풍선을 작게, 섬·단계 칸을 촘촘하게, 주요 버튼(시작·다 썼어요·다음)은 화면 아래에 붙여요. */
 .dict-tabs { margin-top: -4px; }
@@ -1212,7 +1231,18 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 
   /* 결과 */
   .finish { gap: 10px; padding-top: 4px; }
-  .finish h2 { font-size: 24px; }
+  .finish h2 { font-size: 22px; }
+  .fin-top { gap: 14px; }
+  .fin-top .stamp { width: 92px; height: 92px; font-size: 20px; border-width: 5px; }
+  .finish > .row { flex-wrap: nowrap; gap: 6px; }
+  .finish > .row .btn { font-size: 16px; padding: 4px 10px; min-height: 48px; white-space: nowrap; }
+  .finish .caught-row > small { width: auto; }
+  .finish .mini { width: 52px; }
+  .finish .mini .art { width: 44px; height: 44px; }
+  .fin-sum .finish-stars { font-size: 24px; }
+  .fin-grid .quest-art { width: 52px; height: 52px; }
+  .fin-grid .pack-cta { padding: 6px 12px; gap: 10px; }
+  .fin-grid .pack-cta > span b { font-size: 20px; }
   .finish-stars { font-size: 26px; }
 }
 /* 키가 작은 휴대폰(아이폰 SE 등): 조금 더 촘촘하게 */
