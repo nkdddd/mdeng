@@ -148,23 +148,8 @@ function speak(parts, slow) {
 }
 const sayAttr = (parts) => esc([].concat(parts).join('|'));
 
-let actx = null;
-function sfx(kind) {
-  try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    const notes = { ok: [660, 880, 1320], no: [300, 220], pop: [520], star: [880, 1175, 1568, 2093], click: [190], whoosh: [1200, 900, 600, 400] }[kind];
-    notes.forEach((f, i) => {
-      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i * 0.09;
-      o.type = kind === 'no' ? 'triangle' : 'sine';
-      o.frequency.value = f;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-      o.connect(g).connect(actx.destination);
-      o.start(t); o.stop(t + 0.25);
-    });
-  } catch (e) { /* 소리 없이 진행 */ }
-}
+/* 효과음은 js/sfx.js (실로폰·바스락·몬스터볼 소리 …) */
+const sfx = (kind) => SFX.play(kind);
 
 /* ---------- 공통 조각 ---------- */
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -712,7 +697,7 @@ async function evolveShow(evo, box) {
     box.insertAdjacentHTML('afterbegin', `<div class="evolve"><p class="evo-line">🧬 ${esc(a)} ${EVO_NEED}마리가 모였어요! 어라…?</p>
       <div class="card-reveal evo-card">${pokeCard(m)}</div></div>`);
     const el = box.firstElementChild;
-    sfx('pop');
+    sfx('evolve');
     speak(LINES.evolving(a, EVO_NEED));
     await wait(reduceMotion ? 200 : 1600);
     el.classList.add('done');
@@ -862,7 +847,7 @@ function showWild(e, cont) {
       <p class="small-note">${esc(LINES.wildLater)}</p>
       <button class="btn primary big" id="wildGo">계속 공부하기 ▶</button>
     </div>`;
-  sfx('pop');
+  sfx('rustle');
   speak(LINES.rustle);
   setTimeout(() => {
     const wild = $('.wild', app);
@@ -978,7 +963,7 @@ function catchScene(list, onEnd, notes) {
       const dx = tr.left + tr.width / 2 - (b.left + b.width / 2);
       const dy = tr.top + tr.height / 2 - (b.top + b.height / 2);
       const off = hit ? 0 : (pos < 50 ? -1 : 1) * 70;
-      sfx('whoosh');
+      sfx('throw');
       await run(ball, [
         { transform: 'translate(0, 0) rotate(0) scale(1)' },
         { transform: `translate(${(dx + off) * 0.5}px, ${dy - 90}px) rotate(-400deg) scale(.85)`, offset: 0.55 },
@@ -986,7 +971,7 @@ function catchScene(list, onEnd, notes) {
       ], { duration: 650, easing: 'cubic-bezier(.3,.6,.5,1)' });
 
       if (!hit) {
-        sfx('no');
+        sfx('miss');
         run(ball, [
           { transform: `translate(${dx + off}px, ${dy}px) rotate(-720deg) scale(.7)`, opacity: 1 },
           { transform: `translate(${dx + off * 3}px, ${dy + 260}px) rotate(-1000deg) scale(.6)`, opacity: 0 },
@@ -1002,7 +987,7 @@ function catchScene(list, onEnd, notes) {
         speak([LINES.missed, LINES.fled(N, subj), ...(q.legend ? [LINES.legendAway] : [])]);
       } else {
         field.classList.add('flashing');
-        sfx('pop');
+        sfx('hit');
         await run(target, [
           { transform: 'scale(1)', filter: 'brightness(1)', opacity: 1 },
           { transform: 'scale(1.08)', filter: 'brightness(4)', opacity: 1, offset: 0.35 },
@@ -1014,7 +999,7 @@ function catchScene(list, onEnd, notes) {
         ], { duration: 280, easing: 'cubic-bezier(.5,0,1,1)' });
         for (let w = 1; w <= 3; w++) {
           msg.textContent = '…'.repeat(w);
-          sfx('click');
+          sfx('wobble');
           await run(ball, [
             { transform: `translate(${dx}px, ${dy + 60}px) rotate(0deg) scale(.7)` },
             { transform: `translate(${dx}px, ${dy + 60}px) rotate(-22deg) scale(.7)`, offset: 0.3 },
@@ -1034,7 +1019,7 @@ function catchScene(list, onEnd, notes) {
         addPack(packKind, N, q.diff);
         caught.push(q);
         ball.classList.add('locked');
-        sfx('star');
+        sfx('catch');
         confetti();
         msg.innerHTML = `<b>딸깍! ${N}${obj} 잡았다!</b>`;
         $('#after').innerHTML = `
@@ -1270,7 +1255,7 @@ SCREENS.packs = (back) => {
   pack.addEventListener('click', async () => {
     if (opening) return;
     taps++;
-    sfx(taps < 3 ? 'click' : 'whoosh');
+    sfx(taps < 3 ? 'crinkle' : 'tear');
     pack.classList.remove('shake'); void pack.offsetWidth; pack.classList.add('shake', 't' + Math.min(taps, 3));
     if (taps < 3) return;
     opening = true;
@@ -1483,7 +1468,7 @@ function diagnose(user, answer, hints) {
     if (sw === w.replace(/ /g, '') || !un.includes(sw)) return;
     reasons.push(k === 'spell' || k === 'sais'
       ? { k, text: `<s>${esc(s)}</s>${josaPick(s, ['이', '가'])} 아니라 <b>${esc(w)}</b>${hasBatchim(w) ? '이에요' : '예요'}.` }
-      : { k, text: `<b>${esc(w)}</b>${josaPick(w, ['을', '를'])} 소리 나는 대로 <b>[${esc(s)}]</b>라고 썼어요.` });
+      : { k, text: `<b>${esc(w)}</b>${josaPick(w, ['을', '를'])} 소리 나는 대로 <b>[${esc(s)}]</b>${josaPick(s, ['이라고', '라고'])} 썼어요.` });
   });
   a.split(' ').forEach((word) => {
     [...word].forEach((ch, idx) => {

@@ -16,54 +16,33 @@ const CardFX = (() => {
   const pickOf = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   /* ---------- 소리 (Web Audio로 만든 효과음) ---------- */
-  let actx = null;
-  function noise(dur, { type = 'lowpass', from = 2000, to = 400, gain = 0.3, q = 1, delay = 0 } = {}) {
-    try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const t = actx.currentTime + delay;
-      const len = Math.floor(actx.sampleRate * dur);
-      const buf = actx.createBuffer(1, len, actx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-      const src = actx.createBufferSource();
-      src.buffer = buf;
-      const f = actx.createBiquadFilter();
-      f.type = type; f.Q.value = q;
-      f.frequency.setValueAtTime(from, t);
-      f.frequency.exponentialRampToValueAtTime(to, t + dur);
-      const g = actx.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(gain, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      src.connect(f).connect(g).connect(actx.destination);
-      src.start(t); src.stop(t + dur);
-    } catch (e) { /* 소리 없이 */ }
-  }
-  function tone(freqs, { wave = 'sine', gain = 0.12, step = 0.07, len = 0.25, delay = 0 } = {}) {
-    try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      freqs.forEach((fq, i) => {
-        const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + delay + i * step;
-        o.type = wave; o.frequency.value = fq;
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(gain, t + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
-        o.connect(g).connect(actx.destination);
-        o.start(t); o.stop(t + len + 0.05);
-      });
-    } catch (e) { /* 소리 없이 */ }
-  }
+  /* 소리 엔진은 js/sfx.js (울림·압축기를 거쳐 더 실감 나게) */
+  const noise = (...x) => window.SFX && SFX.noise(...x);
+  const tone = (...x) => window.SFX && SFX.tone(...x);
+  const bell = (...x) => window.SFX && SFX.bell(...x);
+  const crackle = (...x) => window.SFX && SFX.crackle(...x);
+  const drop = (...x) => window.SFX && SFX.drop(...x);
   const SOUND = {
-    bolt: () => { noise(0.18, { type: 'highpass', from: 3000, to: 1500, gain: 0.35 }); noise(0.25, { type: 'highpass', from: 2500, to: 800, gain: 0.3, delay: 0.22 }); noise(0.5, { type: 'lowpass', from: 900, to: 80, gain: 0.45, delay: 0.45 }); },
-    fire: () => { noise(1.1, { type: 'lowpass', from: 300, to: 1800, gain: 0.3 }); noise(0.6, { type: 'bandpass', from: 1200, to: 300, gain: 0.25, delay: 0.4 }); },
-    water: () => { noise(0.5, { type: 'bandpass', from: 2500, to: 400, gain: 0.35, q: 2, delay: 0.3 }); tone([600, 900, 750, 1100], { gain: 0.05, step: 0.09, len: 0.12, delay: 0.5 }); },
-    leaf: () => { noise(0.9, { type: 'bandpass', from: 800, to: 3000, gain: 0.18, q: 3 }); tone([660, 880], { gain: 0.06, delay: 0.4 }); },
-    ice: () => { tone([1568, 2093, 2637, 3136], { wave: 'triangle', gain: 0.07, step: 0.06, delay: 0.3 }); noise(0.3, { type: 'highpass', from: 5000, to: 3000, gain: 0.15, delay: 0.35 }); },
-    psy: () => { tone([392, 523, 659, 784, 1047], { gain: 0.07, step: 0.08, len: 0.4 }); },
-    smoke: () => { noise(1.0, { type: 'lowpass', from: 200, to: 600, gain: 0.3 }); tone([220, 185], { wave: 'triangle', gain: 0.07, step: 0.25, len: 0.5, delay: 0.3 }); },
-    dragon: () => { noise(0.9, { type: 'lowpass', from: 200, to: 1200, gain: 0.35 }); tone([196, 294, 392], { wave: 'sawtooth', gain: 0.04, step: 0.1, len: 0.4, delay: 0.4 }); },
-    rock: () => { noise(0.35, { type: 'lowpass', from: 400, to: 60, gain: 0.55, delay: 0.35 }); noise(0.2, { type: 'lowpass', from: 300, to: 60, gain: 0.35, delay: 0.6 }); },
-    spark: () => { tone([1047, 1319, 1568, 2093], { gain: 0.07, step: 0.06 }); },
+    /* 번개: 지지직 + 쾅 + 우르릉 */
+    bolt: () => { crackle(0.35, { from: 3000, to: 9000, gain: 0.3, bits: 24 }); noise(0.12, { type: 'highpass', from: 2000, to: 800, gain: 0.35, delay: 0.3, attack: 0.002 }); noise(1.4, { type: 'lowpass', from: 700, to: 50, gain: 0.55, delay: 0.32, attack: 0.01 }); },
+    /* 불: 확 붙고 타닥타닥 */
+    fire: () => { noise(1.2, { type: 'lowpass', from: 200, to: 1600, gain: 0.5, attack: 0.25 }); crackle(1.1, { from: 1500, to: 4500, gain: 0.25, bits: 18, delay: 0.2 }); },
+    /* 물: 촤아 + 물방울 */
+    water: () => { noise(0.8, { type: 'bandpass', from: 3500, to: 600, gain: 0.35, q: 1.2, delay: 0.25, attack: 0.05 }); [0.5, 0.62, 0.8, 0.9].forEach((d, i) => drop(500 + i * 170, d)); },
+    /* 풀: 사르르 + 맑은 음 */
+    leaf: () => { crackle(0.9, { from: 2500, to: 6000, gain: 0.15, bits: 18 }); bell(784, { kind: 'marimba', gain: 0.1, delay: 0.45 }); bell(1175, { kind: 'marimba', gain: 0.08, delay: 0.55 }); },
+    /* 얼음: 쨍그랑 */
+    ice: () => { [2093, 2637, 3136, 3951, 3520].forEach((f, i) => bell(f, { gain: 0.06, delay: 0.3 + i * 0.05, decay: 1.2 })); crackle(0.3, { from: 5000, to: 10000, gain: 0.15, bits: 10, delay: 0.3 }); },
+    /* 에스퍼: 신비로운 울림 */
+    psy: () => { [392, 523, 659, 784, 1047].forEach((f, i) => bell(f, { gain: 0.07, delay: i * 0.09, decay: 1.4 })); noise(1.2, { type: 'bandpass', from: 300, to: 3000, q: 4, gain: 0.08, attack: 0.5 }); },
+    /* 고스트: 스르르 */
+    smoke: () => { noise(1.2, { type: 'lowpass', from: 150, to: 700, gain: 0.3, attack: 0.3 }); tone([220, 185], { wave: 'triangle', gain: 0.07, step: 0.25, len: 0.6, delay: 0.3 }); },
+    /* 드래곤: 크아앙 */
+    dragon: () => { noise(1.0, { type: 'lowpass', from: 150, to: 1400, gain: 0.6, attack: 0.2 }); tone([110, 147, 196], { wave: 'sawtooth', gain: 0.09, step: 0.12, len: 0.6, delay: 0.3 }); },
+    /* 바위: 쿵 쿵 */
+    rock: () => { noise(0.5, { type: 'lowpass', from: 350, to: 40, gain: 0.6, delay: 0.35, attack: 0.003 }); noise(0.35, { type: 'lowpass', from: 300, to: 40, gain: 0.4, delay: 0.62, attack: 0.003 }); crackle(0.3, { from: 800, to: 2500, gain: 0.15, bits: 8, delay: 0.36 }); },
+    /* 기본: 반짝 */
+    spark: () => { [1047, 1319, 1568, 2093].forEach((f, i) => bell(f, { gain: 0.08, delay: i * 0.06 })); },
   };
 
   /* ---------- 캔버스 ---------- */
