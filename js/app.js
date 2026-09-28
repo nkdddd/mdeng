@@ -2084,6 +2084,7 @@ function rollSides(m) {
 }
 function rollView(m, top) {
   const { me, other, rounds, A, B } = rollSides(m);
+  stageWho = { me: m.who[me], them: m.who[other] };
   let root = $('#arena');
   if (!root || root.dataset.mid !== m.id) {
     const ca = CARD_BY[A.id], cb = CARD_BY[B.id];
@@ -2136,74 +2137,102 @@ function rollView(m, top) {
     $('#rollBtn').disabled = true;
     const done = rounds.slice(0, cur);
     const tension = done.filter((x) => x.w === 0).length === 1 && done.filter((x) => x.w === 1).length === 1;
-    await bigRoll(rounds[cur].da, { label: tension ? '🔥 마지막 판! 내 주사위' : `${cur + 1}판 · 내 주사위`, tension });
+    const st = openStage(tension ? '🔥 마지막 판!' : `${cur + 1}판`, tension);
+    const theyRolled = ((SOCIAL.match(m.id) || m).rolled || {})[other] > cur;
+    restPane(st.them, 0, theyRolled ? '✅ 벌써 굴렸어! 두근두근…' : '⏳ 친구가 굴리길 기다려요');
+    await rollPane(st.me, rounds[cur].da, ['-60vw', '-40vh']);
     $('#dA').innerHTML = dieSvg(rounds[cur].da);
     SOCIAL.roll(m.id, me, cur + 1).catch(() => toast('앗, 연결이 끊겼어요. 다시 눌러 봐요'));
+    /* 친구가 이미 굴렸으면 그대로 두고 친구 주사위를 이어서 보여 줘요. 아니면 잠깐 뒤 닫아요 */
+    if (!theyRolled) closeStage(700); else stageClose = setTimeout(() => closeStage(), 8000);
   };
 }
-/* 🎲 화면 가득 큰 주사위: 손에서 달그락 → 휙 던져 통통 튀며 데굴데굴 → 탁! 멈춰요
- * opts: { label, tension(마지막 판), mine(내 주사위 값: 친구 주사위 옆에 작게), banner: { html, win } } */
+/* 🎲 주사위 무대: 화면을 둘로 나눠요 (가로 화면: 왼쪽 나 · 오른쪽 친구 / 세로 화면(휴대폰): 위 나 · 아래 친구)
+ * 내 주사위: 손에서 달그락 → 휙 던져 통통 튀며 데굴데굴 → 딱! 멈춤. 친구 주사위는 둘 다 굴린 뒤에 굴러요. */
 const CUBE_ROT = { 1: [0, 0], 2: [0, -90], 3: [-90, 0], 4: [90, 0], 5: [0, 90], 6: [0, 180] };
 const cubeHTML = () => `<div class="cube">${[1, 6, 2, 5, 3, 4].map((n) => `<div class="cf f${n}">${dieSvg(n)}</div>`).join('')}</div>`;
-async function bigRoll(value, opts = {}) {
-  const w = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? Math.min(ms, 60) : ms));
-  const el = document.createElement('div');
-  el.className = 'dice-stage' + (opts.tension ? ' tension' : '');
-  el.innerHTML = `<p class="dice-label">${opts.label || '🎲'}</p>
+const dwait = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? Math.min(ms, 60) : ms));
+let dstage = null, stageWho = null, stageClose = 0;
+function openStage(label, tension) {
+  clearTimeout(stageClose);
+  if (dstage && document.body.contains(dstage.el)) {
+    dstage.el.classList.toggle('tension', !!tension);
+    dstage.label.textContent = label;
+    return dstage;
+  }
+  const who = stageWho || { me: { name: '나', avatar: '🙂' }, them: { name: '친구', avatar: '🙂' } };
+  const pane = (side, p) => `<div class="dice-pane ${side}"><p class="pane-who">${p.avatar} ${esc(p.name)}${side === 'me' ? ' <small>(나)</small>' : ''}</p>
     <div class="dice-floor"><div class="dice-fly">${cubeHTML()}</div><div class="dice-shadow"></div></div>
-    ${opts.mine ? `<p class="dice-mine">내 주사위 ${dieSvg(opts.mine)}</p>` : ''}
-    <p class="dice-num" aria-live="polite"></p><div class="dice-banner" aria-live="polite"></div>`;
+    <p class="dice-num" aria-live="polite"></p><p class="pane-note"></p></div>`;
+  const el = document.createElement('div');
+  el.className = 'dice-stage' + (tension ? ' tension' : '');
+  el.innerHTML = `<p class="dice-label">${label}</p>${pane('me', who.me)}<div class="dice-vs">VS</div>${pane('them', who.them)}<div class="dice-banner" aria-live="polite"></div>`;
   document.body.appendChild(el);
-  const fly = $('.dice-fly', el), cube = $('.cube', el);
+  const P = (side) => { const r = $('.dice-pane.' + side, el); return { root: r, fly: $('.dice-fly', r), cube: $('.cube', r), num: $('.dice-num', r), note: $('.pane-note', r) }; };
+  dstage = { el, label: $('.dice-label', el), banner: $('.dice-banner', el), me: P('me'), them: P('them') };
+  requestAnimationFrame(() => el.classList.add('in'));
+  return dstage;
+}
+async function closeStage(after = 0) {
+  const st = dstage;
+  if (!st) return;
+  await dwait(after);
+  if (dstage !== st) return;
+  dstage = null;
+  st.el.classList.add('out');
+  await dwait(320);
+  st.el.remove();
+}
+/* 멈춰 있는 주사위: 값이 있으면 그 면, 없으면 '?' (아직 모름) */
+function restPane(p, value, note) {
+  p.fly.getAnimations().forEach((a) => a.cancel());
+  p.cube.getAnimations().forEach((a) => a.cancel());
+  p.root.classList.toggle('secret', !value);
+  p.root.classList.toggle('landed', !!value);
+  const [fx, fy] = CUBE_ROT[value || 5];
+  p.cube.style.transform = value ? `rotateX(${fx}deg) rotateY(${fy}deg)` : `rotateX(${fx - 20}deg) rotateY(${fy + 30}deg)`;
+  p.num.innerHTML = value ? `${value}` : '';
+  p.note.textContent = note || '';
+}
+async function rollPane(p, value, from) {
+  p.root.classList.remove('secret', 'landed');
+  p.num.innerHTML = '';
+  p.note.textContent = '';
   const [fx, fy] = CUBE_ROT[value];
-  await w(20);
-  el.classList.add('in');
-  /* 1) 손 안에서 달그락달그락 */
-  cube.style.transform = `rotateX(${fx - 25}deg) rotateY(${fy + 35}deg)`;
-  fly.classList.add('shaking');
-  sfx(opts.tension ? 'drumroll' : 'diceShake');
-  await w(opts.tension ? 1000 : 600);
-  fly.classList.remove('shaking');
+  /* 1) 달그락달그락 */
+  p.cube.style.transform = `rotateX(${fx - 25}deg) rotateY(${fy + 35}deg)`;
+  p.fly.classList.add('shaking');
+  sfx(dstage && dstage.el.classList.contains('tension') ? 'drumroll' : 'diceShake');
+  await dwait(dstage && dstage.el.classList.contains('tension') ? 1000 : 600);
+  p.fly.classList.remove('shaking');
   /* 2) 휙 던져서 통통 튀며 데굴데굴 */
-  const D = 1400;
-  const hops = [0.34, 0.62, 0.82, 0.93];
+  const D = 1400, hops = [0.34, 0.62, 0.82, 0.93];
   sfx('diceRoll', hops.map((h) => (h * D) / 1000));
   const spinX = 720 + 360 * Math.floor(Math.random() * 2), spinY = 1080 + 360 * Math.floor(Math.random() * 2);
   if (!reduceMotion) {
-    fly.animate([
-      { transform: 'translate(-70vw, -45vh) scale(.55)' },
-      { transform: 'translate(-12vw, 0) scale(1)', offset: hops[0] },
-      { transform: 'translate(-6vw, -22vh) scale(1.05)', offset: (hops[0] + hops[1]) / 2 },
-      { transform: 'translate(-2vw, 0) scale(1)', offset: hops[1] },
-      { transform: 'translate(0, -8vh) scale(1.02)', offset: (hops[1] + hops[2]) / 2 },
+    const [sx, sy] = from; /* 던져 오는 방향 (화면 밖) */
+    p.fly.animate([
+      { transform: `translate(${sx}, ${sy}) scale(.55)` },
+      { transform: 'translate(0, 0) scale(1)', offset: hops[0] },
+      { transform: 'translate(0, -14%) scale(1.05)', offset: (hops[0] + hops[1]) / 2 },
+      { transform: 'translate(0, 0) scale(1)', offset: hops[1] },
+      { transform: 'translate(0, -6%) scale(1.02)', offset: (hops[1] + hops[2]) / 2 },
       { transform: 'translate(0, 0) scale(1)', offset: hops[2] },
-      { transform: 'translate(0, -2vh) scale(1)', offset: (hops[2] + hops[3]) / 2 },
+      { transform: 'translate(0, -2%) scale(1)', offset: (hops[2] + hops[3]) / 2 },
       { transform: 'translate(0, 0) scale(1)' },
-    ], { duration: D, easing: 'linear', fill: 'forwards' });
-    await cube.animate([
+    ], { duration: D, easing: 'linear' });
+    await p.cube.animate([
       { transform: `rotateX(${fx - spinX}deg) rotateY(${fy - spinY}deg) rotateZ(90deg)` },
       { transform: `rotateX(${fx}deg) rotateY(${fy}deg) rotateZ(0deg)` },
-    ], { duration: D, easing: 'cubic-bezier(.2, .65, .25, 1)', fill: 'forwards' }).finished;
+    ], { duration: D, easing: 'cubic-bezier(.2, .65, .25, 1)' }).finished;
   }
-  cube.style.transform = `rotateX(${fx}deg) rotateY(${fy}deg)`;
-  /* 3) 탁! 멈춤 */
+  /* 3) 딱! 멈춤 */
+  p.cube.style.transform = `rotateX(${fx}deg) rotateY(${fy}deg)`;
   sfx('diceLand');
-  el.classList.add('landed');
-  const num = $('.dice-num', el);
-  num.innerHTML = `${value}${value === 6 ? ' <small>최고!</small>' : value === 1 ? ' <small>앗!</small>' : '!'}`;
+  p.root.classList.add('landed');
+  p.num.innerHTML = `${value}${value === 6 ? ' <small>최고!</small>' : value === 1 ? ' <small>앗!</small>' : '!'}`;
   if (value === 6) { sfx('diceBig'); confetti(); }
-  await w(900);
-  /* 4) (친구 주사위일 때) 이 판 결과 */
-  if (opts.banner) {
-    const bn = $('.dice-banner', el);
-    bn.innerHTML = opts.banner.html;
-    bn.classList.add('show', opts.banner.win === true ? 'win' : opts.banner.win === false ? 'lose' : 'tie');
-    sfx(opts.banner.win === true ? 'roundWin' : opts.banner.win === false ? 'roundLose' : 'pop');
-    await w(1500);
-  }
-  el.classList.add('out');
-  await w(320);
-  el.remove();
+  await dwait(800);
 }
 async function revealRound(rounds, i) {
   if (!$('#arena')) return;
@@ -2212,13 +2241,18 @@ async function revealRound(rounds, i) {
   $('#nB').textContent = '';
   const before = rounds.slice(0, i);
   const tension = before.filter((x) => x.w === 0).length === 1 && before.filter((x) => x.w === 1).length === 1;
-  const them = ($('#fB b') || {}).textContent || '친구';
-  await bigRoll(r.db, {
-    label: `${tension ? '🔥 마지막 판! ' : `${i + 1}판 · `}친구 주사위`, tension, mine: r.da,
-    banner: { win: r.w === -1 ? null : r.w === 0,
-      html: `<b>${r.w === -1 ? '🤝 비겼어요! 한 번 더!' : r.w === 0 ? '👍 이 판은 내가 이겼어!' : '💥 이 판은 친구가 이겼어!'}</b><small>나 ${r.sa} : ${r.sb} ${esc(them)}</small>` },
-  });
+  const st = openStage(tension ? '🔥 마지막 판!' : `${i + 1}판`, tension);
+  restPane(st.me, r.da);
+  await rollPane(st.them, r.db, ['60vw', '40vh']);
   $('#dB').innerHTML = dieSvg(r.db);
+  /* 이 판 결과 */
+  const win = r.w === -1 ? null : r.w === 0;
+  st.banner.innerHTML = `<b>${win === null ? '🤝 비겼어요! 한 번 더!' : win ? '👍 이 판은 내가 이겼어!' : '💥 이 판은 친구가 이겼어!'}</b><small>나 ${r.sa} : ${r.sb} 친구</small>`;
+  st.banner.className = 'dice-banner show ' + (win === true ? 'win' : win === false ? 'lose' : 'tie');
+  (win === true ? st.me : win === false ? st.them : null)?.root.classList.add('winner');
+  sfx(win === true ? 'roundWin' : win === false ? 'roundLose' : 'pop');
+  await dwait(1600);
+  await closeStage();
   const lines = $('#bRounds');
   lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: 🎲${r.da} → <b>${r.sa}</b> vs <b>${r.sb}</b> ← 🎲${r.db} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : '💥 친구가 이겼어!'}</p>`);
   const won = rounds.slice(0, i + 1);

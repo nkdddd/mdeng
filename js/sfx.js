@@ -163,15 +163,21 @@ window.SFX = (() => {
     /* 진화: 신비롭게 올라가는 소리 */
     /* 🎲 손 안에서 달그락달그락 */
     diceShake: () => { for (let i = 0; i < 9; i++) { const d = i * 0.055 + rand(0, 0.02); noise(0.035, { type: 'bandpass', from: rand(1800, 3200), to: rand(1500, 2600), q: 5, gain: 0.45, delay: d, attack: 0.002, reverb: 0.2 }); note(rand(900, 1300), { gain: 0.08, decay: 0.03, delay: d, reverb: 0 }); } },
-    /* 데굴데굴: 바닥에 탁·탁·탁 부딪히며 굴러가요 (at: 부딪히는 시각들) */
-    diceRoll: (at = [0.18, 0.46, 0.7, 0.88, 1.02, 1.12]) => at.forEach((d, i) => {
-      const k = 1 - i / at.length;
-      noise(0.05, { type: 'bandpass', from: 1400, to: 700, q: 2.5, gain: 0.3 * k + 0.08, delay: d, attack: 0.002, reverb: 0.35 });
-      note(210 + rand(-20, 20), { gain: 0.16 * k + 0.05, decay: 0.07, delay: d, reverb: 0.3 });
-      noise(0.09, { type: 'bandpass', from: 3500, to: 2000, q: 1.5, gain: 0.06 * k, delay: d + 0.02, reverb: 0 }); /* 굴러가는 사각사각 */
-    }),
-    /* 탁! 멈춤 + 반짝 */
-    diceLand: () => { note(95, { glide: 60, glideTime: 0.12, gain: 0.3, decay: 0.2, reverb: 0.4 }); noise(0.06, { type: 'lowpass', from: 900, to: 200, gain: 0.35, attack: 0.002 }); bell(1568, { gain: 0.07, delay: 0.12, decay: 0.8 }); },
+    /* 데굴데굴: 딱·딱·딱 부딪히고 사이사이 드르르르 굴러가요 (at: 부딪히는 시각들)
+     * 휴대폰 스피커는 낮은 소리를 거의 못 내서, 또렷한 높은 소리(1~5kHz) 위주로 만들어요 */
+    diceRoll: (at = [0.18, 0.46, 0.7, 0.88, 1.02, 1.12]) => {
+      at.forEach((d, i) => {
+        const k = 1 - i / (at.length + 1);
+        noise(0.025, { type: 'bandpass', from: 2600, to: 2200, q: 3, gain: 0.55 * k + 0.12, delay: d, attack: 0.001, reverb: 0.3 }); /* 딱 */
+        note(1300 + rand(-150, 150), { wave: 'triangle', gain: 0.16 * k + 0.04, decay: 0.06, delay: d, reverb: 0.2 });   /* 나무 울림 */
+        note(520, { gain: 0.12 * k, decay: 0.08, delay: d, reverb: 0.2 });
+        const next = at[i + 1] ?? d + 0.12;
+        for (let t = d + 0.03; t < next - 0.02; t += 0.028 + rand(0, 0.012)) /* 드르르르 */
+          noise(0.018, { type: 'bandpass', from: rand(3000, 5200), to: rand(2500, 4500), q: 4, gain: 0.16 * k + 0.03, delay: t, attack: 0.001, reverb: 0 });
+      });
+    },
+    /* 딱! 멈춤 + 반짝 */
+    diceLand: () => { noise(0.03, { type: 'bandpass', from: 2400, to: 1800, q: 2.5, gain: 0.6, attack: 0.001, reverb: 0.3 }); note(1000, { wave: 'triangle', gain: 0.2, decay: 0.1, reverb: 0.3 }); note(95, { glide: 60, glideTime: 0.12, gain: 0.25, decay: 0.2, reverb: 0.4 }); bell(1568, { gain: 0.08, delay: 0.12, decay: 0.8 }); },
     /* 큰 숫자(6) 나왔을 때 */
     diceBig: () => { [1047, 1319, 1568, 2093, 2637].forEach((f, i) => bell(f, { gain: 0.07, delay: i * 0.05, decay: 1 })); },
     /* 한 판 이김 · 짐 */
