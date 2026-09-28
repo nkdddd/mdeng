@@ -161,13 +161,43 @@ window.SFX = (() => {
     /* 카드팩 쫙 */
     tear: () => { crackle(0.35, { from: 2000, to: 7000, gain: 0.3, bits: 26 }); noise(0.35, { type: 'bandpass', from: 1500, to: 5000, q: 0.7, gain: 0.2, attack: 0.02, reverb: 0.3 }); },
     /* 진화: 신비롭게 올라가는 소리 */
+    /* 🎲 손 안에서 달그락달그락 */
+    diceShake: () => { for (let i = 0; i < 9; i++) { const d = i * 0.055 + rand(0, 0.02); noise(0.035, { type: 'bandpass', from: rand(1800, 3200), to: rand(1500, 2600), q: 5, gain: 0.45, delay: d, attack: 0.002, reverb: 0.2 }); note(rand(900, 1300), { gain: 0.08, decay: 0.03, delay: d, reverb: 0 }); } },
+    /* 데굴데굴: 바닥에 탁·탁·탁 부딪히며 굴러가요 (at: 부딪히는 시각들) */
+    diceRoll: (at = [0.18, 0.46, 0.7, 0.88, 1.02, 1.12]) => at.forEach((d, i) => {
+      const k = 1 - i / at.length;
+      noise(0.05, { type: 'bandpass', from: 1400, to: 700, q: 2.5, gain: 0.3 * k + 0.08, delay: d, attack: 0.002, reverb: 0.35 });
+      note(210 + rand(-20, 20), { gain: 0.16 * k + 0.05, decay: 0.07, delay: d, reverb: 0.3 });
+      noise(0.09, { type: 'bandpass', from: 3500, to: 2000, q: 1.5, gain: 0.06 * k, delay: d + 0.02, reverb: 0 }); /* 굴러가는 사각사각 */
+    }),
+    /* 탁! 멈춤 + 반짝 */
+    diceLand: () => { note(95, { glide: 60, glideTime: 0.12, gain: 0.3, decay: 0.2, reverb: 0.4 }); noise(0.06, { type: 'lowpass', from: 900, to: 200, gain: 0.35, attack: 0.002 }); bell(1568, { gain: 0.07, delay: 0.12, decay: 0.8 }); },
+    /* 큰 숫자(6) 나왔을 때 */
+    diceBig: () => { [1047, 1319, 1568, 2093, 2637].forEach((f, i) => bell(f, { gain: 0.07, delay: i * 0.05, decay: 1 })); },
+    /* 한 판 이김 · 짐 */
+    roundWin: () => { [[784, 0], [988, 0.1], [1319, 0.2]].forEach(([f, d]) => { note(f, { wave: 'square', gain: 0.05, decay: 0.16, delay: d, lp: 3000 }); bell(f * 2, { gain: 0.04, delay: d, decay: 0.4 }); }); },
+    roundLose: () => { note(392, { wave: 'triangle', glide: 262, glideTime: 0.3, gain: 0.14, decay: 0.35, lp: 1500 }); noise(0.15, { type: 'lowpass', from: 500, to: 150, gain: 0.12, delay: 0.05 }); },
+    /* 두근두근 북소리 (마지막 판 전에) */
+    drumroll: () => { for (let i = 0; i < 22; i++) noise(0.05, { type: 'bandpass', from: 1800, to: 1200, q: 1, gain: 0.08 + i * 0.008, delay: i * 0.045, attack: 0.002, reverb: 0.2 }); },
+    /* 🏆 승리 팡파르: 빰빠밤~ + 심벌 */
+    victory: () => {
+      const seq = [[523, 0, 0.14], [523, 0.16, 0.14], [523, 0.32, 0.14], [659, 0.5, 0.5], [784, 1.05, 0.2], [659, 1.28, 0.16], [784, 1.46, 0.9]];
+      seq.forEach(([f, d, len]) => { note(f, { wave: 'sawtooth', gain: 0.06, attack: 0.02, decay: len, delay: d, lp: 2600, vibrato: len > 0.5 ? 5 : 0 }); note(f * 1.5, { wave: 'triangle', gain: 0.03, attack: 0.02, decay: len, delay: d }); });
+      [0.5, 1.46].forEach((d) => { noise(1.2, { type: 'highpass', from: 5000, to: 7000, gain: 0.12, delay: d, attack: 0.005 }); note(80, { gain: 0.25, decay: 0.3, delay: d }); });
+      [2093, 2637, 3136].forEach((f, i) => bell(f, { gain: 0.05, delay: 1.5 + i * 0.08, decay: 1.4 }));
+    },
+    /* 😢 슬픈 트롬본: 와-와-와-와아~ */
+    defeat: () => {
+      [[392, 0], [370, 0.45], [349, 0.9]].forEach(([f, d]) => note(f, { wave: 'sawtooth', gain: 0.13, attack: 0.04, decay: 0.38, delay: d, lp: 1100 }));
+      note(330, { wave: 'sawtooth', glide: 300, glideTime: 1.1, gain: 0.13, attack: 0.04, decay: 1.2, delay: 1.35, lp: 1000, vibrato: 7 });
+    },
     evolve: () => { for (let i = 0; i < 10; i++) bell(A5 * Math.pow(2, i / 6), { gain: 0.08, delay: i * 0.13, decay: 0.8 }); noise(1.4, { type: 'bandpass', from: 400, to: 5000, q: 2, gain: 0.1, attack: 0.6 }); },
   };
 
-  function play(kind) {
+  function play(kind, arg) {
     try {
       if (!SOUNDS[kind]) return;
-      SOUNDS[kind]();
+      SOUNDS[kind](arg);
     } catch (e) { /* 소리 없이 진행 */ }
   }
   return { play, noise: (...a) => { try { noise(...a); } catch (e) { /* 소리 없이 */ } }, tone: (...a) => { try { tone(...a); } catch (e) { /* 소리 없이 */ } }, bell: (...a) => { try { bell(...a); } catch (e) { /* 소리 없이 */ } }, crackle: (...a) => { try { crackle(...a); } catch (e) { /* 소리 없이 */ } }, drop: (...a) => { try { drop(...a); } catch (e) { /* 소리 없이 */ } } };

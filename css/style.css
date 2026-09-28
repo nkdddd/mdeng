@@ -1226,6 +1226,75 @@ body.fx-on .pack-stage { position: relative; z-index: 49; }
 .evo-badge { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--display); font-size: 12px; background: var(--red); color: #fff; border-radius: 999px; padding: 1px 8px; z-index: 2; }
 @media (prefers-reduced-motion: reduce) { .evo-rays, .evo-cta, .bag-mon.can-evo, .spin-hint { animation: none; } }
 
+/* 🎲 큰 주사위 장면 */
+.dice-stage {
+  --s: min(42vw, 190px);
+  position: fixed; inset: 0; z-index: 65; display: grid; place-items: center; align-content: center; gap: 14px; overflow: hidden;
+  background: radial-gradient(circle at 50% 55%, rgba(30, 58, 138, .92), rgba(8, 12, 30, .96) 75%); opacity: 0; transition: opacity .25s;
+}
+.dice-stage.in { opacity: 1; }
+.dice-stage.out { opacity: 0; }
+.dice-stage.tension { background: radial-gradient(circle at 50% 55%, rgba(153, 27, 27, .9), rgba(20, 6, 6, .96) 75%); }
+.dice-label { margin: 0; color: #fff; font-family: var(--display); font-size: 24px; text-shadow: 0 2px 0 rgba(0, 0, 0, .4); }
+.dice-stage.tension .dice-label { color: #fde68a; animation: pop .6s ease-in-out infinite; }
+.dice-floor { position: relative; width: var(--s); height: calc(var(--s) * 1.25); display: grid; place-items: end center; perspective: 900px; }
+.dice-fly { width: var(--s); height: var(--s); transform-style: preserve-3d; position: relative; z-index: 1; }
+.dice-fly.shaking { animation: diceShake .09s linear infinite; }
+@keyframes diceShake { 25% { transform: translate(-6px, 3px) rotate(-4deg); } 75% { transform: translate(6px, -3px) rotate(4deg); } }
+.cube { position: absolute; inset: 0; transform-style: preserve-3d; }
+.cf { position: absolute; inset: 0; backface-visibility: hidden; }
+.cf svg { width: 100%; height: 100%; display: block; }
+.cf .die-body { stroke-width: 3; }
+.cf.f1 { transform: translateZ(calc(var(--s) / 2)); }
+.cf.f6 { transform: rotateY(180deg) translateZ(calc(var(--s) / 2)); }
+.cf.f2 { transform: rotateY(90deg) translateZ(calc(var(--s) / 2)); }
+.cf.f5 { transform: rotateY(-90deg) translateZ(calc(var(--s) / 2)); }
+.cf.f3 { transform: rotateX(90deg) translateZ(calc(var(--s) / 2)); }
+.cf.f4 { transform: rotateX(-90deg) translateZ(calc(var(--s) / 2)); }
+.dice-shadow { position: absolute; bottom: -10px; width: 80%; height: 18px; border-radius: 50%; background: rgba(0, 0, 0, .45); filter: blur(6px); }
+.dice-stage.landed .dice-fly { filter: drop-shadow(0 0 22px rgba(253, 224, 71, .85)); }
+.dice-num { margin: 0; min-height: 1.2em; color: #fde047; font-family: var(--display); font-size: 64px; line-height: 1; text-shadow: 0 4px 0 rgba(0, 0, 0, .35); }
+.dice-num small { font-size: 28px; color: #fff; }
+.dice-stage.landed .dice-num { animation: evoPop .6s cubic-bezier(.3, 1.6, .5, 1); }
+.dice-mine { position: absolute; left: 16px; bottom: 16px; margin: 0; display: flex; align-items: center; gap: 6px; color: #fff; font-size: 14px; }
+.dice-mine svg { width: 44px; height: 44px; }
+.dice-banner { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px; opacity: 0; transform: scale(.6); transition: opacity .25s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+.dice-banner.show { opacity: 1; transform: scale(1); }
+.dice-banner b { font-family: var(--display); font-weight: 400; font-size: 30px; padding: 6px 18px; border-radius: 999px; background: #fff; color: var(--ink); }
+.dice-banner.win b { background: #fde047; color: #7c2d12; box-shadow: 0 0 24px rgba(253, 224, 71, .8); }
+.dice-banner.lose b { background: #cbd5e1; color: #1e293b; }
+.dice-banner small { color: #e2e8f0; font-size: 16px; }
+
+/* 🏆 승리 · 😢 패배 */
+.bt-over { position: fixed; inset: 0; z-index: 66; display: grid; place-items: center; align-content: center; gap: 10px; overflow: hidden; text-align: center; opacity: 0; transition: opacity .35s; padding: 20px; }
+.bt-over.in { opacity: 1; }
+.bt-over.out { opacity: 0; }
+.bt-over.win { background: radial-gradient(circle at 50% 40%, #b45309, #3b1d05 75%); }
+.bt-over.lose { background: linear-gradient(#334155, #0f172a); }
+.evo-rays.gold { opacity: 1; animation-duration: 8s; background: repeating-conic-gradient(from 0deg, rgba(253, 224, 71, .22) 0 9deg, transparent 9deg 18deg); }
+.bt-big { position: relative; margin: 0; font-size: 96px; line-height: 1; }
+.bt-over.win.in .bt-big { animation: trophy 1s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes trophy { 0% { transform: scale(0) rotate(-30deg); } 60% { transform: scale(1.3) rotate(8deg); } }
+.bt-word { position: relative; margin: 0; font-family: var(--display); font-size: 64px; line-height: 1; color: #fde047; text-shadow: 0 5px 0 rgba(0, 0, 0, .35); }
+.bt-over.lose .bt-word { color: #cbd5e1; font-size: 48px; }
+.bt-over.win.in .bt-word { animation: evoPop .9s .2s both cubic-bezier(.3, 1.6, .5, 1); }
+.bt-sub { position: relative; margin: 0; color: #fff; font-size: 18px; }
+.bt-sub b { color: #fde047; font-weight: 400; font-family: var(--display); }
+.bt-card { position: relative; width: min(40vw, 170px); }
+.bt-card .tcg { width: 100%; }
+.bt-over.win.in .bt-card { animation: cardFly 1.1s .5s both cubic-bezier(.2, .9, .3, 1.2); }
+@keyframes cardFly { 0% { transform: translate(60vw, -40vh) rotate(40deg) scale(.4); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.bt-get { position: absolute; right: -14px; top: -14px; font-family: var(--display); font-size: 26px; color: #fff; background: var(--red); border-radius: 999px; padding: 2px 12px; transform: rotate(12deg); animation: pop 1s ease-in-out infinite; }
+.bt-card.gone { filter: grayscale(1); }
+.bt-over.lose.in .bt-card.gone { animation: cardGone 2.2s .4s both ease-in; }
+@keyframes cardGone { 0% { transform: none; opacity: 1; } 100% { transform: translate(55vw, -20vh) rotate(25deg) scale(.5); opacity: 0; } }
+.bt-ok { position: relative; margin-top: 8px; opacity: 0; transition: opacity .3s; }
+.bt-ok.ready { opacity: 1; }
+.rain { position: absolute; inset: 0; pointer-events: none; }
+.rain i { position: absolute; top: -10%; width: 2px; height: 60px; background: linear-gradient(transparent, rgba(186, 230, 253, .7)); animation: rainFall 1s linear infinite; }
+@keyframes rainFall { to { transform: translateY(120vh); } }
+@media (prefers-reduced-motion: reduce) { .rain, .dice-fly.shaking, .bt-get, .dice-stage.tension .dice-label { animation: none !important; } }
+
 /* ---------- 📱 휴대폰: 한 화면에 보이게 ----------
  * 윗줄·말풍선을 작게, 섬·단계 칸을 촘촘하게, 주요 버튼(시작·다 썼어요·다음)은 화면 아래에 붙여요. */
 .dict-tabs { margin-top: -4px; }

@@ -152,7 +152,7 @@ function speak(parts, slow) {
 const sayAttr = (parts) => esc([].concat(parts).join('|'));
 
 /* 효과음은 js/sfx.js (실로폰·바스락·몬스터볼 소리 …) */
-const sfx = (kind) => SFX.play(kind);
+const sfx = (kind, arg) => SFX.play(kind, arg);
 
 /* ---------- 공통 조각 ---------- */
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2134,46 +2134,139 @@ function rollView(m, top) {
     <p class="small-note center-note" id="rollHint">${hint}</p>`;
   $('#rollBtn').onclick = async () => {
     $('#rollBtn').disabled = true;
-    await spinDie($('#dA'), rounds[cur].da);
+    const done = rounds.slice(0, cur);
+    const tension = done.filter((x) => x.w === 0).length === 1 && done.filter((x) => x.w === 1).length === 1;
+    await bigRoll(rounds[cur].da, { label: tension ? '🔥 마지막 판! 내 주사위' : `${cur + 1}판 · 내 주사위`, tension });
+    $('#dA').innerHTML = dieSvg(rounds[cur].da);
     SOCIAL.roll(m.id, me, cur + 1).catch(() => toast('앗, 연결이 끊겼어요. 다시 눌러 봐요'));
   };
 }
-/* 주사위가 데굴데굴 굴러가다 멈춰요 */
-async function spinDie(el, value) {
-  el.classList.add('spin');
-  const steps = reduceMotion ? 1 : 12;
-  for (let i = 0; i < steps; i++) {
-    el.innerHTML = dieSvg(1 + Math.floor(Math.random() * 6));
-    if (i % 3 === 0) sfx('click');
-    await new Promise((r) => setTimeout(r, 40 + i * 12));
+/* 🎲 화면 가득 큰 주사위: 손에서 달그락 → 휙 던져 통통 튀며 데굴데굴 → 탁! 멈춰요
+ * opts: { label, tension(마지막 판), mine(내 주사위 값: 친구 주사위 옆에 작게), banner: { html, win } } */
+const CUBE_ROT = { 1: [0, 0], 2: [0, -90], 3: [-90, 0], 4: [90, 0], 5: [0, 90], 6: [0, 180] };
+const cubeHTML = () => `<div class="cube">${[1, 6, 2, 5, 3, 4].map((n) => `<div class="cf f${n}">${dieSvg(n)}</div>`).join('')}</div>`;
+async function bigRoll(value, opts = {}) {
+  const w = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? Math.min(ms, 60) : ms));
+  const el = document.createElement('div');
+  el.className = 'dice-stage' + (opts.tension ? ' tension' : '');
+  el.innerHTML = `<p class="dice-label">${opts.label || '🎲'}</p>
+    <div class="dice-floor"><div class="dice-fly">${cubeHTML()}</div><div class="dice-shadow"></div></div>
+    ${opts.mine ? `<p class="dice-mine">내 주사위 ${dieSvg(opts.mine)}</p>` : ''}
+    <p class="dice-num" aria-live="polite"></p><div class="dice-banner" aria-live="polite"></div>`;
+  document.body.appendChild(el);
+  const fly = $('.dice-fly', el), cube = $('.cube', el);
+  const [fx, fy] = CUBE_ROT[value];
+  await w(20);
+  el.classList.add('in');
+  /* 1) 손 안에서 달그락달그락 */
+  cube.style.transform = `rotateX(${fx - 25}deg) rotateY(${fy + 35}deg)`;
+  fly.classList.add('shaking');
+  sfx(opts.tension ? 'drumroll' : 'diceShake');
+  await w(opts.tension ? 1000 : 600);
+  fly.classList.remove('shaking');
+  /* 2) 휙 던져서 통통 튀며 데굴데굴 */
+  const D = 1400;
+  const hops = [0.34, 0.62, 0.82, 0.93];
+  sfx('diceRoll', hops.map((h) => (h * D) / 1000));
+  const spinX = 720 + 360 * Math.floor(Math.random() * 2), spinY = 1080 + 360 * Math.floor(Math.random() * 2);
+  if (!reduceMotion) {
+    fly.animate([
+      { transform: 'translate(-70vw, -45vh) scale(.55)' },
+      { transform: 'translate(-12vw, 0) scale(1)', offset: hops[0] },
+      { transform: 'translate(-6vw, -22vh) scale(1.05)', offset: (hops[0] + hops[1]) / 2 },
+      { transform: 'translate(-2vw, 0) scale(1)', offset: hops[1] },
+      { transform: 'translate(0, -8vh) scale(1.02)', offset: (hops[1] + hops[2]) / 2 },
+      { transform: 'translate(0, 0) scale(1)', offset: hops[2] },
+      { transform: 'translate(0, -2vh) scale(1)', offset: (hops[2] + hops[3]) / 2 },
+      { transform: 'translate(0, 0) scale(1)' },
+    ], { duration: D, easing: 'linear', fill: 'forwards' });
+    await cube.animate([
+      { transform: `rotateX(${fx - spinX}deg) rotateY(${fy - spinY}deg) rotateZ(90deg)` },
+      { transform: `rotateX(${fx}deg) rotateY(${fy}deg) rotateZ(0deg)` },
+    ], { duration: D, easing: 'cubic-bezier(.2, .65, .25, 1)', fill: 'forwards' }).finished;
   }
-  el.innerHTML = dieSvg(value);
-  el.classList.remove('spin');
-  el.classList.add('land');
-  setTimeout(() => el.classList.remove('land'), 400);
-  sfx('pop');
+  cube.style.transform = `rotateX(${fx}deg) rotateY(${fy}deg)`;
+  /* 3) 탁! 멈춤 */
+  sfx('diceLand');
+  el.classList.add('landed');
+  const num = $('.dice-num', el);
+  num.innerHTML = `${value}${value === 6 ? ' <small>최고!</small>' : value === 1 ? ' <small>앗!</small>' : '!'}`;
+  if (value === 6) { sfx('diceBig'); confetti(); }
+  await w(900);
+  /* 4) (친구 주사위일 때) 이 판 결과 */
+  if (opts.banner) {
+    const bn = $('.dice-banner', el);
+    bn.innerHTML = opts.banner.html;
+    bn.classList.add('show', opts.banner.win === true ? 'win' : opts.banner.win === false ? 'lose' : 'tie');
+    sfx(opts.banner.win === true ? 'roundWin' : opts.banner.win === false ? 'roundLose' : 'pop');
+    await w(1500);
+  }
+  el.classList.add('out');
+  await w(320);
+  el.remove();
 }
 async function revealRound(rounds, i) {
   if (!$('#arena')) return;
   const r = rounds[i];
   $('#dA').innerHTML = dieSvg(r.da);
   $('#nB').textContent = '';
-  await spinDie($('#dB'), r.db);
+  const before = rounds.slice(0, i);
+  const tension = before.filter((x) => x.w === 0).length === 1 && before.filter((x) => x.w === 1).length === 1;
+  const them = ($('#fB b') || {}).textContent || '친구';
+  await bigRoll(r.db, {
+    label: `${tension ? '🔥 마지막 판! ' : `${i + 1}판 · `}친구 주사위`, tension, mine: r.da,
+    banner: { win: r.w === -1 ? null : r.w === 0,
+      html: `<b>${r.w === -1 ? '🤝 비겼어요! 한 번 더!' : r.w === 0 ? '👍 이 판은 내가 이겼어!' : '💥 이 판은 친구가 이겼어!'}</b><small>나 ${r.sa} : ${r.sb} ${esc(them)}</small>` },
+  });
+  $('#dB').innerHTML = dieSvg(r.db);
   const lines = $('#bRounds');
   lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: 🎲${r.da} → <b>${r.sa}</b> vs <b>${r.sb}</b> ← 🎲${r.db} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : '💥 친구가 이겼어!'}</p>`);
   const won = rounds.slice(0, i + 1);
   $('#bScore').textContent = `${won.filter((x) => x.w === 0).length} : ${won.filter((x) => x.w === 1).length}`;
   const f = r.w === 0 ? $('#fA') : r.w === 1 ? $('#fB') : null;
   if (f) { f.classList.remove('hit'); void f.offsetWidth; f.classList.add('hit'); }
-  sfx(r.w === 0 ? 'ok' : r.w === 1 ? 'no' : 'pop');
-  await new Promise((res) => setTimeout(res, reduceMotion ? 100 : 900));
+  await new Promise((res) => setTimeout(res, reduceMotion ? 60 : 300));
+}
+/* 🏆 승리 / 😢 패배 장면 (card: 이기면 가져온 카드, 지면 보낸 카드) */
+async function battleScene(won, stake, card) {
+  const w = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? Math.min(ms, 60) : ms));
+  const c = card && CARD_BY[card.id];
+  const el = document.createElement('div');
+  el.className = 'bt-over ' + (won ? 'win' : 'lose');
+  el.innerHTML = won
+    ? `<div class="evo-rays gold" aria-hidden="true"></div>
+       <p class="bt-big">🏆</p><p class="bt-word">승리!</p>
+       ${stake && c ? `<div class="bt-card">${cardFace(c, false, card.lv)}<span class="bt-get">GET!</span></div><p class="bt-sub"><b>${esc(card.name)}</b> 카드를 가져왔어요!</p>` : '<p class="bt-sub">🤝 친선 대결 승리! ⭐ +1</p>'}
+       <button class="btn primary big bt-ok">좋아! 👍</button>`
+    : `<div class="rain" aria-hidden="true">${Array.from({ length: 28 }, () => `<i style="left:${Math.random() * 100}%;animation-delay:${(Math.random() * 1.2).toFixed(2)}s;animation-duration:${(0.7 + Math.random() * 0.6).toFixed(2)}s"></i>`).join('')}</div>
+       <p class="bt-big">😢</p><p class="bt-word">아쉽다…</p>
+       ${stake && c ? `<div class="bt-card gone">${cardFace(c, false, card.lv)}</div><p class="bt-sub"><b>${esc(card.name)}</b> 카드가 친구에게 갔어요</p>` : ''}
+       <p class="bt-sub">괜찮아! 다음엔 꼭 이길 거야 💪</p>
+       <button class="btn primary big bt-ok">다시 힘내기 💪</button>`;
+  document.body.appendChild(el);
+  await w(20);
+  el.classList.add('in');
+  if (won) {
+    sfx('victory');
+    confetti();
+    setTimeout(confetti, 700);
+    setTimeout(confetti, 1500);
+    if (c) setTimeout(() => CardFX.play(card.type, card.cls, $('.bt-card', el)).catch(() => {}), 900);
+  } else sfx('defeat');
+  const ok = $('.bt-ok', el);
+  await w(1400);
+  ok.classList.add('ready');
+  await new Promise((r) => { ok.onclick = r; });
+  el.classList.add('out');
+  await w(350);
+  el.remove();
 }
 async function battleEnd(m) {
   if (!$('#arena')) return;
   const { me, other, A, B } = rollSides(m);
   const them = m.who[other];
   const won = m.winner === me;
-  if (won) { await CardFX.play(A.type, A.cls, $('#fA')).catch(() => {}); confetti(); sfx('catch'); }
+  await battleScene(won, m.stake, won ? B : A);
   $('#bEnd').innerHTML = `<p class="bt-result ${won ? 'win' : 'lose'}">${won ? '🏆 이겼어요!' : '😢 아쉽게 졌어요'}</p>
     <p class="small-note center-note">${m.stake ? (won ? `🎴 <b>${esc(B.name)}</b> 카드를 가져왔어요! (내 카드도 돌아와요)` : `🎴 <b>${esc(A.name)}</b> 카드가 ${esc(them.name)}에게 갔어요. 다음엔 이길 거야!`) : won ? '🤝 친선 대결 승리! ⭐1' : '🤝 친선 대결이라 카드는 그대로예요.'}</p>
     <div class="row"><button class="btn primary" id="bAgain">⚔️ 한 번 더</button><button class="btn" id="bBack">🤝 친구 광장</button></div>`;
