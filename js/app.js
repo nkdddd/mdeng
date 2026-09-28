@@ -1853,29 +1853,36 @@ function settleSocial() {
   notes.forEach((n, i) => setTimeout(() => { if (app.className !== 'screen-battle') toast(n, 3800); }, i * 3900));
 }
 
-/* 🎁 부모님이 부탁한 선물: 그 가족 계정(이메일)의 첫 번째 아이에게 한 번만 들어가요.
- * 이메일은 코드에 남기지 않고 SHA-256 해시로만 맞춰 봐요. 클라우드와 맞춘 뒤(synced)에 넣어서 다른 기기 기록을 덮지 않아요. */
+/* 🎁 부모님이 부탁한 선물 상자: 받을 사람마다 한 번만 들어가요.
+ * 이메일·이름은 코드에 남기지 않고 SHA-256 해시로만 맞춰 봐요.
+ *   to:   가족 계정 이메일 → 그 가족의 첫 번째 아이
+ *   kid:  아이 프로필 이름 → 그 아이 / acct: Google 계정 이름 → 그 가족의 첫 번째 아이
+ * 로그인했으면 클라우드와 맞춘 뒤(synced)에 넣어서 다른 기기 기록을 덮지 않아요. */
+const GIFT_BOX = {
+  pokemon: ['리자몽', '거북왕', '이상해꽃', '라이츄', '망나뇽', '루카리오', '갸라도스', '팬텀', '개굴닌자', '피카츄'],
+  shiny: ['피카츄'],
+  cards: ['BS2024017136', 'BS2023015134', 'BS2025015246', 'BS2023001226', 'BS2024007090', 'BS2025015240', 'BS2019005057', 'BS2014001061', 'BS2017012051', 'BS2017010074'],
+};
 const GIFTS = [
-  {
-    id: 'gift-2026-09-first', to: 'bb3a10b83767db61904d93849d0a0d50df6b0b3b641f43027c1fd78722cd7731',
-    pokemon: ['리자몽', '거북왕', '이상해꽃', '라이츄', '망나뇽', '루카리오', '갸라도스', '팬텀', '개굴닌자', '피카츄'],
-    shiny: ['피카츄'],
-    cards: ['BS2024017136', 'BS2023015134', 'BS2025015246', 'BS2023001226', 'BS2024007090', 'BS2025015240', 'BS2019005057', 'BS2014001061', 'BS2017012051', 'BS2017010074'],
-  },
+  { id: 'gift-2026-09-first', to: 'bb3a10b83767db61904d93849d0a0d50df6b0b3b641f43027c1fd78722cd7731', ...GIFT_BOX },
+  { id: 'gift-2026-09-kd', kid: 'ad8a3bd54cb27c7a118710ec3ed0a1a065398d783efe48fbdbad97d3aacdb8a3', acct: 'ad8a3bd54cb27c7a118710ec3ed0a1a065398d783efe48fbdbad97d3aacdb8a3', ...GIFT_BOX },
 ];
+const sha256 = async (text) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('');
 let giftBusy = false;
 async function claimGifts() {
   const u = STORE.cloud.user;
-  if (giftBusy || !u || !u.email || !window.crypto || !crypto.subtle || STORE.cloud.status !== 'synced') return;
-  const first = STORE.profiles()[0];
-  if (!first || STORE.current().id !== first.id) return;
+  if (giftBusy || !window.crypto || !crypto.subtle) return;
+  if (u && STORE.cloud.status !== 'synced') return; /* 로그인했으면 클라우드와 맞춘 뒤에 */
   const todo = GIFTS.filter((g) => !(S.gifts || {})[g.id]);
   if (!todo.length) return;
   giftBusy = true;
   try {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(u.email.trim().toLowerCase()));
-    const h = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-    for (const g of todo.filter((x) => x.to === h)) {
+    const isFirst = STORE.profiles()[0] && STORE.current().id === STORE.profiles()[0].id;
+    const kidH = await sha256(STORE.current().name.replace(/\s+/g, ''));
+    const mailH = u && u.email ? await sha256(u.email.trim().toLowerCase()) : '';
+    const acctH = u && u.displayName ? await sha256(u.displayName.replace(/\s+/g, '')) : '';
+    const mine = (g) => (g.kid && g.kid === kidH) || (isFirst && ((g.to && g.to === mailH) || (g.acct && g.acct === acctH)));
+    for (const g of todo.filter(mine)) {
       S.gifts = { ...(S.gifts || {}), [g.id]: Date.now() };
       S.catches = S.catches || {};
       g.pokemon.forEach((n) => { addDexQuiet(n); S.catches[n] = (S.catches[n] || 0) + 1; });
