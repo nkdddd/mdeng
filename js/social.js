@@ -30,22 +30,39 @@ const SOCIAL = (() => {
   const warn = (what) => (e) => { console.warn('[social]', what, e); emit('error'); };
 
   /* ---------- ⚔️ 대결 계산 (두 기기가 같은 seed로 똑같이 계산해요) ---------- */
-  const CLASS_POWER = { n: 10, r: 20, a: 30, s: 40, u: 50 };
-  /* 타입 상성: 왼쪽이 오른쪽에게 강해요 */
-  const STRONG = {
-    불꽃: ['풀', '얼음', '벌레', '강철'], 물: ['불꽃', '땅', '바위'], 풀: ['물', '땅', '바위'], 전기: ['물', '비행'],
-    얼음: ['풀', '드래곤', '비행', '땅'], 격투: ['노말', '얼음', '바위', '악', '강철'], 땅: ['불꽃', '전기', '바위', '강철', '독'],
-    에스퍼: ['격투', '독'], 고스트: ['에스퍼', '고스트'], 드래곤: ['드래곤'], 바위: ['불꽃', '얼음', '비행', '벌레'],
-    페어리: ['드래곤', '격투', '악'], 강철: ['얼음', '바위', '페어리'], 악: ['에스퍼', '고스트'], 벌레: ['풀', '에스퍼', '악'],
-    비행: ['풀', '격투', '벌레'], 독: ['풀', '페어리'],
+  /* 힘 = 등급 점수 + 강화 ×2. 점수 차이를 좁혀서 약한 카드도 주사위와 먹이사슬로 뒤집을 수 있어요 */
+  const CLASS_POWER = { n: 10, r: 12, a: 14, s: 17, u: 20 };
+  /* 🍖 타입 먹이사슬: 왼쪽이 오른쪽을 잡아먹어요 (×1.5).
+   * 모든 타입이 딱 3가지를 먹고, 딱 3가지에게 먹혀요 — 어느 타입도 손해 보지 않아요 */
+  const FOOD = {
+    불꽃: ['풀', '얼음', '강철'], 물: ['불꽃', '땅', '바위'], 풀: ['물', '땅', '바위'], 전기: ['물', '비행', '강철'],
+    얼음: ['풀', '드래곤', '비행'], 격투: ['노말', '얼음', '악'], 독: ['풀', '페어리', '고스트'], 땅: ['불꽃', '전기', '독'],
+    비행: ['격투', '벌레', '땅'], 에스퍼: ['격투', '독', '노말'], 벌레: ['에스퍼', '악', '페어리'], 바위: ['불꽃', '얼음', '비행'],
+    고스트: ['에스퍼', '강철', '벌레'], 드래곤: ['물', '전기', '독'], 악: ['에스퍼', '고스트', '노말'], 강철: ['바위', '페어리', '드래곤'],
+    페어리: ['드래곤', '격투', '악'], 노말: ['벌레', '전기', '고스트'],
   };
-  const power = (c) => (CLASS_POWER[c.cls] || 10) + (c.lv || 0) * 4;
-  const edge = (a, b) => ((STRONG[a.type] || []).includes(b.type) ? 8 : 0);
+  /* 🔄 진화 단계 가위바위보 (×1.2): 기본은 날쌔서 덩치 큰 최종 진화를, 최종 진화는 1진화를, 1진화는 기본을 이겨요 */
+  const STAGE_NAME = { 1: '기본', 2: '1진화', 3: '최종 진화' };
+  const STAGE_EATS = { 1: 3, 3: 2, 2: 1 };
+  const FOOD_MUL = 1.5, STAGE_MUL = 1.2;
+  const stageOf = (kind) => (/2진화|VMAX|VSTAR|M진화|BREAK|메가진화|V-UNION/.test(kind || '') ? 3 : /1진화|레벨업/.test(kind || '') ? 2 : 1);
+  const power = (c) => (CLASS_POWER[c.cls] || 10) + (c.lv || 0) * 2;
+  /* a가 b를 만났을 때 받는 배수와 그 이유 */
+  function bonus(a, b) {
+    let mul = 1;
+    const why = [];
+    if ((FOOD[a.type] || []).includes(b.type)) { mul *= FOOD_MUL; why.push(`🍖 ${a.type}→${b.type}`); }
+    if (a.stage && b.stage && STAGE_EATS[a.stage] === b.stage) { mul *= STAGE_MUL; why.push(`🔄 ${STAGE_NAME[a.stage]}→${STAGE_NAME[b.stage]}`); }
+    return { mul, why };
+  }
+  const edge = (a, b) => bonus(a, b).mul > 1;
+  /* 한 판 점수 = 힘 × 주사위 × 먹이사슬 배수 */
+  const score = (a, b, die) => Math.round(power(a) * die * bonus(a, b).mul);
   function rng(seed) { /* mulberry32 */
     let t = seed >>> 0;
     return () => { t += 0x6d2b79f5; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
   }
-  /* 3판 2선승. 한 판 = 힘 + 상성 + 주사위(1~6)×6. 약한 카드도 주사위로 이길 수 있어요 */
+  /* 3판 2선승. 한 판 = 힘 × 주사위(1~6) × 먹이사슬. 약한 카드도 큰 주사위와 먹이사슬로 이길 수 있어요 */
   function battle(seed, a, b) {
     const r = rng(seed);
     const dice = () => 1 + Math.floor(r() * 6);
@@ -53,7 +70,7 @@ const SOCIAL = (() => {
     let wa = 0, wb = 0;
     while (wa < 2 && wb < 2 && rounds.length < 9) {
       const da = dice(), db2 = dice();
-      const sa = power(a) + edge(a, b) + da * 6, sb = power(b) + edge(b, a) + db2 * 6;
+      const sa = score(a, b, da), sb = score(b, a, db2);
       if (sa === sb) { rounds.push({ da, db: db2, sa, sb, w: -1 }); continue; }
       const w = sa > sb ? 0 : 1;
       if (w === 0) wa++; else wb++;
@@ -262,7 +279,7 @@ const SOCIAL = (() => {
   const removeListing = (id) => db.collection('listings').doc(id).delete().catch(warn('unlist'));
 
   return {
-    ONLINE_MS, power, edge, battle, fresh,
+    ONLINE_MS, power, edge, bonus, stageOf, FOOD, STAGE_NAME, battle, fresh,
     on(f) { listeners.add(f); },
     get ready() { return st.on; },
     get uid() { return st.uid; },

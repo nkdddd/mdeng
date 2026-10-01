@@ -1676,3 +1676,12 @@ body.scene-open { overflow: hidden; }
   .pack { width: 136px; height: 208px; }
   .flip { width: 158px; }
 }
+
+/* 🍖 대결 먹이사슬 */
+.link-btn { border: 0; background: none; padding: 0 2px; font: inherit; color: var(--accent, #2563eb); text-decoration: underline; cursor: pointer; }
+.fighter .bonus { font-size: 12px; font-weight: 700; color: #b45309; background: #fef3c7; border-radius: 999px; padding: 1px 8px; }
+.food-grid { display: grid; grid-template-columns: 1fr; gap: 0; text-align: left; font-size: 13.5px; line-height: 1.35; width: fit-content; margin: 0 auto; max-height: 58vh; overflow: auto; }
+.food-grid p { margin: 2px 0; }
+.dice-banner small + small { margin-top: 4px; }
+.rd b { color: var(--ink); }
+.dice-banner small b { all: unset; font-weight: 700; color: #fde047; }

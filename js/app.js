@@ -2130,7 +2130,19 @@ function giveCard(id, lv) {
   S.cards[id] = (S.cards[id] || 0) + 1;
   if (lv) { S.cardLv = S.cardLv || {}; S.cardLv[id] = Math.max(S.cardLv[id] || 0, lv); }
 }
-const cardInfo = (c, lv) => ({ id: c[0], name: c[1], cls: c[5], type: c[7] || '', lv: lv || 0 });
+const cardInfo = (c, lv) => ({ id: c[0], name: c[1], cls: c[5], type: c[7] || '', stage: SOCIAL.stageOf(c[2]), lv: lv || 0 });
+/* ⚔️ 대결 배수 이유: 🍖 불꽃→풀 ×1.5 */
+const bonusTag = (a, b) => { const x = SOCIAL.bonus(a, b); return x.mul > 1 ? `<span class="bonus">${x.why.join(' ')} ×${+x.mul.toFixed(2)}</span>` : ''; };
+/* 🍖 먹이사슬 표 */
+function foodSheet() {
+  const F = SOCIAL.FOOD, S2 = SOCIAL.STAGE_NAME;
+  const el = sheet(`<h3 class="inv-t">🍖 먹이사슬</h3>
+    <p class="small-note">한 판 점수 = ⚡힘 × 🎲주사위. 먹이를 만나면 점수가 <b>×1.5</b>!</p>
+    <div class="food-grid">${Object.keys(F).map((t) => `<p><b>${t}</b> → ${F[t].join(' · ')}</p>`).join('')}</div>
+    <p class="small-note">🔄 진화 단계 가위바위보 <b>×1.2</b>: ${S2[1]} → ${S2[3]} → ${S2[2]} → ${S2[1]}</p>
+    <div class="row"><button class="btn primary" id="fOk">알았어!</button></div>`);
+  $('#fOk', el).onclick = closeSheet;
+}
 const kidInfo = () => { const p = STORE.current(); return { id: p.id, name: p.name, avatar: p.avatar }; };
 const PRICE_HINT = { n: 2, r: 6, a: 12, s: 25, u: 50 };
 
@@ -2419,7 +2431,7 @@ function renderBattle() {
     const myPick = (m.picks || {})[me];
     if (myPick) {
       const c = CARD_BY[myPick.id];
-      app.innerHTML = `${top}<div class="bt-pick">${c ? cardFace(c, false, myPick.lv) : ''}<p>내 카드: <b>${esc(myPick.name)}</b> · ⚡ ${SOCIAL.power(myPick)}</p></div>
+      app.innerHTML = `${top}<div class="bt-pick">${c ? cardFace(c, false, myPick.lv) : ''}<p>내 카드: <b>${esc(myPick.name)}</b> · ⚡ ${SOCIAL.power(myPick)}${myPick.type ? ` · ${myPick.type}` : ''}</p></div>
         <div class="wait">⏳ ${esc(them.name)}${josaPick(them.name, ['이', '가'])} 카드를 고르는 중…</div><div class="row">${quit}</div>`;
       wireQuit();
       return;
@@ -2427,11 +2439,12 @@ function renderBattle() {
     const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean)
       .map((c) => ({ c, p: SOCIAL.power(cardInfo(c, cardLv(c[0]))) })).sort((a, b) => b.p - a.p);
     app.innerHTML = `${top}${bubble(m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
-      <p class="small-note center-note">⚡ 힘 = 등급 + 강화 · 타입 상성이 맞으면 +8 · 주사위 운도 있어요</p>
-      <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}</button>`).join('')}</div>
+      <p class="small-note center-note">점수 = ⚡힘 × 🎲주사위 · 먹이를 만나면 ×1.5 <button class="link-btn" id="foodBtn">🍖 먹이사슬 보기</button></p>
+      <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}${c[7] ? ` ${c[7]}` : ''}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}</button>`).join('')}</div>
       <div class="row">${quit}</div>`;
     wireQuit();
     $$('[data-pick]', app).forEach((b) => b.addEventListener('click', () => confirmPick(m, CARD_BY[b.dataset.pick])));
+    $('#foodBtn', app).onclick = foodSheet;
     speak(m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라!');
     return;
   }
@@ -2440,6 +2453,7 @@ function renderBattle() {
 function confirmPick(m, c) {
   const info = cardInfo(c, cardLv(c[0]));
   const el = sheet(`${cardFace(c)}<p class="inv-t"><b>${esc(c[1])}</b> · ⚡ ${SOCIAL.power(info)}</p>
+    <p class="small-note">${info.type ? `${info.type} 타입이 먹는 것: ${(SOCIAL.FOOD[info.type] || []).join(' · ')} · ` : ''}${SOCIAL.STAGE_NAME[info.stage]}</p>
     <p class="small-note">${m.stake ? '이 카드로 할까요? 지면 친구에게 가요.' : '이 카드로 할까요?'}</p>
     <div class="row"><button class="btn primary" id="pYes">⚔️ 이 카드로!</button><button class="btn" id="pNo">다시 고를래</button></div>`);
   $('#pNo', el).onclick = closeSheet;
@@ -2481,24 +2495,24 @@ function rollView(m, top) {
     const ca = CARD_BY[A.id], cb = CARD_BY[B.id];
     app.innerHTML = `${top}
       <div class="arena" id="arena" data-mid="${m.id}" data-shown="0">
-        <div class="fighter" id="fA">${ca ? cardFace(ca, false, A.lv) : ''}<b>${esc(A.name)}</b><span class="pw">⚡${SOCIAL.power(A)}${SOCIAL.edge(A, B) ? ' +8 상성!' : ''}</span>
+        <div class="fighter" id="fA">${ca ? cardFace(ca, false, A.lv) : ''}<b>${esc(A.name)}</b><span class="pw">⚡${SOCIAL.power(A)}${A.type ? ` ${A.type}` : ''}</span>${bonusTag(A, B)}
           <span class="die" id="dA" aria-label="내 주사위">🎲</span></div>
         <div class="score" id="bScore">0 : 0</div>
-        <div class="fighter" id="fB">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}${SOCIAL.edge(B, A) ? ' +8 상성!' : ''}</span>
+        <div class="fighter" id="fB">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}${B.type ? ` ${B.type}` : ''}</span>${bonusTag(B, A)}
           <span class="die" id="dB" aria-label="친구 주사위">🎲</span><small class="die-note" id="nB"></small></div>
       </div>
       <div class="roll-ctl" id="rollCtl" aria-live="polite"></div>
       <div class="rounds" id="bRounds" aria-live="polite"></div>
       <div id="bEnd"></div>`;
     root = $('#arena');
-    if (m.status === 'roll') speak('주사위를 굴려! 큰 숫자가 나오면 힘이 세져!');
+    if (m.status === 'roll') speak('주사위를 굴려! 주사위 숫자만큼 힘이 곱해져!');
   }
   const rolled = m.rolled || {};
   const mine = rolled[me] || 0, theirs = rolled[other] || 0;
   const doneN = m.status === 'done' ? rounds.length : Math.min(mine, theirs);
   /* 새로 끝난 판을 하나씩 보여 줘요 */
   let shown = +root.dataset.shown;
-  for (; shown < doneN; shown++) { const i = shown; revealChain = revealChain.then(() => revealRound(rounds, i)); }
+  for (; shown < doneN; shown++) { const i = shown; revealChain = revealChain.then(() => revealRound(rounds, i, A, B)); }
   root.dataset.shown = shown;
   const ctl = $('#rollCtl');
   if (doneN >= rounds.length) {
@@ -2625,7 +2639,9 @@ async function rollPane(p, value, from) {
   if (value === 6) { sfx('diceBig'); confetti(); }
   await dwait(800);
 }
-async function revealRound(rounds, i) {
+/* 점수 풀이: ⚡12 × 🎲4 × 1.5 = 72 */
+const scoreHow = (P, Q, die, sc) => { const x = SOCIAL.bonus(P, Q).mul; return `⚡${SOCIAL.power(P)} × 🎲${die}${x > 1 ? ` × ${+x.toFixed(2)}` : ''} = <b>${sc}</b>`; };
+async function revealRound(rounds, i, A, B) {
   if (!$('#arena')) return;
   const r = rounds[i];
   $('#dA').innerHTML = dieSvg(r.da);
@@ -2638,14 +2654,14 @@ async function revealRound(rounds, i) {
   $('#dB').innerHTML = dieSvg(r.db);
   /* 이 판 결과 */
   const win = r.w === -1 ? null : r.w === 0;
-  st.banner.innerHTML = `<b>${win === null ? '🤝 비겼어요! 한 번 더!' : win ? '👍 이 판은 내가 이겼어!' : '💥 이 판은 친구가 이겼어!'}</b><small>나 ${r.sa} : ${r.sb} 친구</small>`;
+  st.banner.innerHTML = `<b>${win === null ? '🤝 비겼어요! 한 번 더!' : win ? '👍 이 판은 내가 이겼어!' : '💥 이 판은 친구가 이겼어!'}</b><small>나 ${A ? scoreHow(A, B, r.da, r.sa) : r.sa}</small><small>친구 ${A ? scoreHow(B, A, r.db, r.sb) : r.sb}</small>`;
   st.banner.className = 'dice-banner show ' + (win === true ? 'win' : win === false ? 'lose' : 'tie');
   (win === true ? st.me : win === false ? st.them : null)?.root.classList.add('winner');
   sfx(win === true ? 'roundWin' : win === false ? 'roundLose' : 'pop');
   await dwait(1600);
   await closeStage();
   const lines = $('#bRounds');
-  lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: 🎲${r.da} → <b>${r.sa}</b> vs <b>${r.sb}</b> ← 🎲${r.db} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : '💥 친구가 이겼어!'}</p>`);
+  lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: ${A ? scoreHow(A, B, r.da, r.sa) : `🎲${r.da} → <b>${r.sa}</b>`} vs ${A ? scoreHow(B, A, r.db, r.sb) : `<b>${r.sb}</b> ← 🎲${r.db}`} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : '💥 친구가 이겼어!'}</p>`);
   const won = rounds.slice(0, i + 1);
   $('#bScore').textContent = `${won.filter((x) => x.w === 0).length} : ${won.filter((x) => x.w === 1).length}`;
   const f = r.w === 0 ? $('#fA') : r.w === 1 ? $('#fB') : null;
