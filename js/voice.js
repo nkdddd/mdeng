@@ -30,6 +30,9 @@ const VOICE = (() => {
     DICTATION.forEach((d) => d.items.forEach((q) => add(q.t)));
     SCHOOL.forEach((d) => d.items.forEach((q) => add(q.t)));
     GRADE_DICT.forEach((d) => d.items.forEach((q) => add(q.t)));
+    /* 🎯 핵심 개념 단계: 이름·묻는 것, 📝 공책에서 자주 틀리는 문장 */
+    if (typeof CORE !== 'undefined') CORE.forEach((c) => { add(`${c.name}.`); add(c.ask); });
+    if (typeof NOTEBOOK !== 'undefined') NOTEBOOK.forEach((q) => add(q.t));
     /* 🔢 구구단 노래·문제 (나머지 수학 문제는 기기 목소리로 읽어요) */
     if (typeof MATH !== 'undefined') {
       for (let a = 2; a <= 9; a++) {

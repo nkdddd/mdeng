@@ -301,7 +301,7 @@ SCREENS.home = () => {
 };
 /* 섬 안 단계들의 난이도 범위: ★~★★★★ */
 function rangeTag(id) {
-  const levels = id === 'dict' ? [...DICTATION, ...GRADE_DICT].map((l) => l.id) : id === 'exam' ? SCHOOL.map((l) => l.id) : MATH.ISLANDS[id].map((l) => l.id);
+  const levels = id === 'dict' ? [...CORE, ...DICTATION, ...GRADE_DICT].map((l) => l.id) : id === 'exam' ? SCHOOL.map((l) => l.id) : MATH.ISLANDS[id].map((l) => l.id);
   const ds = levels.map(diffOf);
   const lo = Math.min(...ds), hi = Math.max(...ds);
   return lo === hi ? diffStars(lo) : `${'★'.repeat(lo)}~${'★'.repeat(hi)}`;
@@ -847,7 +847,7 @@ function missionText(ms, noTimes) {
   return `${where}에서 ${what}${!noTimes && (ms.times || 1) > 1 ? ` ${ms.times}번` : ''}`;
 }
 function missionHits(ms, key, pct, maxStreak) {
-  const isDict = /^(d\d|s\d+|g\d+)$/.test(key); /* 학교 시험·1·2학년 받아쓰기도 받아쓰기로 쳐요 */
+  const isDict = /^(d\d|s\d+|g\d+|c\d+|wk|my)$/.test(key); /* 학교 시험·1·2학년 받아쓰기도 받아쓰기로 쳐요 */
   if (ms.mode === 'dict' ? !isDict : ms.mode !== 'any' && ms.mode !== key) return false;
   if (ms.min != null && pct < ms.min) return false;
   if (ms.streak != null && maxStreak < ms.streak) return false;
@@ -1711,116 +1711,230 @@ SCREENS.album = () => {
 };
 
 /* ---------- 🎧 받아쓰기 섬 ---------- */
-/* 받아쓰기 섬: 칸이 많아서 묶음(탭)으로 나눠 보여 줘요. 마지막에 본 묶음을 기억해요 */
+/* 모든 받아쓰기 문장과 그 문장이 묻는 핵심 개념 (js/spell.js가 찾아요). 처음 쓸 때 한 번 만들어요 */
+let dictPool = null;
+const RULE_ONLY = (t) => t.filter((k) => k !== 'space' && k !== 'punct');
+const qTags = (q) => q.tags || (q.tags = SPELL.tags(q.t, q.hints || []));
+function dictAll() {
+  if (dictPool) return dictPool;
+  const seen = new Set();
+  dictPool = [...DICTATION, ...GRADE_DICT, ...SCHOOL].flatMap((l) => l.items).concat(NOTEBOOK)
+    .filter((q) => !seen.has(q.t) && seen.add(q.t)).map((q) => ({ ...q, tags: SPELL.tags(q.t, q.hints) }));
+  return dictPool;
+}
+/* 핵심 개념 단계 문제: 그 개념이 앞에 오는(많이 나오는) 문장일수록 먼저, 그중에서 골고루 */
+function coreItems(c, n = DICT_SIZE) {
+  const P = dictAll();
+  let L;
+  if (c.keys[0] === 'plain') L = P.filter((q) => !RULE_ONLY(q.tags).length).map((q) => ({ q, r: Math.random() }));
+  else if (c.keys[0] === 'mix') L = P.map((q) => ({ q, r: -new Set(RULE_ONLY(q.tags)).size - q.t.length / 12 + Math.random() * 2 }));
+  else L = P.filter((q) => q.tags.some((k) => c.keys.includes(k)))
+    .map((q) => ({ q, r: Math.min(...c.keys.map((k) => (q.tags.includes(k) ? q.tags.indexOf(k) : 99))) + RULE_ONLY(q.tags).length * 0.3 + Math.random() * 1.5 }));
+  return shuffle(L.sort((a, b) => a.r - b.r).slice(0, Math.max(n * 4, 16))).slice(0, n).map((x) => x.q);
+}
+/* 개념 → 그 개념을 연습하는 핵심 단계 */
+const CORE_OF = { vowel: 'c10', bat: 'c2' };
+CORE.forEach((c) => c.keys.forEach((k) => { CORE_OF[k] = CORE_OF[k] || c.id; }));
+CORE.forEach((c) => { DIFFICULTY[c.id] = c.diff; });
+DIFFICULTY.wk = 3; DIFFICULTY.my = 3;
+
+/* 🩹 약점 노트: 개념마다 { n: 만난 수, m: 틀린 수 } (처음 쓴 답으로만) */
+function noteWeak(q, g) {
+  S.weak = S.weak || {};
+  const missed = new Set([...g.errs.map((e) => e.k), ...(g.space.length ? ['space'] : []), ...(g.punct.length ? ['punct'] : [])]);
+  new Set([...qTags(q), ...missed]).forEach((k) => {
+    if (!CORE_OF[k]) return;
+    const w = S.weak[k] || (S.weak[k] = { n: 0, m: 0 });
+    w.n++;
+    if (missed.has(k)) w.m++;
+  });
+  save();
+}
+const weakList = () => Object.entries(S.weak || {}).filter(([, w]) => w.m > 0)
+  .map(([k, w]) => ({ k, ...w, rate: w.m / Math.max(w.n, 1) })).sort((a, b) => b.m * b.rate - a.m * a.rate || b.m - a.m);
+function weakItems() {
+  const top = weakList().slice(0, 3);
+  const out = [], seen = new Set();
+  for (let t = 0; out.length < DICT_SIZE && t < 4; t++)
+    top.forEach((w) => coreItems(CORE.find((c) => c.id === CORE_OF[w.k]), 3).forEach((q) => { if (out.length < DICT_SIZE && !seen.has(q.t)) { seen.add(q.t); out.push(q); } }));
+  return shuffle(out);
+}
+const myItems = () => shuffle((S.myLines || []).map((t) => ({ t, e: '✏️', hints: [] }))).slice(0, DICT_SIZE);
+
+/* 받아쓰기 섬: 묶음(탭)으로 나눠 보여 줘요. 마지막에 본 묶음을 기억해요 */
 const DICT_TABS = [
-  { id: 'prac', label: '🎧 연습', note: `단계마다 ${DICT_SIZE}문제씩`, list: () => DICTATION },
+  { id: 'core', label: '🎯 핵심 개념', note: '쉬운 규칙부터 하나씩 · 단계를 누르면 무엇을 묻는지 먼저 알려 줘요' },
   { id: 'g1', label: '📚 1학년', note: `단계마다 ${DICT_SIZE}문제씩`, list: () => GRADE_DICT.filter((l) => l.grade === 1) },
   { id: 'g2', label: '📚 2학년', note: `단계마다 ${DICT_SIZE}문제씩`, list: () => GRADE_DICT.filter((l) => l.grade === 2) },
   { id: 'test', label: '📝 시험', note: '학교 받아쓰기 시험 1-2단계 · 급마다 10문제 차례대로', list: () => SCHOOL },
+  { id: 'weak', label: '🩹 약점 노트', note: '자주 틀린 규칙을 모아서 다시 · 공책에서 틀린 문장도 넣을 수 있어요' },
 ];
+const exText = ([w, s]) => (s.includes('✗') ? `${esc(w)} <s>${esc(s.replace(' ✗', ''))}</s>` : `${esc(w)} <small>[${esc(s)}]</small>`);
 SCREENS.dict = (quiet) => {
+  if (S.dictTab === 'prac') S.dictTab = 'core';
   const tab = DICT_TABS.find((t) => t.id === S.dictTab) || DICT_TABS[0];
-  const best = (id) => (S.best[id] ? `<span class="i-best">최고 ${S.best[id]}점</span>` : '');
+  const best = (id) => (S.best[id] != null ? `<span class="i-best">최고 ${S.best[id]}점</span>` : '');
   const tile = (lv) => tab.id === 'test'
     ? `<button class="level" data-id="${lv.id}"><span class="l-grade">${lv.n}급</span><span class="l-name">${lv.name}</span>${diffTag(lv.id)}${best(lv.id)}</button>`
     : `<button class="level" data-id="${lv.id}"><span class="l-icon">${lv.icon}</span><span class="l-name">${lv.name}</span>
         <span class="l-sub">${lv.grade ? `${esc(lv.desc)}` : `${lv.desc} · ${Math.min(DICT_SIZE, lv.items.length)}문제`}</span>${diffTag(lv.id)}${best(lv.id)}</button>`;
+  let body;
+  if (tab.id === 'core') {
+    body = `<div class="levels core">${CORE.map((c, k) => `<button class="level" data-core="${c.id}"><span class="l-icon">${c.icon}</span><span class="l-name"><i class="l-no">${k + 1}</i>${c.name}</span>
+        <span class="l-sub">${exText(c.ex[0])}</span>${diffTag(c.id)}${best(c.id)}</button>`).join('')}</div>
+      <details class="mix-box"><summary class="small-note">🎲 섞어 풀기 (낱말 · 문장 · 포켓몬)</summary><div class="levels">${DICTATION.map(tile).join('')}</div></details>`;
+  } else if (tab.id === 'weak') {
+    const W = weakList();
+    body = `<div class="weak-list">${W.length ? W.slice(0, 6).map((w) => `<button class="weak-row" data-core="${CORE_OF[w.k]}"><span class="t-icon">${TYPES[w.k].icon}</span><b>${TYPES[w.k].name}</b>
+        <span class="weak-bar" style="--p:${Math.round(w.rate * 100)}%"><i></i></span><small>${w.m}번 틀림 / ${w.n}번</small></button>`).join('')
+      : '<p class="small-note">아직 틀린 기록이 없어요. 핵심 개념 단계를 풀면 여기에 약점이 모여요.</p>'}</div>
+      <div class="row">${W.length ? `<button class="btn primary" data-id="wk">🩹 약점 섞어서 ${DICT_SIZE}문제</button>` : ''}
+        ${(S.myLines || []).length ? `<button class="btn" data-id="my">✏️ 우리 집 문장 (${S.myLines.length})</button>` : ''}<button class="btn ghost" id="myEdit">✏️ 문장 넣기</button></div>`;
+  } else body = `<div class="levels ${tab.id === 'test' ? 'school' : 'grade'}">${tab.list().map(tile).join('')}</div>`;
   app.innerHTML = `
     <h2 class="h">🎧 받아쓰기 섬</h2>
     ${bubble(LINES.dictBubble, 'tight')}
     <div class="dex-tabs dict-tabs" role="tablist">${DICT_TABS.map((t) => `<button role="tab" aria-selected="${t.id === tab.id}" data-tab="${t.id}">${t.label}</button>`).join('')}</div>
     <p class="small-note tab-note">${tab.note}</p>
-    <div class="levels ${tab.id === 'test' ? 'school' : tab.id === 'prac' ? '' : 'grade'}">${tab.list().map(tile).join('')}</div>
+    ${body}
     ${hasTTS ? '' : '<p class="notice">이 기기에서는 소리가 나오지 않아요. 문제 화면의 👀 어른용 버튼을 눌러 어른이 읽어 주세요.</p>'}`;
   $$('[data-tab]', app).forEach((b) => b.addEventListener('click', () => { S.dictTab = b.dataset.tab; save(); sfx('pop'); SCREENS.dict(true); }));
-  $$('.level', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); dictLevel(b.dataset.id); }));
+  $$('[data-id]', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); dictLevel(b.dataset.id); }));
+  $$('[data-core]', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); coreIntro(CORE.find((c) => c.id === b.dataset.core)); }));
+  $('#myEdit')?.addEventListener('click', myLinesSheet);
   if (quiet !== true) speak(LINES.dictBubble);
 };
+/* 🎯 핵심 카드: 이 단계가 무엇을 묻는지, 규칙과 예시를 먼저 보여 줘요 */
+function coreIntro(c) {
+  const T = TYPES[c.keys[0]];
+  const why = c.keys[0] === 'plain' ? '받침이 없거나 소리와 글자가 똑같은 말이에요. 한 글자씩 손가락으로 짚으며 빠짐없이 써요.'
+    : c.keys[0] === 'mix' ? '앞에서 배운 규칙이 한 문장에 여러 개 숨어 있어요. 다 쓰고 나서 함정마다 다시 확인해요.' : T.why;
+  app.innerHTML = `
+    <h2 class="h">${c.icon} ${CORE.indexOf(c) + 1}단계 · ${c.name} <small class="h-note">${diffStars(c.diff)}</small></h2>
+    <div class="core-card">
+      <p class="core-ask"><b>🎯 이 단계에서 확인해요</b>${esc(c.ask)}</p>
+      <div class="core-ex">${c.ex.map(([w, s]) => `<div class="ex"><span class="ex-s">${s.includes('✗') ? `<s>${esc(s.replace(' ✗', ''))}</s> ✗` : `🔊 [${esc(s)}]`}</span><span class="ex-arrow">→</span><b>${esc(w)}</b></div>`).join('')}</div>
+      <p class="core-why">${why}</p>
+    </div>
+    <div class="row"><button class="btn primary big" id="coreGo">✏️ 시작! (${DICT_SIZE}문제)</button><button class="btn" id="coreBack">↩ 단계 고르기</button></div>`;
+  speak([`${c.name}.`, c.ask]);
+  $('#coreGo').onclick = () => { sfx('pop'); dictLevel(c.id); };
+  $('#coreBack').onclick = () => go('dict');
+}
+/* ✏️ 우리 집 문장: 공책에서 틀린 문장을 어른이 넣어 두면 그 문장으로 연습해요 */
+function myLinesSheet() {
+  const el = sheet(`<h3 class="inv-t">✏️ 우리 집 문장</h3>
+    <p class="small-note">공책에서 틀린 문장을 한 줄에 하나씩 적어 주세요. 문장 부호까지 바르게!</p>
+    <textarea id="myLines" class="my-lines" rows="7" placeholder="친구를 만났다.&#10;책을 읽습니다.">${esc((S.myLines || []).join('\n'))}</textarea>
+    <div id="myCheck" class="small-note"></div>
+    <div class="row"><button class="btn primary" id="mySave">저장</button><button class="btn" id="myNo">닫기</button></div>`);
+  const ta = $('#myLines', el);
+  const show = () => {
+    const L = ta.value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 40);
+    $('#myCheck', el).innerHTML = L.slice(0, 6).map((t) => `${esc(t)} → ${RULE_ONLY(SPELL.tags(t)).slice(0, 3).map((k) => TYPES[k] ? TYPES[k].icon + TYPES[k].name : '').join(' · ') || '쉬운 문장'}`).join('<br>');
+    return L;
+  };
+  ta.addEventListener('input', show);
+  show();
+  $('#myNo', el).onclick = closeSheet;
+  $('#mySave', el).onclick = () => { S.myLines = show(); save(); closeSheet(); toast(`✏️ ${S.myLines.length}문장을 넣었어요`); SCREENS.dict(true); };
+}
 
 let inputMode = 'tiles';
 function dictLevel(id) {
   const school = SCHOOL.find((l) => l.id === id);
-  /* 학교 시험 연습은 시험처럼 10문제를 차례대로, 연습 단계는 5문제를 골라서 */
-  const items = school ? school.items : shuffle([...DICTATION, ...GRADE_DICT].find((l) => l.id === id).items).slice(0, DICT_SIZE);
-  runQuiz(id, items, (q, i, n, mark, next) => dictQuestion(q, i, n, mark, next));
+  const core = CORE.find((c) => c.id === id);
+  /* 학교 시험 연습은 시험처럼 10문제를 차례대로, 나머지는 5문제를 골라서 */
+  const items = school ? school.items : core ? coreItems(core) : id === 'wk' ? weakItems() : id === 'my' ? myItems()
+    : shuffle([...DICTATION, ...GRADE_DICT].find((l) => l.id === id).items).slice(0, DICT_SIZE);
+  if (!items.length) { go('dict'); return; }
+  runQuiz(id, items, (q, i, n, mark, next) => dictQuestion(q, i, n, mark, next, { key: id, exam: !!school }));
   /* runQuiz의 '한 번 더'가 go(key)로 가므로 단계 화면을 등록 */
   SCREENS[id] = () => dictLevel(id);
 }
 
-const clean = (s) => s.replace(/[.,!?~]/g, '').replace(/\s+/g, ' ').trim();
-function lcsMarks(a, b) {
-  const n = a.length, m = b.length;
-  const d = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-  for (let x = n - 1; x >= 0; x--) for (let y = m - 1; y >= 0; y--)
-    d[x][y] = a[x] === b[y] ? d[x + 1][y + 1] + 1 : Math.max(d[x + 1][y], d[x][y + 1]);
-  const ka = new Array(n).fill(false), kb = new Array(m).fill(false);
-  let x = 0, y = 0;
-  while (x < n && y < m) {
-    if (a[x] === b[y]) { ka[x] = kb[y] = true; x++; y++; } else if (d[x + 1][y] >= d[x][y + 1]) x++; else y++;
-  }
-  return [ka, kb];
-}
-/* 글자 칸 표시: 공백을 뺀 순서(keep)를 원래 문자열 칸으로 옮김 */
-function marksFor(str, keep, cls) {
-  const out = {};
-  let k = 0;
-  [...str].forEach((ch, idx) => {
-    if (ch === ' ' || /[.,!?~]/.test(ch)) return;
-    if (!keep[k]) out[idx] = cls;
-    k++;
+/* 🔤 자모 판 */
+const JAMO_ROWS = [
+  'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊ', 'ㅋㅌㅍㅎㄲㄸㅃㅆㅉ',
+  'ㅏㅑㅓㅕㅗㅛㅜㅠㅡㅣ', 'ㅐㅒㅔㅖㅘㅙㅚㅝㅞㅟㅢ',
+];
+const PUNCTS = ['.', '?', '!', ','];
+/* 채점 결과 그리기: 내 글(틀린 칸 빨강, 띄어야 할 곳 ∨, 붙여야 할 곳 ⌒, 빠진 부호) · 바른 글 */
+function gradeLines(g, answer) {
+  const { U, A, uOf } = g;
+  const spMiss = new Set(g.space.filter((s) => s.miss).map((s) => uOf[s.at]));
+  const spExtra = new Set(g.space.filter((s) => !s.miss).map((s) => uOf[s.at]));
+  const pMiss = new Map(g.punct.filter((p) => p.want && uOf[p.at] >= 0).map((p) => [uOf[p.at], p.want]));
+  const pBad = new Set(g.punct.filter((p) => p.got).map((p) => uOf[p.at]));
+  const cell = (ch, cls = '') => `<span class="cell${cls}">${ch === ' ' ? '' : esc(ch)}</span>`;
+  let mine = '';
+  U.chars.forEach((ch, i) => {
+    mine += cell(ch, g.marks[i] ? ' bad' : '');
+    if (U.punAfter[i]) mine += [...U.punAfter[i]].map((p) => cell(p, ' pun' + (pBad.has(i) ? ' bad' : ''))).join('');
+    if (pMiss.has(i)) mine += cell(pMiss.get(i), ' pun want');
+    if (spMiss.has(i)) mine += '<span class="cell sp vmark" aria-label="띄어 써요">∨</span>';
+    else if (U.gapAfter[i]) mine += `<span class="cell sp${spExtra.has(i) ? ' join' : ''}"${spExtra.has(i) ? ' aria-label="붙여 써요"' : ''}>${spExtra.has(i) ? '⌒' : ''}</span>`;
   });
-  return out;
-}
-function spaceSet(s) {
-  const set = new Set();
-  let k = 0;
-  for (const ch of s) { if (ch === ' ') set.add(k); else k++; }
-  return set;
-}
-function diagnose(user, answer, hints) {
-  const u = clean(user), a = clean(answer);
-  const un = u.replace(/ /g, ''), an = a.replace(/ /g, '');
-  const reasons = [];
-  if (un === an) {
-    reasons.push({ k: 'space', text: '글자는 모두 맞았어요! 띄어쓰기만 다시 볼까요?' });
-    return reasons;
-  }
-  hints.forEach(([w, s, k]) => {
-    const sw = s.replace(/ /g, '');
-    if (sw === w.replace(/ /g, '') || !un.includes(sw)) return;
-    reasons.push(k === 'spell' || k === 'sais'
-      ? { k, text: `<s>${esc(s)}</s>${josaPick(s, ['이', '가'])} 아니라 <b>${esc(w)}</b>${hasBatchim(w) ? '이에요' : '예요'}.` }
-      : { k, text: `<b>${esc(w)}</b>${josaPick(w, ['을', '를'])} 소리 나는 대로 <b>[${esc(s)}]</b>${josaPick(s, ['이라고', '라고'])} 썼어요.` });
+  const fixSp = new Set(g.space.filter((s) => s.miss).map((s) => s.at));
+  const fixP = new Set(g.punct.map((p) => p.at));
+  let right = '';
+  A.chars.forEach((ch, i) => {
+    right += cell(ch, g.fix[i] ? ' fix' : '');
+    if (A.punAfter[i]) right += [...A.punAfter[i]].map((p) => cell(p, ' pun' + (fixP.has(i) ? ' fix' : ''))).join('');
+    if (A.gapAfter[i]) right += cell(' ', ' sp' + (fixSp.has(i) ? ' fix' : ''));
   });
-  a.split(' ').forEach((word) => {
-    [...word].forEach((ch, idx) => {
-      const sw = swapVowel(ch);
-      if (sw) {
-        const bad = word.slice(0, idx) + sw + word.slice(idx + 1);
-        if (un.includes(bad)) reasons.push({ k: /[ㅖ]/.test(JUNG[split(ch).jung]) ? 'ye' : 'ae', text: `<s>${esc(bad)}</s> 가 아니라 <b>${esc(word)}</b>예요.` });
-      }
-    });
+  return `<div class="tl"><span class="tl-lab">내 글</span><div class="cells">${mine}</div></div>
+    <div class="tl"><span class="tl-lab">바른 글</span><div class="cells">${right}</div></div>`;
+}
+/* 틀린 곳마다 까닭 (같은 까닭은 한 줄로) */
+function gradeReasons(g) {
+  const rows = [];
+  const by = {};
+  g.errs.forEach((e) => { (by[e.k] = by[e.k] || []).push(e); });
+  Object.entries(by).forEach(([k, es]) => rows.push({ k, text: es.map((e) => (e.k === 'miss' ? `<b>${esc(e.a)}</b> 빠짐` : e.k === 'extra' ? `<s>${esc(e.u)}</s> 더 씀`
+    : `<s>${esc(e.u)}</s> → <b>${esc(e.a)}</b>${e.back ? ' <small>(받침을 거꾸로 끌어왔어요)</small>' : ''}`)).join(' · ') }));
+  if (g.space.length) rows.push({ k: 'space', text: g.space.map((s) => `${esc(g.A.chars[s.at])}${s.miss ? '<b class="v">∨</b>' : '<b class="v">⌒</b>'}${esc(g.A.chars[s.at + 1])}`).join(' · ') + ' <small>(∨ 띄어 써요 · ⌒ 붙여 써요)</small>' });
+  if (g.punct.length) rows.push({ k: 'punct', text: g.punct.map((p) => (p.want ? `<b>${esc(g.A.chars[p.at])}${esc(p.want)}</b> ${p.got ? `(${esc(p.got)} ✗)` : '부호를 빠뜨렸어요'}` : `<s>${esc(p.got)}</s> 부호는 없어요`)).join(' · ') });
+  return rows;
+}
+/* 이 문장에 숨은 함정: 소리 규칙(낱말 → [소리]) + 눈으로 외울 것 */
+function trapList(q) {
+  const out = [];
+  q.t.split(/\s+/).forEach((w) => {
+    const P = SPELL.pron(w), say = P.map((x) => x.say).join('');
+    const k = P.flatMap((x) => x.why)[0];
+    if (k && say !== w) out.push({ k, html: `<b>${esc(w.replace(/[.,!?~]/g, ''))}</b> → 소리 [${esc(say.replace(/[.,!?~]/g, ''))}]` });
   });
-  const us = spaceSet(u), as = spaceSet(a);
-  if (reasons.length === 0 && ([...as].some((x) => !us.has(x)) || [...us].some((x) => !as.has(x))) && Math.abs(un.length - an.length) <= 1)
-    reasons.push({ k: 'space', text: '띄어쓰기도 한 번 더 살펴봐요.' });
-  return reasons;
+  (q.hints || []).forEach(([w, s, k]) => { if (!out.some((o) => o.k === k && o.html.includes(esc(w)))) out.push({ k, html: s === w ? `<b>${esc(w)}</b>` : k === 'spell' || k === 'sais' ? `<b>${esc(w)}</b> <s>${esc(s)}</s>` : `<b>${esc(w)}</b> → 소리 [${esc(s)}]` }); });
+  ['ae', 'ye', 'dbl', 'ss', 'vow2', 'wae', 'ui', 'gyeop'].forEach((k) => {
+    if (out.some((o) => o.k === k)) return;
+    const chs = [...q.t].filter((ch) => SPELL.charTags(ch).includes(k));
+    if (chs.length) out.push({ k, html: chs.slice(0, 3).map((c) => `<b>${esc(c)}</b>`).join(' ') });
+  });
+  return out.filter((o) => TYPES[o.k]).slice(0, 4);
 }
 
-function dictQuestion(q, i, n, mark, next) {
+function dictQuestion(q, i, n, mark, next, opt = {}) {
   app.classList.remove('dq-done');
-  const target = clean(q.t);
+  const target = q.t.trim();
+  const diff = diffOf(opt.key);
   let typed = '';
   let stack = [];
+  let jamo = [];
   let tries = 0;
+  if (!['tiles', 'jamo', 'keys'].includes(inputMode)) inputMode = 'tiles';
+  inputMode = S.inputMode || inputMode;
+  const hasSpace = /\s/.test(target);
   const pieces = (() => {
-    const base = [...target.replace(/ /g, '')];
-    const extra = new Set();
-    q.hints.forEach(([w, s]) => [...s.replace(/ /g, '')].forEach((ch, k) => { if (ch !== w.replace(/ /g, '')[k]) extra.add(ch); }));
-    base.forEach((ch) => { const sw = swapVowel(ch); if (sw) extra.add(sw); });
-    base.forEach((ch) => extra.delete(ch));
-    return shuffle([...base, ...shuffle([...extra]).slice(0, 4)]).map((ch) => ({ ch, used: false }));
+    const base = [...target].filter((ch) => !/\s/.test(ch));
+    const extra = SPELL.decoys(target);
+    /* 데이터에 적힌 소리([눈싸람])에서도 헷갈리는 글자를 더해요 */
+    (q.hints || []).forEach(([w, so]) => [...so.replace(/ /g, '')].forEach((ch, k) => { if (ch !== w.replace(/ /g, '')[k] && !base.includes(ch) && !extra.includes(ch) && SPELL.isH(ch)) extra.push(ch); }));
+    const pun = hasSpace ? PUNCTS.filter((p) => !base.includes(p)).slice(0, 2) : [];
+    return shuffle([...base, ...extra, ...pun]).map((ch) => ({ ch, used: false, pun: PUNCTS.includes(ch) }));
   })();
+  const traps = trapList(q);
+  const trapHtml = traps.map((t) => `<span class="trap"><i>${TYPES[t.k].icon}</i>${TYPES[t.k].name}</span>`).join('');
 
   app.innerHTML = `
     ${dots(i, n)}
@@ -1830,9 +1944,11 @@ function dictQuestion(q, i, n, mark, next) {
       <button class="btn" data-say="${esc(q.t)}" data-slow="1">🐢 천천히</button>
       <button class="btn ghost" id="peek">👀 어른용</button>
     </div>
+    ${traps.length && !opt.exam ? (diff <= 2 ? `<div class="traps" aria-label="이 문장의 함정">🔎 ${trapHtml}</div>` : `<div class="traps"><button class="link-btn" id="trapBtn">💡 함정 보기</button><span id="trapBox" hidden>${trapHtml}</span></div>`) : ''}
     <div class="paper" id="paper"><div id="ans"></div></div>
     <div class="modes" role="tablist">
       <button class="mode" role="tab" data-m="tiles">🧩 글자 조각</button>
+      <button class="mode" role="tab" data-m="jamo">🔤 자모 조립</button>
       <button class="mode" role="tab" data-m="keys">⌨️ 키보드</button>
     </div>
     <div id="pad"></div>
@@ -1840,30 +1956,39 @@ function dictQuestion(q, i, n, mark, next) {
     <div class="explain" id="result" hidden></div>`;
 
   const paintAns = () => {
-    $('#ans').innerHTML = cells(typed + '​') ;
+    $('#ans').innerHTML = cells(typed + '​');
     const last = $('#ans .cell:last-child');
     if (last) { last.textContent = ''; last.classList.add('cursor'); }
   };
+  const ctl = (spaceBtn = true) => `${spaceBtn ? '<button class="btn" id="spc">␣ 띄우기</button>' : ''}<button class="btn" id="bk">⌫ 지우기</button>`;
   const paintPad = () => {
     $$('.mode', app).forEach((b) => b.setAttribute('aria-selected', b.dataset.m === inputMode));
     const pad = $('#pad');
     $('#padKeys').innerHTML = '';
     if (inputMode === 'keys') {
       pad.innerHTML = `<label class="sr" for="typed">여기에 써요</label>
-        <input id="typed" class="typed" autocomplete="off" autocapitalize="off" spellcheck="false" lang="ko" placeholder="여기를 누르고 써요" value="${esc(typed)}">`;
+        <input id="typed" class="typed" autocomplete="off" autocapitalize="off" spellcheck="false" lang="ko" placeholder="여기에 써요 (부호까지!)" value="${esc(typed)}">`;
       const inp = $('#typed');
       inp.addEventListener('input', () => { typed = inp.value; paintAns(); });
       inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) $('#check').click(); });
       inp.focus();
+    } else if (inputMode === 'jamo') {
+      /* 자음·모음을 하나씩 눌러 글자를 만들어요 (공책에 쓰는 것처럼) */
+      pad.innerHTML = `<div class="jamo">${JAMO_ROWS.map((r, k) => `<div class="jrow ${k < 2 ? 'con' : 'vow'}">${[...r].map((j) => `<button class="jk" data-j="${j}">${j}</button>`).join('')}</div>`).join('')}
+        <div class="jrow pun">${PUNCTS.map((p) => `<button class="jk p" data-j="${p}">${p}</button>`).join('')}</div></div>`;
+      $('#padKeys').innerHTML = ctl();
+      $$('.jk', pad).forEach((b) => b.addEventListener('click', () => { jamo.push(b.dataset.j); typed = SPELL.compose(jamo); sfx('click'); paintAns(); }));
+      $('#spc').onclick = () => { if (typed && !typed.endsWith(' ')) { jamo.push(' '); typed = SPELL.compose(jamo); paintAns(); } };
+      $('#bk').onclick = () => { jamo.pop(); typed = SPELL.compose(jamo); paintAns(); };
     } else {
-      pad.innerHTML = `<div class="tiles">${pieces.map((p, k) => `<button class="tile" data-k="${k}" ${p.used ? 'disabled' : ''}>${p.ch}</button>`).join('')}</div>`;
+      pad.innerHTML = `<div class="tiles">${pieces.map((p, k) => `<button class="tile${p.pun ? ' pun' : ''}" data-k="${k}" ${p.used ? 'disabled' : ''}>${p.ch}</button>`).join('')}</div>`;
       /* 띄우기·지우기는 '다 썼어요' 옆에 (휴대폰에서 아래에 함께 붙어 있어요) */
-      $('#padKeys').innerHTML = '<button class="btn" id="spc">␣ 띄우기</button><button class="btn" id="bk">⌫ 지우기</button>';
+      $('#padKeys').innerHTML = ctl(hasSpace);
       $$('.tile', pad).forEach((t) => t.addEventListener('click', () => {
         const p = pieces[+t.dataset.k];
         p.used = true; stack.push(+t.dataset.k); typed += p.ch; sfx('pop'); paintAns(); paintPad();
       }));
-      $('#spc').onclick = () => { if (typed && !typed.endsWith(' ')) { typed += ' '; stack.push(-1); paintAns(); } };
+      $('#spc')?.addEventListener('click', () => { if (typed && !typed.endsWith(' ')) { typed += ' '; stack.push(-1); paintAns(); } });
       $('#bk').onclick = () => {
         const k = stack.pop();
         if (k === undefined) return;
@@ -1873,27 +1998,37 @@ function dictQuestion(q, i, n, mark, next) {
       };
     }
   };
+  const resetInput = () => { typed = ''; stack = []; jamo = []; pieces.forEach((p) => { p.used = false; }); };
   $$('.mode', app).forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.m === inputMode) return;
-    inputMode = b.dataset.m;
+    inputMode = S.inputMode = b.dataset.m;
+    save();
     /* 방식을 바꾸면 새로 써요 */
-    typed = ''; stack = []; pieces.forEach((p) => { p.used = false; });
+    resetInput();
     paintAns(); paintPad();
   }));
   $('#peek').onclick = () => toast(`<div class="peek"><small>어른이 읽어 주세요</small><b>${esc(q.t)}</b></div>`, 3500);
+  $('#trapBtn')?.addEventListener('click', () => { $('#trapBox').hidden = false; $('#trapBtn').remove(); });
   paintAns(); paintPad();
 
   $('#check').onclick = () => {
-    if (!clean(typed)) { toast('먼저 공책에 써 보세요! ✏️'); speak(LINES.writeFirst); return; }
+    if (!typed.trim()) { toast('먼저 공책에 써 보세요! ✏️'); speak(LINES.writeFirst); return; }
     tries++;
-    const u = clean(typed);
-    const ok = u === target;
-    if (tries === 1) mark(ok);
+    const g = SPELL.grade(typed, target);
+    const ok = g.ok;
+    if (tries === 1) {
+      mark(ok);
+      noteWeak(q, g);
+      /* 조각 없이 스스로 쓰면 별 하나 더 */
+      if (ok && inputMode !== 'tiles') { addStar(1); toast(`${inputMode === 'jamo' ? '🔤 자모' : '⌨️ 키보드'}로 혼자 써서 ⭐ +1`); }
+    }
     sfx(ok ? 'ok' : 'no');
-    const [ku, ka] = lcsMarks([...u.replace(/ /g, '')], [...target.replace(/ /g, '')]);
     const res = $('#result');
-    const secrets = q.hints.map(([w, s, k]) => `<li><span class="t-icon">${TYPES[k].icon}</span><b>${esc(w)}</b>${s === w ? '' : k === 'spell' || k === 'sais' ? ` <s class="wrong">${esc(s)}</s> ✗` : ` → 소리 [${esc(s)}]`} <em>${TYPES[k].name}</em></li>`).join('');
-    const secretBox = secrets ? `<p class="small-note">이 문장에 숨은 비밀</p><ul class="secrets">${secrets}</ul>` : '';
+    const secrets = traps.map((t) => `<li><span class="t-icon">${TYPES[t.k].icon}</span>${t.html} <em>${TYPES[t.k].name}</em></li>`).join('');
+    const secretBox = secrets ? `<p class="small-note">이 문장에 숨은 함정</p><ul class="secrets">${secrets}</ul>` : '';
+    const checks = `<div class="checks"><span class="${g.lettersOk ? 'ok' : 'no'}">글자 ${g.letters.ok}/${g.letters.total}</span>
+      <span class="${g.spaceOk ? 'ok' : 'no'}">띄어쓰기 ${g.spaceOk ? '✓' : `✗${g.space.length}`}</span>
+      <span class="${g.punctOk ? 'ok' : 'no'}">문장 부호 ${g.punctOk ? '✓' : `✗${g.punct.length}`}</span></div>`;
     if (ok) {
       $('#paper').innerHTML = cells(q.t);
       maru($('#paper'));
@@ -1903,18 +2038,16 @@ function dictQuestion(q, i, n, mark, next) {
         <button class="btn primary next">다음 ➜</button>`;
       speak(LINES.dictOk);
     } else {
-      const reasons = diagnose(typed, q.t, q.hints);
-      $('#paper').innerHTML = `
-        <div class="tl"><span class="tl-lab">내 글</span>${cells(u, marksFor(u, ku, 'bad'))}</div>
-        <div class="tl"><span class="tl-lab">바른 글</span>${cells(q.t, marksFor(q.t, ka, 'fix'))}</div>`;
-      res.innerHTML = `
-        ${reasons.length ? reasons.map((r) => `<div class="reason"><div class="typebadge"><span>${TYPES[r.k].icon}</span>${TYPES[r.k].name}</div><p>${r.text}</p><p class="small-note">${TYPES[r.k].why}</p></div>`).join('')
-          : '<p>빨간 칸을 바른 글과 비교해 봐요.</p>'}
-        ${secretBox}
+      const rows = gradeReasons(g);
+      const main = rows.find((r) => !['letter', 'miss', 'extra'].includes(r.k)) || rows[0];
+      $('#paper').innerHTML = gradeLines(g, target);
+      res.innerHTML = `${checks}
+        ${main ? `<div class="reason main"><div class="typebadge"><span>${TYPES[main.k].icon}</span>${TYPES[main.k].name}</div><p>${main.text}</p><p class="small-note">${TYPES[main.k].why}</p></div>` : ''}
+        ${rows.length > 1 ? `<ul class="more-reasons">${rows.filter((r) => r !== main).map((r) => `<li><span>${TYPES[r.k].icon} <b>${TYPES[r.k].name}</b></span> ${r.text}</li>`).join('')}</ul>` : ''}
         <div class="row"><button class="btn primary" id="retry">✏️ 다시 써 볼래요</button><button class="btn next">다음 ➜</button></div>`;
       speak([LINES.dictWrong, q.t]);
       $('#retry').onclick = () => {
-        typed = ''; stack = []; pieces.forEach((p) => { p.used = false; });
+        resetInput();
         $('#paper').innerHTML = '<div id="ans"></div>';
         res.hidden = true;
         app.classList.remove('dq-done');
@@ -1935,6 +2068,7 @@ function dictQuestion(q, i, n, mark, next) {
 /* ---------- 🎒 포켓몬 가방 ---------- */
 SCREENS.book = () => {
   const all = [...ISLANDS.filter((x) => !['book', 'dict', 'dex', 'friends', 'exam'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
+    ...CORE.map((d, k) => ({ id: d.id, icon: d.icon, name: `받아쓰기 ${k + 1}단계 ${d.name}` })),
     ...GRADE_DICT.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '📚', name: `${d.grade}학년 ${d.name}` })),
     ...MATH.ALL.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '🔢', name: `수학 ${d.name}` })),
     ...SCHOOL.map((d) => ({ id: d.id, icon: '📝', name: `시험 ${d.n}급` }))];

@@ -1685,3 +1685,82 @@ body.scene-open { overflow: hidden; }
 .dice-banner small + small { margin-top: 4px; }
 .rd b { color: var(--ink); }
 .dice-banner small b { all: unset; font-weight: 700; color: #fde047; }
+
+/* 🎯 받아쓰기 핵심 개념 사다리 */
+.levels.core .l-no { font-style: normal; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 4px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 13px; vertical-align: 2px; }
+.levels.core .l-sub s, .core-ex s { color: var(--red); }
+.levels.core .l-sub small { font-size: .9em; }
+.mix-box { margin-top: 10px; }
+.mix-box summary { cursor: pointer; text-align: center; }
+.mix-box .levels { margin-top: 8px; }
+.core-card { display: flex; flex-direction: column; gap: 12px; background: var(--card); border: 3px solid var(--ink); border-radius: 20px; padding: 14px 16px; box-shadow: var(--shadow); }
+.core-ask { margin: 0; font-size: 19px; line-height: 1.45; }
+.core-ask b { display: block; font-family: var(--display); font-weight: 400; color: var(--red); font-size: 17px; margin-bottom: 2px; }
+.core-ex { display: flex; flex-direction: column; gap: 6px; }
+.core-ex .ex { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; }
+.core-ex .ex-s { color: var(--ink-soft); }
+.core-ex b { font-family: var(--display); font-weight: 400; font-size: 26px; color: var(--ok); }
+.core-why { margin: 0; font-size: 15px; color: var(--ink-soft); line-height: 1.5; }
+/* 🩹 약점 노트 */
+.weak-list { display: flex; flex-direction: column; gap: 8px; }
+.weak-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid var(--ink); border-radius: 14px; background: var(--card); font: inherit; text-align: left; cursor: pointer; }
+.weak-row b { font-family: var(--display); font-weight: 400; font-size: 18px; }
+.weak-row small { color: var(--ink-soft); white-space: nowrap; }
+.weak-bar { height: 10px; border-radius: 99px; background: var(--grid-soft); overflow: hidden; }
+.weak-bar i { display: block; height: 100%; width: var(--p); background: var(--red); border-radius: inherit; }
+.my-lines { width: 100%; box-sizing: border-box; font: inherit; font-size: 17px; padding: 8px 10px; border: 2px solid var(--ink); border-radius: 12px; background: var(--paper); color: var(--ink); }
+/* 🔎 함정 표시 */
+.traps { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; font-size: 14px; }
+.traps #trapBox { display: contents; }
+.traps #trapBox[hidden] { display: none; }
+.trap { display: inline-flex; align-items: center; gap: 3px; padding: 2px 9px; border-radius: 999px; background: var(--sun-soft); border: 1.5px solid var(--ink); }
+.trap i { font-style: normal; }
+/* 🔤 자모 판 */
+.jamo { display: flex; flex-direction: column; gap: 5px; align-items: center; margin-bottom: 8px; }
+.jrow { display: flex; gap: 4px; justify-content: center; flex-wrap: nowrap; }
+.jk { width: 42px; height: 44px; padding: 0; font-family: var(--display); font-size: 24px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.jk:active { transform: translateY(2px); box-shadow: none; }
+.jrow.con .jk { background: var(--t2); }
+.jrow.vow .jk { background: var(--t4); }
+.jrow.pun .jk { width: 54px; background: var(--sun-soft); }
+.tile.pun { background: var(--sun-soft) !important; }
+/* ✔ 자세한 채점 */
+.cell.pun { width: 26px; }
+.cell.pun::before, .cell.pun::after { display: none; }
+.cell.want { color: var(--red); background: var(--red-soft); border-style: dashed; }
+.cell.vmark { color: var(--red); font-size: 24px; background: var(--red-soft); }
+.cell.join { color: var(--red); background: var(--red-soft); font-size: 22px; }
+.cell.sp.fix { background: var(--sun-soft); box-shadow: inset 0 0 0 3px var(--red); }
+.checks { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.checks span { padding: 2px 10px; border-radius: 999px; font-size: 15px; border: 2px solid currentColor; }
+.checks .ok { color: var(--ok); }
+.checks .no { color: var(--red); background: var(--red-soft); }
+.reason b.v { color: var(--red); font-family: var(--display); font-weight: 400; }
+.reason:not(.main) { padding: 6px 12px; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+.reason:not(.main) .typebadge { font-size: 15px; }
+.reason:not(.main) .typebadge span { font-size: 18px; }
+@media (max-width: 560px) {
+  .jk { width: calc((100vw - 32px - 40px) / 11); max-width: 38px; height: 40px; font-size: 21px; border-radius: 8px; }
+  .jrow { gap: 3px; }
+  .jamo { gap: 4px; margin-bottom: 4px; }
+  .jrow.pun .jk { width: 48px; }
+  .core-ask { font-size: 17px; }
+  .core-ex .ex { font-size: 17px; }
+  .core-ex b { font-size: 22px; }
+  .mode { padding: 8px 10px; font-size: 15px; }
+  .explain .cell.pun { width: 20px; }
+  .reason { padding: 8px 10px; }
+  .reason p { font-size: 16px; }
+}
+.more-reasons { list-style: none; margin: 0; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; background: var(--card); border: 2px solid var(--ink); border-radius: 14px; font-size: 16px; }
+.more-reasons li span b { font-family: var(--display); font-weight: 400; }
+.more-reasons s { color: var(--red); }
+@media (max-width: 560px) {
+  .paper .tl .cell { width: 30px; height: 30px; font-size: 19px; }
+  .paper .tl .cell.pun { width: 16px; }
+  .paper .tl { gap: 2px; }
+  .reason.main .typebadge { font-size: 16px; padding: 2px 10px; }
+  .reason.main .typebadge span { font-size: 20px; }
+  .more-reasons { font-size: 14px; padding: 6px 10px; }
+  .checks span { font-size: 13px; padding: 1px 8px; }
+}
