@@ -1044,7 +1044,7 @@ function catchScene(list, onEnd, notes) {
       introMs: 1500,
     });
     scene.cleanupKeys = () => g.stop();
-    scene.throwBall = (h) => g.throwNow(h && h.force === false ? { power: 0.5, dir: 0 } : { power: 1.7, auto: true }); /* 테스트용 */
+    scene.throwBall = (h) => g.throwNow(h && h.how ? h.how : h && h.force === false ? { power: 0.5, dir: 0 } : { power: 1.7, auto: true }); /* 테스트용 */
     /* 등장: "앗! 야생 ○○이 튀어나왔다!" → 고리가 돌기 시작 */
     (async () => {
       if (q.legend) confetti();
