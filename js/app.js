@@ -2386,19 +2386,17 @@ const LOCAL_MATCH = {};
 const matchOf = (id) => LOCAL_MATCH[id] || (SOCIAL.ready ? SOCIAL.match(id) : null);
 const meOf = (m) => (m && m.local ? 'me' : SOCIAL.uid);
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-/* 🎯 연습봇 난이도: 아이 승률이 40% 정도 (모의 실험으로 맞춘 값 · 우리집 학습플래너와 같아요)
- * 1판: 내 탭 수 −2~+3을 봇 기준값으로 · 2판부터: 기준값에서 0~7번 더하거나(55%) 빼요(45%)
- * 카드 힘이 달라도 승률이 흔들리지 않게 봇 탭 수를 ⚡힘 비율로 맞춰요 · 최근 10판 승률이 50%↑면 조금 세게, 30%↓면 조금 약하게 */
-const BOT_HIST = 'tapBotHist';
-const botHist = () => { try { return JSON.parse(localStorage.getItem(BOT_HIST) || '[]'); } catch (_) { return []; } };
-const botRecord = (won) => { try { localStorage.setItem(BOT_HIST, JSON.stringify([...botHist(), won ? 1 : 0].slice(-10))); } catch (_) { /* 저장 못 해도 괜찮아요 */ } };
+/* 🎯 연습봇 난이도: 기본 승률 35%~55% — 내 카드가 셀수록 올라가요 (힘이 같으면 45% · 우리집 학습플래너와 같아요)
+ * 카드 힘 비율로 목표 승률을 정하고(모의 실험으로 맞춘 값), 그만큼 봇 1판 탭 수를 조금 올리거나 내려요
+ * 1판: 봇 = 내 탭 수 ±3 (+ 난이도 보정) · 2판부터: 그 기준값에서 0~7번 더하거나 빼요 → 내가 더 많이 탭하면 더 잘 이겨요 */
+const botWinRate = (m) => Math.max(0.35, Math.min(0.55, 0.45 + (TapBattle.power(m.picks.me) / TapBattle.power(m.picks.cpu) - 1) * 0.5));
 function botTaps(m, round, mine) {
   let raw;
   if (round === 0 || m.botBase == null) {
-    const h = botHist(), rate = h.length >= 5 ? h.reduce((a, b) => a + b, 0) / h.length : 0.4;
-    m.botBase = Math.max(0, mine + rnd(rate > 0.5 ? -1 : rate < 0.3 ? -3 : -2, 3)); raw = m.botBase;
-  } else raw = Math.max(0, m.botBase + (Math.random() < 0.55 ? 1 : -1) * rnd(0, 7));
-  return Math.round(raw * TapBattle.power(m.picks.me) / TapBattle.power(m.picks.cpu));
+    const bias = (0.5 - botWinRate(m)) / 0.14; /* 승률 1%p ≈ 탭 0.07번 (모의 실험) */
+    m.botBase = Math.max(0, mine + Math.round(Math.random() * 6 - 3 + bias)); raw = m.botBase;
+  } else raw = Math.max(0, m.botBase + (Math.random() < 0.5 ? 1 : -1) * rnd(0, 7));
+  return Math.round(raw * TapBattle.power(m.picks.me) / TapBattle.power(m.picks.cpu)); /* ⚡힘 차이만큼 봇 탭 수를 맞춰요 (위 승률이 되게) */
 }
 const practiceBox = () => `<div class="fam-card practice-card"><div class="fam-head"><b>🤖 연습봇</b> <small>언제나 온라인</small></div>
   <p class="small-note">봇이 비슷한 카드를 내면 보고 대결할지 정해요 · 👆 탭 대결! 이기면 봇 카드를 받고, 지면 건 카드가 사라져요.</p>
@@ -2431,7 +2429,6 @@ function sendTap(m, who, round, n) {
   if (m.status === 'done' && !m.settledLocal) { /* 끝: 이기면 봇 카드 받기, 지면 건 카드 한 장 사라짐 */
     m.settledLocal = true;
     if (m.winner === 'me') giveCard(m.picks.cpu.id, m.picks.cpu.lv); else takeCard(m.picks.me.id);
-    botRecord(m.winner === 'me');
     save();
   }
   if (app.className === 'screen-battle' && battleId === m.id) renderBattle();
@@ -2495,7 +2492,8 @@ function renderBattle() {
   if (m.local && m.status === 'offer') { /* 🤖 봇 카드를 보고 대결할지 정해요 */
     const A = m.picks.me, B = m.picks.cpu, ca = CARD_BY[A.id], cb = CARD_BY[B.id], d = SOCIAL.power(B) - SOCIAL.power(A);
     const how = d > 0 ? `봇 카드가 ⚡${d} 더 세요` : d < 0 ? `내 카드가 ⚡${-d} 더 세요` : '힘이 똑같아요';
-    app.innerHTML = `${top}${bubble(`봇은 이 카드를 냈어! ${how}. 싫으면 거부해도 돼.`, 'tight')}
+    const odds = Math.round(botWinRate(m) * 100);
+    app.innerHTML = `${top}${bubble(`봇은 이 카드를 냈어! ${how}. 이길 확률은 약 ${odds}%야. 싫으면 거부해도 돼.`, 'tight')}
       <div class="arena"><div class="fighter">${ca ? cardFace(ca, false, A.lv) : ''}<b>${esc(A.name)}</b><span class="pw">⚡${SOCIAL.power(A)}</span></div>
         <div class="score">VS</div>
         <div class="fighter">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}</span></div></div>
