@@ -203,11 +203,8 @@ const SOCIAL = (() => {
       if (!d || d.status !== 'pick') throw new Error('closed');
       const picks = { ...(d.picks || {}), [st.uid]: card };
       const upd = { picks, updatedAt: now() };
-      if (picks[d.users[0]] && picks[d.users[1]]) {
-        /* 주사위 값은 seed로 미리 정해져요 (누르는 순간을 바꿔도 결과는 같아서 공평해요). 아이가 눌러야 하나씩 보여요 */
-        const r = battle(d.seed, picks[d.users[0]], picks[d.users[1]]);
-        Object.assign(upd, { status: 'roll', winner: d.users[r.winner], rounds: r.rounds, rolled: {} });
-      }
+      /* 두 카드가 모이면 👆 탭 대결 시작 (js/tapbattle.js — 우리집 학습플래너와 같은 규칙) */
+      if (picks[d.users[0]] && picks[d.users[1]]) Object.assign(upd, TapBattle.startFields());
       t.update(ref, upd);
       return upd.status || 'pick';
     });
@@ -226,6 +223,18 @@ const SOCIAL = (() => {
       return true;
     });
   }
+  /* 👆 한 판 탭 수 내기 (round: 0부터, who: 나 또는 오래 안 오는 친구를 0번으로) */
+  function tap(id, who, round, n) {
+    const ref = db.collection('matches').doc(id);
+    return db.runTransaction(async (t) => {
+      const d = (await t.get(ref)).data();
+      const upd = TapBattle.addTaps(d, who, round, n);
+      if (upd) t.update(ref, upd);
+      return !!upd;
+    });
+  }
+  /* 예전 주사위 대결(굴리는 중)을 그만해요 — 건 카드는 settleSocial에서 돌아와요 */
+  const drop = (id) => db.collection('matches').doc(id).update({ status: 'cancel', updatedAt: now() });
   function cancel(id) {
     const ref = db.collection('matches').doc(id);
     return db.runTransaction(async (t) => {
@@ -289,7 +298,7 @@ const SOCIAL = (() => {
     myListings: () => Object.values(st.mine),
     start, stop, publish, setKid,
     friendList, requestFriend, acceptFriend, removeFriend,
-    invite, respond, pick, roll, cancel, settled,
+    invite, respond, pick, roll, tap, drop, cancel, settled,
     sell, market, buy, unlist, removeListing,
   };
 })();
