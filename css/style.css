@@ -1836,3 +1836,15 @@ body.scene-open { overflow: hidden; }
   .ball-cta .ball-row { font-size: 26px; }
   .ball-cta b { font-size: 19px; }
 }
+
+/* 🐾 짝꿍 포켓몬 · 점수 풀이 */
+.bt-pk { display: inline-block; font-size: 12px; font-weight: 800; color: #047857; background: #d1fae5; border-radius: 999px; padding: 1px 9px; }
+.die-how { display: block; font-size: 12.5px; font-weight: 800; color: var(--ink-soft); margin-top: -2px; }
+.pk-opts { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; width: 100%; }
+.pk-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; border: 2px solid var(--line, #e2e8f0); background: #fff; border-radius: 14px; padding: 9px 12px; cursor: pointer; font: inherit; color: inherit; }
+.pk-opt b { font-size: 15px; } .pk-opt small { color: var(--ink-soft); font-size: 12px; }
+.pk-opt.same { background: #ecfdf5; } .pk-opt.family { background: #eff6ff; }
+.pk-opt.on { border-color: var(--ink, #1f2937); box-shadow: 0 0 0 2px rgba(0,0,0,.08); }
+.album-card .pk-mark { position: absolute; right: 4px; bottom: 4px; font-size: 14px; background: #fff; border-radius: 999px; padding: 0 3px; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.fighter .die { width: auto; min-width: 72px; font-size: 44px; font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .fighter .die { font-size: 34px; min-width: 58px; } }

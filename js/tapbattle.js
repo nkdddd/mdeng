@@ -1,7 +1,10 @@
 /* ============================================================
  *  👆 탭 대결 (우리집 학습플래너 · 또박또박 받아쓰기 공용 — 두 앱이 같은 파일을 써요)
  *  - 한 판 = 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 스페이스바(또는 클릭)
- *  - 점수 = ⚡카드 기본 파워(등급 10/12/14/17/20 + 강화×2) × 👆탭 수
+ *  - 점수 = ⚡카드 파워(등급 10/12/14/17/20 + 강화×2 + 🐾짝꿍 포켓몬) × 👆탭 수
+ *  - 🐾 짝꿍 포켓몬: 카드와 맞는 포켓몬만 함께 출전 — 같은 포켓몬 ⚡+4 · 같은 진화 가족 ⚡+2
+ *    카드 걸기 대결이면 짝꿍도 함께 걸어요 (이기면 상대 짝꿍 한 마리를 받고, 지면 내 짝꿍 한 마리가 가요)
+ *    pick 기록: {…카드, pk:포켓몬 이름, pm:'same'|'family'}
  *  - 3판 2선승 · 같은 점수면 그 판은 다시 · 두 사람이 각자 자기 차례에 탭해요
  *  - 타격감: 누를 때마다 타격음(Web Audio) · 진동 · 화면 흔들림 · 타격 고리 · 불꽃 · "팡!" · 10번마다 🔥콤보 (빠를수록 세게)
  *  - 대결 기록: matches/{id} { mode:'tap', taps:{uid:[판마다 탭 수]}, rounds:[{ta,tb,sa,sb,w}], winner, status }
@@ -10,7 +13,42 @@
 (function(){
 const SECONDS=5, MAX_TAPS=100, WIN=2, MAX_ROUNDS=9;
 const CLASS_POWER={n:10, r:12, a:14, s:17, u:20};
-const power=c=>(CLASS_POWER[c&&c.cls]||10)+Math.max(0,Math.min(5,Number(c&&c.lv)||0))*2;
+const PARTNER={same:4, family:2};
+const power=c=>(CLASS_POWER[c&&c.cls]||10)+Math.max(0,Math.min(5,Number(c&&c.lv)||0))*2+(c&&c.pk? PARTNER[c.pm]||0 : 0);
+const basePower=c=>power(c&&{cls:c.cls, lv:c.lv});
+
+/* ----- 🐾 짝꿍 포켓몬 (도감 window.POKEDEX: [이름, 이모지, 타입, 번호, 분류, 등급, 진화 전 모습]) ----- */
+let ROOT=null, NAMES=null;
+function dexIndex(){
+  if(ROOT && NAMES.length) return;
+  const from={}; ROOT={}; NAMES=[];
+  (window.POKEDEX||[]).forEach(p=>{ from[p[0]]=p[6]||""; NAMES.push(p[0]); });
+  NAMES.sort((a,b)=>b.length-a.length);                                    // 긴 이름부터 (예: '리자몽'보다 '메가리자몽')
+  NAMES.forEach(n=>{ let k=n, g=0; while(from[k] && from[from[k]]!==undefined && g++<6) k=from[k]; ROOT[n]=k; });
+}
+const rootOf=n=>{ dexIndex(); return ROOT[n]||n; };
+// 카드가 어떤 포켓몬 카드인지: 카드 기록의 포켓몬 이름 → 없으면 카드 이름에 들어 있는 도감 이름
+function cardPoke(c){
+  dexIndex(); if(!c) return "";
+  if(c.poke && ROOT[c.poke]) return c.poke;
+  const nm=String(c.name||""); return NAMES.find(n=>nm.includes(n)) || c.poke || "";
+}
+// 이 카드와 함께 나갈 수 있는 내 포켓몬 (잡은 수가 1마리 이상): 같은 포켓몬 먼저, 그다음 진화 가족
+function partners(c, catches){
+  const poke=cardPoke(c); if(!poke) return [];
+  const r=rootOf(poke), out=[];
+  Object.keys(catches||{}).forEach(n=>{ if(!((catches[n]||0)>0)) return;
+    if(n===poke) out.push({name:n, m:"same", n:catches[n]}); else if(rootOf(n)===r) out.push({name:n, m:"family", n:catches[n]}); });
+  return out.sort((a,b)=>(a.m==="same"? 0 : 1)-(b.m==="same"? 0 : 1) || a.name.localeCompare(b.name));
+}
+// 봇 짝꿍: 봇 카드와 맞는 포켓몬 (같은 포켓몬이거나 진화 가족 중 하나)
+function botPartner(c){
+  dexIndex(); const poke=cardPoke(c); if(!poke) return null;
+  const fam=NAMES.filter(n=>n!==poke && rootOf(n)===rootOf(poke));
+  if(fam.length && Math.random()<.5) return {name:fam[Math.floor(Math.random()*fam.length)], m:"family"};
+  return {name:poke, m:"same"};
+}
+const partnerTag=c=>c&&c.pk? `🐾 ${c.pk} ⚡+${PARTNER[c.pm]||0}` : "";
 const clampTaps=n=>Math.max(0, Math.min(MAX_TAPS, Math.round(Number(n)||0)));
 
 // 두 사람의 탭 기록 → 판 결과 · 승자 (두 앱 · 두 기기가 똑같이 계산)
@@ -53,10 +91,11 @@ function addCss(){
 .tap-stage.in{opacity:1}.tap-stage.out{opacity:0}
 .tap-stage .tp-label{margin:0;font-weight:900;font-size:22px;color:#fde68a}
 .tap-stage .tp-who{margin:0;font-size:15px;opacity:.85}
-.tap-stage .tp-count{margin:0;font-weight:900;font-size:min(34vw,170px);line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 6px 0 rgba(0,0,0,.35)}
+.tap-stage .tp-count{margin:0;font-weight:900;font-size:min(24vw,140px);line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 6px 0 rgba(0,0,0,.35)}
 .tap-stage .tp-count.bump{animation:tpBump .12s ease-out}
 @keyframes tpBump{from{transform:scale(1.12)}}
-.tap-stage .tp-score{margin:0;font-size:20px;font-weight:800;color:#c7d2fe}
+.tap-stage .tp-score{margin:0;font-size:24px;font-weight:900;color:#c7d2fe}
+.tap-stage .tp-unit{margin:-6px 0 0;font-size:14px;font-weight:800;color:#fde68a;opacity:.9}
 .tap-stage .tp-bar{width:min(80vw,420px);height:12px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}
 .tap-stage .tp-bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#fde047,#f97316);transform-origin:left;transition:transform .1s linear}
 .tap-stage .tp-hint{margin:0;font-size:16px;font-weight:800}
@@ -123,10 +162,10 @@ function play(opts){
   const el=document.createElement("div");
   el.className="tap-stage";
   el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""}</p><p class="tp-who">${opts.who||""}</p>
-    <p class="tp-count">3</p><p class="tp-score">준비!</p><div class="tp-bar"><i></i></div>
+    <p class="tp-count">3</p><p class="tp-unit"></p><p class="tp-score">준비!</p><div class="tp-bar"><i></i></div>
     <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ <kbd>스페이스바</kbd>를 최대한 빨리! (클릭도 돼요)"}</p></div><div class="tp-ring"></div><div class="tp-flash"></div>`;
   document.body.appendChild(el);
-  const cnt=el.querySelector(".tp-count"), score=el.querySelector(".tp-score"), bar=el.querySelector(".tp-bar i");
+  const cnt=el.querySelector(".tp-count"), score=el.querySelector(".tp-score"), unit=el.querySelector(".tp-unit"), bar=el.querySelector(".tp-bar i");
   requestAnimationFrame(()=>el.classList.add("in"));
   return new Promise(async res=>{
     let n=0, live=false;
@@ -135,8 +174,8 @@ function play(opts){
       if(!live) return; n=Math.min(MAX_TAPS, n+1);
       const t=performance.now(); recent.push(t); while(recent.length && t-recent[0]>600) recent.shift();
       const speed=recent.length;                                   // 0.6초 안에 누른 수 → 빠를수록 세게
-      cnt.textContent=n; cnt.classList.remove("bump"); void cnt.offsetWidth; cnt.classList.add("bump");
-      score.textContent=`⚡${pw} × 👆${n} = ${pw*n}`;
+      cnt.textContent=pw*n; cnt.classList.remove("bump"); void cnt.offsetWidth; cnt.classList.add("bump");
+      score.textContent=`⚡${pw} × 👆${n}`;
       el.classList.toggle("hot", speed>=5); el.classList.toggle("fire", speed>=8);
       thump(n, speed);
       try{ navigator.vibrate && navigator.vibrate(speed>=8? 18 : 10); }catch(_){}
@@ -164,12 +203,12 @@ function play(opts){
     el.addEventListener("pointerdown", onPtr);
     window.addEventListener("keydown", onKey, true);
     for(const k of [3,2,1]){ cnt.textContent=k; sfx("click"); await wait(reduce? 80 : 700); }
-    cnt.textContent="0"; score.textContent=`⚡${pw} × 👆0`; el.classList.add("go"); live=true; sfx("whoosh");
+    cnt.textContent="0"; unit.textContent="점수 (⚡카드 힘 × 👆탭 수)"; score.textContent=`⚡${pw} × 👆0`; el.classList.add("go"); live=true; sfx("whoosh");
     const t0=performance.now(), D=sec*1000;
     await new Promise(r=>{ const tick=()=>{ const p=Math.min(1,(performance.now()-t0)/D); bar.style.transform=`scaleX(${1-p})`; if(p>=1) r(); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
     live=false; el.classList.remove("go");
     el.removeEventListener("pointerdown", onPtr); window.removeEventListener("keydown", onKey, true);
-    score.textContent=`끝! ⚡${pw} × 👆${n} = ${pw*n}`; sfx("star");
+    score.textContent=`끝! ⚡${pw} × 👆${n} = ${pw*n}점`; sfx("star");
     await wait(reduce? 80 : 1100);
     el.classList.add("out"); await wait(220); el.remove();
     res(n);
@@ -182,5 +221,5 @@ async function banner(html, kind){
   document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add("show"));
   await wait(reduce? 80 : 1800); el.classList.remove("show"); await wait(250); el.remove();
 }
-window.TapBattle={SECONDS, MAX_TAPS, power, resolve, addTaps, startFields, play, banner, clampTaps};
+window.TapBattle={SECONDS, MAX_TAPS, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
 })();
