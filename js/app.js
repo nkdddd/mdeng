@@ -2379,14 +2379,19 @@ function friendsBody(quiet) {
 }
 
 /* 🤖 연습봇 대결 (로그인 없이 이 기기에서만 · 우리집 학습플래너와 같은 규칙)
- * 내 카드와 같은 등급 · 같은 강화의 봇 카드와 👆 탭 대결. 봇은 5초에 41~56번
+ * 봇은 비슷한 카드(등급 한 단계 위·아래, 강화 ±1)를 내요 → 보고 대결하거나 거부해요
+ * 봇 탭 수: 1판은 내 탭 수 ±3을 기준으로, 2판부터는 그 기준에서 0~7번 더하거나 빼요
  * 이기면 봇 카드를 받고, 지면 건 카드가 사라져요 (카드는 끝났을 때 정리해요 — 중간에 그만두면 그대로) */
 const LOCAL_MATCH = {};
 const matchOf = (id) => LOCAL_MATCH[id] || (SOCIAL.ready ? SOCIAL.match(id) : null);
 const meOf = (m) => (m && m.local ? 'me' : SOCIAL.uid);
-const botTaps = () => 41 + Math.floor(Math.random() * 16); /* 41~56 */
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+function botTaps(m, round, mine) {
+  if (round === 0 || m.botBase == null) { m.botBase = Math.max(0, mine + rnd(-3, 3)); return m.botBase; }
+  return Math.max(0, m.botBase + (Math.random() < 0.5 ? -1 : 1) * rnd(0, 7));
+}
 const practiceBox = () => `<div class="fam-card practice-card"><div class="fam-head"><b>🤖 연습봇</b> <small>언제나 온라인</small></div>
-  <p class="small-note">내 카드와 같은 등급 · 같은 강화 카드로 👆 탭 대결! 이기면 봇 카드를 받고, 지면 건 카드가 사라져요.</p>
+  <p class="small-note">봇이 비슷한 카드를 내면 보고 대결할지 정해요 · 👆 탭 대결! 이기면 봇 카드를 받고, 지면 건 카드가 사라져요.</p>
   <button class="btn small primary" data-practice="1">⚔️ 연습 대결</button></div>`;
 const wirePractice = (box) => $$('[data-practice]', box).forEach((b) => b.addEventListener('click', startPractice));
 function startPractice() {
@@ -2397,11 +2402,14 @@ function startPractice() {
   sfx('pop');
   go('battle', id);
 }
-/* 봇 카드: 같은 등급에서 (되도록 다른 카드) 하나, 강화도 똑같이 */
+/* 봇 카드: 내 카드와 비슷하게 — 등급은 한 단계 아래 · 같음 · 한 단계 위, 강화는 ±1 (더 세거나 약할 수도) */
 function cpuCard(mine) {
-  const all = (window.CARD_POOL || {})[mine.cls] || CARDS;
+  const UP = ['n', 'r', 'a', 's', 'u'], i = Math.max(0, UP.indexOf(mine.cls));
+  const cls = UP[Math.max(0, Math.min(UP.length - 1, i + rnd(-1, 1)))];
+  const P = window.CARD_POOL || {};
+  const all = (P[cls] && P[cls].length ? P[cls] : P[mine.cls]) || CARDS;
   const pool = all.length > 1 ? all.filter((c) => c[0] !== mine.id) : all;
-  return cardInfo(pool[Math.floor(Math.random() * pool.length)], mine.lv);
+  return cardInfo(pool[Math.floor(Math.random() * pool.length)], Math.max(0, Math.min(5, (mine.lv || 0) + rnd(-1, 1))));
 }
 /* 👆 한 판 탭 수 내기: 연습이면 봇도 바로 내요 */
 function sendTap(m, who, round, n) {
@@ -2409,7 +2417,7 @@ function sendTap(m, who, round, n) {
   let upd = TapBattle.addTaps(m, who, round, n);
   if (!upd) return Promise.resolve(false);
   Object.assign(m, upd);
-  if (m.status === 'roll') { upd = TapBattle.addTaps(m, 'cpu', round, botTaps()); if (upd) Object.assign(m, upd); }
+  if (m.status === 'roll') { upd = TapBattle.addTaps(m, 'cpu', round, botTaps(m, round, n)); if (upd) Object.assign(m, upd); }
   if (m.status === 'done' && !m.settledLocal) { /* 끝: 이기면 봇 카드 받기, 지면 건 카드 한 장 사라짐 */
     m.settledLocal = true;
     if (m.winner === 'me') giveCard(m.picks.cpu.id, m.picks.cpu.lv); else takeCard(m.picks.me.id);
@@ -2457,7 +2465,7 @@ function renderBattle() {
   const mine = m.who[me], them = m.who[other];
   const top = `<h2 class="h">⚔️ ${m.local ? '연습 대결' : '카드 대결'}</h2>
     <div class="vs"><span class="vs-kid">${mine.avatar}<b>${esc(mine.name)}</b></span><span class="vs-x">VS</span><span class="vs-kid">${them.avatar}<b>${esc(them.name)}</b></span></div>
-    <p class="small-note center-note">${m.local ? '🤖 같은 등급 · 같은 강화 봇 카드 · 이기면 봇 카드를 받고, 지면 건 카드가 사라져요' : m.stake ? '🎴 카드 걸기 대결 · 이기면 친구 카드를 가져와요' : '🤝 친선 대결 · 카드는 그대로, 이기면 ⭐1'}</p>`;
+    <p class="small-note center-note">${m.local ? '🤖 봇이 비슷한 카드를 내요 · 이기면 봇 카드를 받고, 지면 건 카드가 사라져요' : m.stake ? '🎴 카드 걸기 대결 · 이기면 친구 카드를 가져와요' : '🤝 친선 대결 · 카드는 그대로, 이기면 ⭐1'}</p>`;
   const quit = '<button class="btn ghost" id="bQuit">그만하기</button>';
   const wireQuit = () => { $('#bQuit')?.addEventListener('click', async () => {
     if (m.local) delete LOCAL_MATCH[m.id]; else await SOCIAL.cancel(m.id).catch(() => {});
@@ -2473,6 +2481,19 @@ function renderBattle() {
     wireBack();
     return;
   }
+  if (m.local && m.status === 'offer') { /* 🤖 봇 카드를 보고 대결할지 정해요 */
+    const A = m.picks.me, B = m.picks.cpu, ca = CARD_BY[A.id], cb = CARD_BY[B.id], d = SOCIAL.power(B) - SOCIAL.power(A);
+    const how = d > 0 ? `봇 카드가 ⚡${d} 더 세요` : d < 0 ? `내 카드가 ⚡${-d} 더 세요` : '힘이 똑같아요';
+    app.innerHTML = `${top}${bubble(`봇은 이 카드를 냈어! ${how}. 싫으면 거부해도 돼.`, 'tight')}
+      <div class="arena"><div class="fighter">${ca ? cardFace(ca, false, A.lv) : ''}<b>${esc(A.name)}</b><span class="pw">⚡${SOCIAL.power(A)}</span></div>
+        <div class="score">VS</div>
+        <div class="fighter">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}</span></div></div>
+      <div class="row"><button class="btn primary" id="bGo">⚔️ 대결!</button><button class="btn" id="bNo">🙅 거부하기</button></div>`;
+    $('#bGo').onclick = () => { sfx('pop'); Object.assign(m, TapBattle.startFields()); renderBattle(); };
+    $('#bNo').onclick = () => { delete LOCAL_MATCH[m.id]; toast('대결을 거부했어요. 카드는 그대로예요'); go('friends', 'fr'); };
+    speak(`봇은 ${B.name} 카드를 냈어! 대결할까?`);
+    return;
+  }
   if (m.status === 'pick') {
     const myPick = (m.picks || {})[me];
     if (myPick) {
@@ -2484,7 +2505,7 @@ function renderBattle() {
     }
     const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean)
       .map((c) => ({ c, p: SOCIAL.power(cardInfo(c, cardLv(c[0]))) })).sort((a, b) => b.p - a.p);
-    app.innerHTML = `${top}${bubble(m.local ? '걸 카드를 골라! 같은 등급 · 같은 강화의 봇 카드와 대결해. 지면 이 카드는 사라져.' : m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
+    app.innerHTML = `${top}${bubble(m.local ? '걸 카드를 골라! 봇이 비슷한 카드를 내면, 보고 싫으면 거부해도 돼. 지면 이 카드는 사라져.' : m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
       <p class="small-note center-note">👆 탭 대결: 한 판 점수 = ⚡카드 힘 × 5초 동안 탭한 수 (컴퓨터는 스페이스바) · 3판 2선승</p>
       <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}${c[7] ? ` ${c[7]}` : ''}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}</button>`).join('')}</div>
       <div class="row">${quit}</div>`;
@@ -2499,14 +2520,14 @@ function confirmPick(m, c) {
   const info = cardInfo(c, cardLv(c[0]));
   const el = sheet(`${cardFace(c)}<p class="inv-t"><b>${esc(c[1])}</b> · ⚡ ${SOCIAL.power(info)}</p>
     <p class="small-note">점수 = ⚡${SOCIAL.power(info)} × 👆탭 수</p>
-    <p class="small-note">${m.local ? '이 카드를 걸까요? 이기면 봇 카드를 받고, 지면 이 카드는 사라져요.' : m.stake ? '이 카드로 할까요? 지면 친구에게 가요.' : '이 카드로 할까요?'}</p>
+    <p class="small-note">${m.local ? '이 카드를 걸까요? 봇 카드를 보고 대결할지 정해요. 이기면 봇 카드를 받고, 지면 이 카드는 사라져요.' : m.stake ? '이 카드로 할까요? 지면 친구에게 가요.' : '이 카드로 할까요?'}</p>
     <div class="row"><button class="btn primary" id="pYes">⚔️ 이 카드로!</button><button class="btn" id="pNo">다시 고를래</button></div>`);
   $('#pNo', el).onclick = closeSheet;
   $('#pYes', el).onclick = async () => {
     closeSheet();
-    if (m.local) { /* 연습: 봇 카드는 같은 등급 · 같은 강화. 카드 정리는 끝났을 때 */
+    if (m.local) { /* 연습: 봇 카드를 먼저 보여 줘요 (대결 / 거부). 카드 정리는 끝났을 때 */
       m.picks = { me: info, cpu: cpuCard(info) };
-      Object.assign(m, TapBattle.startFields());
+      m.status = 'offer';
       sfx('pop');
       renderBattle();
       return;
