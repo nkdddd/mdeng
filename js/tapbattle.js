@@ -3,6 +3,7 @@
  *  - 한 판 = 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 스페이스바(또는 클릭)
  *  - 점수 = ⚡카드 기본 파워(등급 10/12/14/17/20 + 강화×2) × 👆탭 수
  *  - 3판 2선승 · 같은 점수면 그 판은 다시 · 두 사람이 각자 자기 차례에 탭해요
+ *  - 타격감: 누를 때마다 타격음(Web Audio) · 진동 · 화면 흔들림 · 타격 고리 · 불꽃 · "팡!" · 10번마다 🔥콤보 (빠를수록 세게)
  *  - 대결 기록: matches/{id} { mode:'tap', taps:{uid:[판마다 탭 수]}, rounds:[{ta,tb,sa,sb,w}], winner, status }
  *    (rounds · w 는 users[0] 기준, w: 0=users[0] 승, 1=users[1] 승, -1=비김)
  * ============================================================ */
@@ -69,31 +70,95 @@ function addCss(){
 .tap-banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .tap-banner b{font-size:22px}.tap-banner.win b{color:#fde047}.tap-banner.lose b{color:#cbd5e1}
 .tap-banner small{font-size:15px;opacity:.9}
-@media (prefers-reduced-motion:reduce){.tap-stage.go .tp-ring{animation:none}}`;
+.tap-stage .tp-shake{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;pointer-events:none}
+.tap-stage.shk .tp-shake{animation:tpShake .14s linear}
+@keyframes tpShake{0%{transform:translate(0,0)}25%{transform:translate(var(--sx),var(--sy)) rotate(var(--sr))}50%{transform:translate(calc(var(--sx)*-.8),calc(var(--sy)*-.6))}75%{transform:translate(calc(var(--sx)*.4),calc(var(--sy)*.5))}100%{transform:translate(0,0)}}
+.tap-stage .tp-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.tap-stage .tp-flash.on{animation:tpFlash .12s ease-out}
+@keyframes tpFlash{from{opacity:.14}to{opacity:0}}
+.tap-stage .tp-hit{position:absolute;width:90px;height:90px;margin:-45px 0 0 -45px;border-radius:50%;pointer-events:none;border:5px solid #fde047;box-shadow:0 0 18px #f97316,inset 0 0 12px #fde047;animation:tpHit .32s ease-out forwards}
+@keyframes tpHit{from{transform:scale(.2);opacity:1}to{transform:scale(1.6);opacity:0}}
+.tap-stage .tp-spark{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#fde047;box-shadow:0 0 8px #f97316;pointer-events:none;animation:tpSpark .38s ease-out forwards}
+@keyframes tpSpark{to{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+.tap-stage .tp-pow{position:absolute;pointer-events:none;font-weight:900;font-size:26px;color:#fff;-webkit-text-stroke:2px #b91c1c;text-shadow:0 3px 0 #7f1d1d;animation:tpPow .45s ease-out forwards;white-space:nowrap}
+@keyframes tpPow{0%{transform:translate(-50%,-50%) scale(.4) rotate(var(--r));opacity:1}60%{transform:translate(-50%,-90%) scale(1.15) rotate(var(--r))}100%{transform:translate(-50%,-120%) scale(1) rotate(var(--r));opacity:0}}
+.tap-stage .tp-combo{position:absolute;left:50%;top:22%;transform:translate(-50%,0);font-weight:900;font-size:44px;color:#fde047;text-shadow:0 4px 0 #b45309,0 0 24px #f97316;pointer-events:none;animation:tpCombo .7s cubic-bezier(.3,1.6,.5,1) forwards}
+@keyframes tpCombo{0%{transform:translate(-50%,10px) scale(.3);opacity:0}30%{transform:translate(-50%,0) scale(1.25);opacity:1}100%{transform:translate(-50%,-30px) scale(1);opacity:0}}
+.tap-stage .tp-count{transition:color .1s}
+.tap-stage.hot .tp-count{color:#fde047}.tap-stage.fire .tp-count{color:#fb923c;text-shadow:0 6px 0 rgba(0,0,0,.35),0 0 30px #f97316}
+@media (prefers-reduced-motion:reduce){.tap-stage.go .tp-ring,.tap-stage.shk .tp-shake{animation:none}}`;
   document.head.appendChild(st);
+}
+/* 🔊 타격음 (Web Audio로 바로 만들어요 — 파일 없이) */
+let actx=null;
+function ac(){ try{ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); }catch(_){ actx=null; } return actx; }
+function thump(n, speed){
+  const c=ac(); if(!c) return;
+  const t=c.currentTime, g=c.createGain(), o=c.createOscillator();
+  const f0=150+Math.min(n,80)*3+speed*6;                           // 누를수록 · 빠를수록 조금씩 높아져요
+  o.type="triangle"; o.frequency.setValueAtTime(f0*2.2, t); o.frequency.exponentialRampToValueAtTime(f0*.55, t+.09);
+  g.gain.setValueAtTime(.32, t); g.gain.exponentialRampToValueAtTime(.001, t+.12);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t+.13);
+  // 짧은 '탁' 소리 (잡음)
+  const len=Math.floor(c.sampleRate*.04), buf=c.createBuffer(1,len,c.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3);
+  const src=c.createBufferSource(), ng=c.createGain(), hp=c.createBiquadFilter();
+  hp.type="highpass"; hp.frequency.value=1200; ng.gain.value=.22;
+  src.buffer=buf; src.connect(hp).connect(ng).connect(c.destination); src.start(t);
+}
+function ding(n){
+  const c=ac(); if(!c) return;
+  const t=c.currentTime;
+  [0,.07].forEach((dt,i)=>{ const o=c.createOscillator(), g=c.createGain(); o.type="square";
+    o.frequency.setValueAtTime((i? 1320 : 990)*(1+Math.min(n,60)/200), t+dt);
+    g.gain.setValueAtTime(.12, t+dt); g.gain.exponentialRampToValueAtTime(.001, t+dt+.16);
+    o.connect(g).connect(c.destination); o.start(t+dt); o.stop(t+dt+.17); });
 }
 // opts: {label, who, power, seconds}
 function play(opts){
+  ac();                                                           // 버튼을 누른 순간 소리를 켜 둬요 (휴대폰은 터치해야 소리가 나요)
   addCss();
   const sec=(opts&&opts.seconds)||SECONDS, pw=(opts&&opts.power)||10;
   const touch=("ontouchstart" in window) || (navigator.maxTouchPoints>0);
   const el=document.createElement("div");
   el.className="tap-stage";
-  el.innerHTML=`<p class="tp-label">${opts.label||""}</p><p class="tp-who">${opts.who||""}</p>
+  el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""}</p><p class="tp-who">${opts.who||""}</p>
     <p class="tp-count">3</p><p class="tp-score">준비!</p><div class="tp-bar"><i></i></div>
-    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ <kbd>스페이스바</kbd>를 최대한 빨리! (클릭도 돼요)"}</p><div class="tp-ring"></div>`;
+    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ <kbd>스페이스바</kbd>를 최대한 빨리! (클릭도 돼요)"}</p></div><div class="tp-ring"></div><div class="tp-flash"></div>`;
   document.body.appendChild(el);
   const cnt=el.querySelector(".tp-count"), score=el.querySelector(".tp-score"), bar=el.querySelector(".tp-bar i");
   requestAnimationFrame(()=>el.classList.add("in"));
   return new Promise(async res=>{
     let n=0, live=false;
+    const flash=el.querySelector(".tp-flash"), recent=[];
     const hit=(x,y)=>{
       if(!live) return; n=Math.min(MAX_TAPS, n+1);
+      const t=performance.now(); recent.push(t); while(recent.length && t-recent[0]>600) recent.shift();
+      const speed=recent.length;                                   // 0.6초 안에 누른 수 → 빠를수록 세게
       cnt.textContent=n; cnt.classList.remove("bump"); void cnt.offsetWidth; cnt.classList.add("bump");
       score.textContent=`⚡${pw} × 👆${n} = ${pw*n}`;
-      if(n%5===0) sfx("pop");
-      if(!reduce && x!=null){ const f=document.createElement("span"); f.className="tp-fx"; f.textContent=["✨","💥","⭐","👆"][n%4]; f.style.left=(x-15)+"px"; f.style.top=(y-15)+"px"; el.appendChild(f); setTimeout(()=>f.remove(),600); }
+      el.classList.toggle("hot", speed>=5); el.classList.toggle("fire", speed>=8);
+      thump(n, speed);
+      try{ navigator.vibrate && navigator.vibrate(speed>=8? 18 : 10); }catch(_){}
+      const milestone=n%10===0;
+      if(milestone){ ding(n); combo(n); }
+      if(reduce) return;
+      // 💥 화면 흔들림 (빠를수록 크게)
+      const a=Math.min(14, 3+speed*1.3)*(milestone?1.6:1);
+      el.style.setProperty("--sx", ((Math.random()<.5?-1:1)*a).toFixed(1)+"px");
+      el.style.setProperty("--sy", ((Math.random()<.5?-1:1)*a*.6).toFixed(1)+"px");
+      el.style.setProperty("--sr", ((Math.random()-.5)*a*.25).toFixed(1)+"deg");
+      el.classList.remove("shk"); void el.offsetWidth; el.classList.add("shk");
+      flash.classList.remove("on"); void flash.offsetWidth; flash.classList.add("on");
+      if(x==null) return;
+      // 타격 고리 · 불꽃 · 의성어
+      const ring=document.createElement("i"); ring.className="tp-hit"; ring.style.left=x+"px"; ring.style.top=y+"px"; el.appendChild(ring); setTimeout(()=>ring.remove(),340);
+      for(let k=0;k<6;k++){ const sp=document.createElement("i"); sp.className="tp-spark"; const ang=Math.random()*Math.PI*2, d=40+Math.random()*50;
+        sp.style.left=x+"px"; sp.style.top=y+"px"; sp.style.setProperty("--dx",(Math.cos(ang)*d).toFixed(0)+"px"); sp.style.setProperty("--dy",(Math.sin(ang)*d).toFixed(0)+"px"); el.appendChild(sp); setTimeout(()=>sp.remove(),400); }
+      if(n%3===0 || speed>=8){ const w=document.createElement("span"); w.className="tp-pow"; w.textContent=["팡!","쾅!","퍽!","빡!","POW!","탁!"][Math.floor(Math.random()*6)];
+        w.style.left=x+"px"; w.style.top=y+"px"; w.style.setProperty("--r",((Math.random()-.5)*30).toFixed(0)+"deg"); el.appendChild(w); setTimeout(()=>w.remove(),460); }
     };
+    const combo=k=>{ if(reduce) return; const c=document.createElement("div"); c.className="tp-combo"; c.textContent=`🔥 ${k}!`; el.appendChild(c); setTimeout(()=>c.remove(),720); };
     const onPtr=e=>{ e.preventDefault(); hit(e.clientX, e.clientY); };
     const onKey=e=>{ if(e.code==="Space"||e.key===" "||e.key==="Enter"){ e.preventDefault(); if(!e.repeat) hit(innerWidth/2+(Math.random()*120-60), innerHeight/2+(Math.random()*120-60)); } };
     el.addEventListener("pointerdown", onPtr);
