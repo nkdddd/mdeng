@@ -669,8 +669,9 @@ const DIFF_INFO = {
 /* 📖 포켓몬 도감: [이름, 그림 없을 때 이모지, 타입, 전국도감 번호, 분류, 등급]
  * 등급: c 일반 · r 희귀 · l 전설 · m 신화 · s 시크릿
  * 이름·번호·분류는 PokeAPI의 공식 한국어 데이터로 확인했어요. */
-/* 도감 포켓몬: [이름, 이모지, 타입, 도감 번호, 분류, 등급]. 진화 가족끼리 붙여 적어요 */
-const POKEMON = [
+/* 도감 포켓몬: 전국도감 1~1025 (js/pokedex.js — [이름, 이모지, 타입, 도감 번호, 분류, 등급, 진화 전, 세대])
+ * 못 불러오면 아래 85종: [이름, 이모지, 타입, 도감 번호, 분류, 등급]. 진화 가족끼리 붙여 적어요 */
+const POKEMON = (window.POKEDEX && window.POKEDEX.length) ? window.POKEDEX : [
   ['피카츄', '⚡', '전기', 25, '쥐포켓몬', 'c'], ['라이츄', '⚡', '전기', 26, '쥐포켓몬', 'r'],
   ['코일', '🧲', '전기', 81, '자석포켓몬', 'c'], ['레어코일', '🧲', '전기', 82, '자석포켓몬', 'c'], ['자포코일', '🛸', '전기', 462, '자기장포켓몬', 'r'],
   ['데덴네', '🐭', '전기', 702, '안테나포켓몬', 'c'],
@@ -727,6 +728,11 @@ const EVOLUTION = [
   ['미뇽', '신뇽', '망나뇽'], ['리오르', '루카리오'],
 ];
 const EVO_NEED = 3;
+/* 진화 가족 지도: 진화 전 → 진화 후 (이브이처럼 여러 갈래도 있어요) */
+const EVO_FROM = {}, EVO_KIDS = {};
+if (POKEMON[0] && POKEMON[0].length > 6) POKEMON.forEach((m) => { if (m[6]) EVO_FROM[m[0]] = m[6]; });
+else EVOLUTION.forEach((l) => l.forEach((n, i) => { if (i) EVO_FROM[n] = l[i - 1]; }));
+Object.entries(EVO_FROM).forEach(([b, a]) => { (EVO_KIDS[a] = EVO_KIDS[a] || []).push(b); });
 
 /* 등급: 이름, 표시, 포획 타임의 성공 칸(±%)과 화살표 빠르기(작을수록 빨라요) */
 const GRADES = {

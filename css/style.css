@@ -1764,3 +1764,10 @@ body.scene-open { overflow: hidden; }
   .more-reasons { font-size: 14px; padding: 6px 10px; }
   .checks span { font-size: 13px; padding: 1px 8px; }
 }
+
+/* 📖 도감: 세대 고르기 (1,025종) */
+.dex-gens { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 4px 0 10px; }
+.dex-gens button { display: flex; flex-direction: column; align-items: center; min-width: 64px; padding: 4px 10px; border: 2px solid #1C1B22; border-radius: 14px; background: #fff; font: inherit; font-size: 15px; cursor: pointer; }
+.dex-gens button small { font-size: 12px; color: #64748B; }
+.dex-gens button.on { background: #1C1B22; color: #fff; }
+.dex-gens button.on small { color: #e2e8f0; }
