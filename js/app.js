@@ -42,8 +42,7 @@ function evolveFrom(name, one) {
   const out = [];
   let n = name;
   for (;;) {
-    const line = EVOLUTION.find((l) => l.includes(n));
-    const next = line && line[line.indexOf(n) + 1];
+    const next = evoNextOf(n);
     if (!next || (S.catches[n] || 0) < EVO_NEED) return out;
     while (S.catches[n] >= EVO_NEED) { /* 예전 기록은 한꺼번에: 캐터피 9 → 단데기 3 → 버터플 1 */
       S.catches[n] -= EVO_NEED;
@@ -58,6 +57,8 @@ function evolveFrom(name, one) {
     n = next;
   }
 }
+/* 다음 진화: 아직 도감에 없는 갈래부터 (이브이 → 샤미드 · 쥬피썬더 · 부스터 …) */
+function evoNextOf(n) { const k = EVO_KIDS[n]; return k && (k.find((x) => !(S.dex || []).includes(x)) || k[0]); }
 /* 진화 규칙이 생기기 전에 잡은 포켓몬도 3마리씩 모아 진화시켜요 (처음 한 번만) */
 function migrateEvo() {
   if (S.evoV) return;
@@ -66,7 +67,7 @@ function migrateEvo() {
     const m = POKEMON.find((x) => x[0] === n);
     if (m && 'cr'.includes(m[5]) && !S.catches[n]) S.catches[n] = 1; /* 몇 번 잡았는지 모르면 한 마리 */
   });
-  EVOLUTION.forEach((line) => line.forEach((n) => evolveFrom(n)));
+  Object.keys(EVO_KIDS).forEach((n) => evolveFrom(n));
   S.evoV = 1;
   STORE.save(S);
 }
@@ -723,15 +724,8 @@ const TYPE_TONE = { 전기: 't3', 불꽃: 't1', 물: 't2', 풀: 't4', 에스퍼:
 const POKE_BY = Object.fromEntries(POKEMON.map((m) => [m[0], m]));
 const dexHas = (name) => (S.dex || []).includes(name);
 const hasShiny = (name) => (S.shinies || []).includes(name);
-const evoLine = (name) => EVOLUTION.find((l) => l.includes(name));
-/* 가족의 지금 모습: 도감에 있는 가장 높은 단계 (아직 없으면 1단계) */
-function evoNow(name) {
-  const line = evoLine(name);
-  if (!line) return name;
-  let cur = line[0];
-  line.forEach((n) => { if (dexHas(n)) cur = n; });
-  return cur;
-}
+/* 풀숲에 나오는 모습: 가족의 첫 모습이나 도감에 있는 모습 중, 진화한 모습을 다 모으지 않은 것 */
+const spawnable = (name) => (!EVO_FROM[name] || dexHas(name)) && !((EVO_KIDS[name] || []).length && EVO_KIDS[name].every(dexHas));
 /* 다음 진화까지 모은 수: ●●○ */
 const evoDots = (name) => `<span class="evo-dots" aria-hidden="true">${'●'.repeat(Math.min(EVO_NEED, (S.catches || {})[name] || 0)).padEnd(EVO_NEED, '○')}</span>`;
 const canEvolve = (name) => !!evoNext(name) && ((S.catches || {})[name] || 0) >= EVO_NEED;
@@ -799,7 +793,7 @@ async function evolvePokemon(name) {
   });
   return b;
 }
-const evoNext = (name) => { const l = evoLine(name); return l && l[l.indexOf(name) + 1]; };
+const evoNext = (name) => evoNextOf(name);
 const ro = (w) => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c % 28 && c % 28 !== 8 ? '으로' : '로'; };
 function addDex(name) {
   S.dex = S.dex || [];
@@ -821,7 +815,7 @@ document.addEventListener('error', (e) => {
   span.textContent = img.dataset.e || '?';
   img.replaceWith(span);
 }, true);
-const artImg = (m, shiny, cls = '') => `<img class="art ${cls}" src="${POKE_ART(m[3], shiny)}" data-e="${m[1]}" alt="" draggable="false">`;
+const artImg = (m, shiny, cls = '') => `<img class="art ${cls}" src="${POKE_ART(m[3], shiny)}" data-e="${m[1]}" alt="" loading="lazy" draggable="false">`;
 const dexNo = (id) => 'No.' + String(id).padStart(3, '0');
 const gradeChip = (g, shiny) => shiny
   ? `<span class="grade-chip gs">🌈 시크릿 ✨</span>`
@@ -916,7 +910,7 @@ function rollWild(streak, seen, diff) {
   /* 어려운 섬일수록, 연속 정답이 길수록 희귀 확률이 올라가요 (예: 쉬움 0연속 8% · 도전 3연속 65%, 최대 75%) */
   const grade = Math.random() < Math.min(0.75, DIFF_INFO[diff].rare + 0.1 * streak) ? 'r' : 'c';
   /* 풀숲에는 가족마다 지금 모습만 나와요 (파이리 → 리자드를 얻으면 리자드가 나와요) */
-  const now = (g) => POKEMON.filter((m) => m[5] === g && evoNow(m[0]) === m[0] && !seen.some((e) => e.name === m[0]));
+  const now = (g) => POKEMON.filter((m) => m[5] === g && spawnable(m[0]) && !seen.some((e) => e.name === m[0]));
   const pool = now(grade).length ? now(grade) : now(grade === 'r' ? 'c' : 'r');
   const fresh = pool.filter((m) => !dexHas(m[0]));
   const m = pick(fresh.length && Math.random() < 0.7 ? fresh : pool);
@@ -1312,8 +1306,14 @@ function pokeCard(m, shiny, locked) {
     <span class="pc-art">${artImg(m, shiny)}</span>
     <b>${name}</b><small>${genus}</small>${gradeChip(g, shiny)}</button>`;
 }
-let dexTab = 'all';
+let dexTab = 'all', dexGen = 1;
+const GEN_NAME = { 1: '1세대', 2: '2세대', 3: '3세대', 4: '4세대', 5: '5세대', 6: '6세대', 7: '7세대', 8: '8세대', 9: '9세대' };
 SCREENS.dex = () => {
+  /* 1,025종이라 세대별로 나눠 보여 줘요 (잡은 포켓몬이 앞에) */
+  const gens = [...new Set(POKEMON.map((m) => m[7] || 1))].sort((a, b) => a - b);
+  if (!gens.includes(dexGen)) dexGen = gens[0];
+  const inGen = (m) => gens.length < 2 || (m[7] || 1) === dexGen;
+  const caughtFirst = (a, b) => (dexHas(b[0]) - dexHas(a[0])) || a[3] - b[3];
   const count = (g) => POKEMON.filter((m) => m[5] === g && dexHas(m[0])).length;
   const total = (g) => POKEMON.filter((m) => m[5] === g).length;
   const shinyCards = (S.shinies || []).filter((n) => POKE_BY[n]).map((n) => POKE_BY[n]);
@@ -1325,7 +1325,7 @@ SCREENS.dex = () => {
       + shinyCards.map((m) => pokeCard(m, true)).join('')
       + '<p class="small-note dex-tip">✨ 색이 다른(이로치) 카드는 전설이나 신화를 잡은 뒤, 연속 정답을 이어 가면 가끔 나타나요.</p>';
   } else {
-    cards = POKEMON.filter((m) => dexTab === 'all' || m[5] === dexTab).map((m) => pokeCard(m, false, !dexHas(m[0]))).join('');
+    cards = POKEMON.filter((m) => (dexTab === 'all' || m[5] === dexTab) && (dexTab !== 'all' && dexTab !== 'c' && dexTab !== 'r' ? true : inGen(m))).sort(caughtFirst).map((m) => pokeCard(m, false, !dexHas(m[0]))).join('');
   }
   app.innerHTML = `
     <h2 class="h">📖 포켓몬 도감</h2>
@@ -1337,10 +1337,12 @@ SCREENS.dex = () => {
     ${questPanel(true)}
     <div class="dex-tabs" role="tablist">${tabs.map(([g, label, have, all]) =>
       `<button role="tab" aria-selected="${dexTab === g}" data-tab="${g}" class="g${g}">${label}<small>${have}${all != null ? `/${all}` : ''}</small></button>`).join('')}</div>
+    ${gens.length > 1 && ['all', 'c', 'r'].includes(dexTab) ? `<div class="dex-gens">${gens.map((g) => { const L = POKEMON.filter((m) => (m[7] || 1) === g && (dexTab === 'all' || m[5] === dexTab)); return `<button data-gen="${g}" class="${g === dexGen ? 'on' : ''}">${GEN_NAME[g] || g + '세대'}<small>${L.filter((m) => dexHas(m[0])).length}/${L.length}</small></button>`; }).join('')}</div>` : ''}
     <div class="pdex">${cards}</div>
     <section class="setbox"><h3 class="h3">🏅 퀘스트 배지 <small class="h-note">전설·신화를 잡을 때마다 하나씩</small></h3>${badgeCase()}</section>`;
   speak(LINES.pokeDex);
   $$('[data-tab]', app).forEach((b) => b.addEventListener('click', () => { dexTab = b.dataset.tab; sfx('pop'); SCREENS.dex(); }));
+  $$('[data-gen]', app).forEach((b) => b.addEventListener('click', () => { dexGen = +b.dataset.gen; sfx('pop'); SCREENS.dex(); }));
   $$('.pcard[data-id]', app).forEach((c) => c.addEventListener('click', () => playCry(+c.dataset.id)));
   $('[data-go-mode]', app)?.addEventListener('click', (e) => go(e.target.dataset.goMode));
   $('#toPacks').onclick = () => go('packs');
@@ -1433,6 +1435,7 @@ function drawCard(kind, name, diff) {
   rel[0].forEach((i) => weighted.push([CARDS[i], 3, 'exact']));
   rel[1].forEach((i) => weighted.push([CARDS[i], 1, 'family']));
   rel[2].forEach((i) => weighted.push([CARDS[i], 1, 'similar']));
+  if (!weighted.length && name) CARDS.forEach((c) => { if (c[8] === name || c[1].includes(name)) weighted.push([c, 3, 'exact']); }); /* 관계표에 없는 포켓몬은 이름으로 찾아요 */
   if (!weighted.length) CARDS.forEach((c) => weighted.push([c, 1, 'any']));
   /* 어려운 섬에서 잡은 포켓몬의 팩일수록 레어 이상 카드가 잘 나와요 */
   const boost = DIFF_INFO[diff || 2].card;
