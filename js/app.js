@@ -2573,12 +2573,11 @@ function renderBattle() {
     const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean)
       .map((c) => ({ c, p: SOCIAL.power(cardInfo(c, cardLv(c[0]))) })).sort((a, b) => b.p - a.p);
     app.innerHTML = `${top}${bubble(m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
-      <p class="small-note center-note">점수 = ⚡힘 × 🎲주사위 · 먹이를 만나면 ×1.5 <button class="link-btn" id="foodBtn">🍖 먹이사슬 보기</button></p>
+      <p class="small-note center-note">👆 탭 대결: 한 판 점수 = ⚡카드 힘 × 5초 동안 탭한 수 (컴퓨터는 스페이스바) · 3판 2선승</p>
       <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}${c[7] ? ` ${c[7]}` : ''}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}</button>`).join('')}</div>
       <div class="row">${quit}</div>`;
     wireQuit();
     $$('[data-pick]', app).forEach((b) => b.addEventListener('click', () => confirmPick(m, CARD_BY[b.dataset.pick])));
-    $('#foodBtn', app).onclick = foodSheet;
     speak(m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라!');
     return;
   }
@@ -2587,7 +2586,7 @@ function renderBattle() {
 function confirmPick(m, c) {
   const info = cardInfo(c, cardLv(c[0]));
   const el = sheet(`${cardFace(c)}<p class="inv-t"><b>${esc(c[1])}</b> · ⚡ ${SOCIAL.power(info)}</p>
-    <p class="small-note">${info.type ? `${info.type} 타입이 먹는 것: ${(SOCIAL.FOOD[info.type] || []).join(' · ')} · ` : ''}${SOCIAL.STAGE_NAME[info.stage]}</p>
+    <p class="small-note">점수 = ⚡${SOCIAL.power(info)} × 👆탭 수</p>
     <p class="small-note">${m.stake ? '이 카드로 할까요? 지면 친구에게 가요.' : '이 카드로 할까요?'}</p>
     <div class="row"><button class="btn primary" id="pYes">⚔️ 이 카드로!</button><button class="btn" id="pNo">다시 고를래</button></div>`);
   $('#pNo', el).onclick = closeSheet;
@@ -2618,72 +2617,72 @@ let revealChain = Promise.resolve();
 function rollSides(m) {
   const me = SOCIAL.uid, other = m.users.find((u) => u !== me);
   const meFirst = m.users[0] === me; /* rounds는 users[0] 기준이라 내 쪽으로 돌려요 */
-  const rounds = (m.rounds || []).map((r) => (meFirst ? r : { da: r.db, db: r.da, sa: r.sb, sb: r.sa, w: r.w === -1 ? -1 : 1 - r.w }));
+  const rounds = (m.rounds || []).map((r) => (meFirst ? r : { ta: r.tb, tb: r.ta, da: r.db, db: r.da, sa: r.sb, sb: r.sa, w: r.w === -1 ? -1 : 1 - r.w }));
   return { me, other, rounds, A: m.picks[me], B: m.picks[other] };
 }
+/* 👆 탭 대결 (js/tapbattle.js): 판마다 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 스페이스바 → ⚡힘 × 👆탭 수. 두 사람이 다 해야 그 판 결과가 나와요 */
 function rollView(m, top) {
+  if (m.mode !== 'tap') { /* 업데이트 전에 시작한 주사위 대결 */
+    app.innerHTML = `${top}<div class="wait">🎲 예전 주사위 방식으로 시작한 대결이에요. 그만하고 새로 신청해 주세요. 건 카드는 돌아와요.</div><div class="row"><button class="btn primary" id="bDrop">그만하기</button></div>`;
+    $('#bDrop').onclick = async () => { await SOCIAL.drop(m.id).catch(() => {}); go('friends', 'fr'); };
+    return;
+  }
   const { me, other, rounds, A, B } = rollSides(m);
-  stageWho = { me: m.who[me], them: m.who[other] };
   let root = $('#arena');
   if (!root || root.dataset.mid !== m.id) {
     const ca = CARD_BY[A.id], cb = CARD_BY[B.id];
     app.innerHTML = `${top}
       <div class="arena" id="arena" data-mid="${m.id}" data-shown="0">
-        <div class="fighter" id="fA">${ca ? cardFace(ca, false, A.lv) : ''}<b>${esc(A.name)}</b><span class="pw">⚡${SOCIAL.power(A)}${A.type ? ` ${A.type}` : ''}</span>${bonusTag(A, B)}
-          <span class="die" id="dA" aria-label="내 주사위">🎲</span></div>
+        <div class="fighter" id="fA">${ca ? cardFace(ca, false, A.lv) : ''}<b>${esc(A.name)}</b><span class="pw">⚡${SOCIAL.power(A)}</span>
+          <span class="die" id="dA" aria-label="내 탭">👆</span></div>
         <div class="score" id="bScore">0 : 0</div>
-        <div class="fighter" id="fB">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}${B.type ? ` ${B.type}` : ''}</span>${bonusTag(B, A)}
-          <span class="die" id="dB" aria-label="친구 주사위">🎲</span><small class="die-note" id="nB"></small></div>
+        <div class="fighter" id="fB">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}</span>
+          <span class="die" id="dB" aria-label="친구 탭">👆</span><small class="die-note" id="nB"></small></div>
       </div>
+      <p class="small-note center-note">한 판 점수 = ⚡카드 힘 × 👆5초 동안 탭한 수 · 3판 2선승</p>
       <div class="roll-ctl" id="rollCtl" aria-live="polite"></div>
       <div class="rounds" id="bRounds" aria-live="polite"></div>
       <div id="bEnd"></div>`;
     root = $('#arena');
-    if (m.status === 'roll') speak('주사위를 굴려! 주사위 숫자만큼 힘이 곱해져!');
+    if (m.status === 'roll') speak('화면을 톡톡톡! 많이 누를수록 힘이 세져!');
   }
-  const rolled = m.rolled || {};
-  const mine = rolled[me] || 0, theirs = rolled[other] || 0;
-  const doneN = m.status === 'done' ? rounds.length : Math.min(mine, theirs);
+  const taps = m.taps || {};
+  const mine = (taps[me] || []).length, theirs = (taps[other] || []).length;
   /* 새로 끝난 판을 하나씩 보여 줘요 */
   let shown = +root.dataset.shown;
-  for (; shown < doneN; shown++) { const i = shown; revealChain = revealChain.then(() => revealRound(rounds, i, A, B)); }
+  for (; shown < rounds.length; shown++) { const i = shown; revealChain = revealChain.then(() => revealRound(rounds, i, A, B)); }
   root.dataset.shown = shown;
   const ctl = $('#rollCtl');
-  if (doneN >= rounds.length) {
+  if (m.status === 'done') {
     ctl.innerHTML = '';
     if (!root.dataset.end) { root.dataset.end = '1'; revealChain = revealChain.then(() => battleEnd(m)); }
     return;
   }
-  const cur = doneN;
-  $('#nB').textContent = theirs > cur ? '✅ 굴렸어!' : '';
+  const cur = rounds.length;
+  $('#nB').textContent = theirs > cur ? '✅ 탭 끝! (숫자는 비밀)' : '';
   if (mine > cur) {
-    ctl.innerHTML = `<p class="wait">⏳ 친구가 주사위를 굴리길 기다려요…</p>`;
+    ctl.innerHTML = `<p class="wait">⏳ 친구가 탭하길 기다려요…</p>`;
     clearTimeout(rollView.t);
-    rollView.t = setTimeout(() => { /* 친구가 오래 안 굴리면 대신 굴려 줄 수 있어요 */
+    rollView.t = setTimeout(() => { /* 친구가 오래 안 오면 이번 판을 0번으로 처리할 수 있어요 */
       const now = SOCIAL.match(m.id);
-      if (!now || now.status !== 'roll' || ((now.rolled || {})[other] || 0) > cur || !$('#rollCtl')) return;
-      $('#rollCtl').insertAdjacentHTML('beforeend', '<button class="btn" id="proxyRoll">⏩ 친구 주사위도 굴려 주기</button>');
-      $('#proxyRoll').onclick = () => { $('#proxyRoll').disabled = true; SOCIAL.roll(m.id, other, cur + 1).catch(() => {}); };
-    }, 20000);
+      if (!now || now.status !== 'roll' || ((now.taps || {})[other] || []).length > cur || !$('#rollCtl')) return;
+      $('#rollCtl').insertAdjacentHTML('beforeend', '<button class="btn" id="proxyRoll">⏩ 친구가 안 와요 (이번 판 친구 0번)</button>');
+      $('#proxyRoll').onclick = () => { $('#proxyRoll').disabled = true; SOCIAL.tap(m.id, other, cur, 0).catch(() => {}); };
+    }, 45000);
     return;
   }
-  const hint = theirs > cur ? '친구는 벌써 굴렸어! 너도 굴려!' : '';
+  const hint = theirs > cur ? '친구는 벌써 탭했어! 너도 힘껏!' : '';
   const btn = $('#rollBtn');
   if (btn && +btn.dataset.r === cur) { $('#rollHint').textContent = hint; return; } /* 이번 판 버튼이 이미 있어요 */
-  ctl.innerHTML = `<button class="btn primary big roll-btn" id="rollBtn" data-r="${cur}">🎲 ${cur + 1}판 주사위 굴리기!</button>
+  const counted = rounds.filter((x) => x.w !== -1);
+  const tension = counted.filter((x) => x.w === 0).length === 1 && counted.filter((x) => x.w === 1).length === 1;
+  ctl.innerHTML = `<button class="btn primary big roll-btn" id="rollBtn" data-r="${cur}">👆 ${tension ? '🔥 마지막 판' : `${cur + 1}판`} 탭 시작!</button>
     <p class="small-note center-note" id="rollHint">${hint}</p>`;
   $('#rollBtn').onclick = async () => {
     $('#rollBtn').disabled = true;
-    const done = rounds.slice(0, cur);
-    const tension = done.filter((x) => x.w === 0).length === 1 && done.filter((x) => x.w === 1).length === 1;
-    const st = openStage(tension ? '🔥 마지막 판!' : `${cur + 1}판`, tension);
-    const theyRolled = ((SOCIAL.match(m.id) || m).rolled || {})[other] > cur;
-    restPane(st.them, 0, theyRolled ? '✅ 벌써 굴렸어! 두근두근…' : '⏳ 친구가 굴리길 기다려요');
-    await rollPane(st.me, rounds[cur].da, ['-60vw', '-40vh']);
-    $('#dA').innerHTML = dieSvg(rounds[cur].da);
-    SOCIAL.roll(m.id, me, cur + 1).catch(() => toast('앗, 연결이 끊겼어요. 다시 눌러 봐요'));
-    /* 친구가 이미 굴렸으면 그대로 두고 친구 주사위를 이어서 보여 줘요. 아니면 잠깐 뒤 닫아요 */
-    if (!theyRolled) closeStage(700); else stageClose = setTimeout(() => closeStage(), 8000);
+    const n = await TapBattle.play({ label: tension ? '🔥 마지막 판!' : `${cur + 1}판`, who: `${m.who[me].avatar || ''} ${esc(m.who[me].name)} · ${esc(A.name)}`, power: SOCIAL.power(A) });
+    if ($('#dA')) $('#dA').textContent = `👆${n}`;
+    SOCIAL.tap(m.id, me, cur, n).catch(() => toast('앗, 연결이 끊겼어요. 다시 눌러 봐요'));
   };
 }
 /* 🎲 주사위 무대: 화면을 둘로 나눠요 (가로 화면: 왼쪽 나 · 오른쪽 친구 / 세로 화면(휴대폰): 위 나 · 아래 친구)
@@ -2773,29 +2772,20 @@ async function rollPane(p, value, from) {
   if (value === 6) { sfx('diceBig'); confetti(); }
   await dwait(800);
 }
-/* 점수 풀이: ⚡12 × 🎲4 × 1.5 = 72 */
-const scoreHow = (P, Q, die, sc) => { const x = SOCIAL.bonus(P, Q).mul; return `⚡${SOCIAL.power(P)} × 🎲${die}${x > 1 ? ` × ${+x.toFixed(2)}` : ''} = <b>${sc}</b>`; };
+/* 점수 풀이: ⚡12 × 👆31 = 372 */
+const scoreHow = (P, taps, sc) => `⚡${SOCIAL.power(P)} × 👆${taps} = <b>${sc}</b>`;
 async function revealRound(rounds, i, A, B) {
   if (!$('#arena')) return;
   const r = rounds[i];
-  $('#dA').innerHTML = dieSvg(r.da);
+  $('#dA').textContent = `👆${r.ta}`;
+  if ($('#dB')) $('#dB').textContent = `👆${r.tb}`;
   $('#nB').textContent = '';
-  const before = rounds.slice(0, i);
-  const tension = before.filter((x) => x.w === 0).length === 1 && before.filter((x) => x.w === 1).length === 1;
-  const st = openStage(tension ? '🔥 마지막 판!' : `${i + 1}판`, tension);
-  restPane(st.me, r.da);
-  await rollPane(st.them, r.db, ['60vw', '40vh']);
-  $('#dB').innerHTML = dieSvg(r.db);
-  /* 이 판 결과 */
   const win = r.w === -1 ? null : r.w === 0;
-  st.banner.innerHTML = `<b>${win === null ? '🤝 비겼어요! 한 번 더!' : win ? '👍 이 판은 내가 이겼어!' : '💥 이 판은 친구가 이겼어!'}</b><small>나 ${A ? scoreHow(A, B, r.da, r.sa) : r.sa}</small><small>친구 ${A ? scoreHow(B, A, r.db, r.sb) : r.sb}</small>`;
-  st.banner.className = 'dice-banner show ' + (win === true ? 'win' : win === false ? 'lose' : 'tie');
-  (win === true ? st.me : win === false ? st.them : null)?.root.classList.add('winner');
   sfx(win === true ? 'roundWin' : win === false ? 'roundLose' : 'pop');
-  await dwait(1600);
-  await closeStage();
+  await TapBattle.banner(`<b>${win === null ? '🤝 비겼어요! 한 번 더!' : win ? '👍 이 판은 내가 이겼어!' : '💥 이 판은 친구가 이겼어!'}</b><small>나 ${scoreHow(A, r.ta, r.sa)}</small><small>친구 ${scoreHow(B, r.tb, r.sb)}</small>`, win === true ? 'win' : win === false ? 'lose' : '');
   const lines = $('#bRounds');
-  lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: ${A ? scoreHow(A, B, r.da, r.sa) : `🎲${r.da} → <b>${r.sa}</b>`} vs ${A ? scoreHow(B, A, r.db, r.sb) : `<b>${r.sb}</b> ← 🎲${r.db}`} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : '💥 친구가 이겼어!'}</p>`);
+  if (!lines) return;
+  lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: ${scoreHow(A, r.ta, r.sa)} vs ${scoreHow(B, r.tb, r.sb)} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : '💥 친구가 이겼어!'}</p>`);
   const won = rounds.slice(0, i + 1);
   $('#bScore').textContent = `${won.filter((x) => x.w === 0).length} : ${won.filter((x) => x.w === 1).length}`;
   const f = r.w === 0 ? $('#fA') : r.w === 1 ? $('#fB') : null;
