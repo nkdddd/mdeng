@@ -1,0 +1,73 @@
+/* 🔴 포켓몬 GO처럼 잡기 (assets/gocatch.js) — 우리집 학습플래너 · 또박또박 받아쓰기 공용 */
+.gq { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.gq-world { position: absolute; inset: 0; }
+.gq-sky { position: absolute; inset: 0 0 42% 0; overflow: hidden; background: linear-gradient(180deg, #3b9be3 0%, #7cc6f2 45%, #c8ebfb 80%, #e8f7fd 100%); }
+.gq-sun { position: absolute; right: 12%; top: 9%; width: 90px; height: 90px; border-radius: 50%; background: radial-gradient(circle, #fffbe6 0 35%, rgba(255,240,180,.55) 55%, transparent 72%); }
+.gq-cloud { position: absolute; height: 26px; border-radius: 26px; background: rgba(255,255,255,.85); animation: gqCloud 38s linear infinite; }
+.gq-cloud::before, .gq-cloud::after { content: ""; position: absolute; bottom: 8px; border-radius: 50%; background: inherit; }
+.gq-cloud::before { left: 16%; width: 44%; height: 34px; } .gq-cloud::after { left: 48%; width: 34%; height: 26px; }
+.gq-cloud.c1 { top: 16%; left: -30%; width: 120px; } .gq-cloud.c2 { top: 30%; left: -50%; width: 90px; opacity: .7; animation-duration: 52s; animation-delay: -20s; }
+@keyframes gqCloud { to { transform: translateX(160vw); } }
+.gq-mtn { position: absolute; left: -10%; right: -10%; bottom: 41%; height: 22%; }
+.gq-mtn.m1 { background: linear-gradient(#9cc6d9, #86b6cb); opacity: .7; clip-path: polygon(0 100%, 12% 40%, 26% 70%, 40% 20%, 55% 65%, 68% 30%, 82% 60%, 94% 25%, 100% 100%); }
+.gq-mtn.m2 { height: 14%; background: linear-gradient(#7fb79d, #6aa889); opacity: .9; clip-path: polygon(0 100%, 10% 55%, 22% 80%, 35% 45%, 50% 75%, 63% 40%, 78% 70%, 90% 50%, 100% 100%); }
+.gq-hill { position: absolute; left: -20%; right: -20%; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+.gq-hill.h1 { bottom: 34%; height: 18%; background: linear-gradient(#8fd06d, #6fb653); }
+.gq-hill.h2 { bottom: 26%; height: 16%; left: -40%; right: 10%; background: linear-gradient(#7cc55c, #5ea845); }
+.gq-grass { position: absolute; inset: 58% 0 0 0; background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.18), transparent 60%), repeating-linear-gradient(100deg, rgba(255,255,255,.035) 0 6px, transparent 6px 18px), linear-gradient(#6cbf4f, #4f9d3a 50%, #3e8430); }
+.gq-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,.22) 100%); }
+.gq.legend .gq-sky { background: linear-gradient(180deg, #312e81 0%, #6d28d9 40%, #f0abfc 85%, #fde7f3 100%); }
+/* 포켓몬 · 받침대 · 고리 */
+.gq-mon { --sz: min(58vw, 36vh, 300px); position: absolute; left: calc(50% + var(--sway, 0px)); top: 44%; width: var(--sz); height: var(--sz); transform: translate(-50%, -62%) scale(.3); opacity: 0; z-index: 2; }
+.gq-mon.in { animation: gqEnter .8s cubic-bezier(.2, 1.3, .4, 1) forwards; }
+@keyframes gqEnter { 0% { transform: translate(-50%, -52%) scale(.3); opacity: 0; filter: brightness(3); } 60% { opacity: 1; filter: brightness(1.4); } 100% { transform: translate(-50%, -62%) scale(1); opacity: 1; filter: none; } }
+.gq-pad { position: absolute; left: 6%; right: 6%; bottom: -9%; height: 22%; border-radius: 50%; background: radial-gradient(ellipse at 50% 40%, rgba(255,255,255,.5), rgba(255,255,255,.12) 55%, transparent 72%); box-shadow: inset 0 -6px 14px rgba(0,0,0,.12); }
+.gq-shadow { position: absolute; left: 24%; right: 24%; bottom: 0; height: 9%; border-radius: 50%; background: rgba(0,0,0,.28); filter: blur(5px); transition: opacity .3s; }
+.gq-shadow.gone { opacity: 0; }
+.gq-body { position: absolute; inset: 0; transform-origin: 50% 100%; }
+.gq-art { position: absolute; inset: 0; display: grid; place-items: center; animation: gqIdle 2.6s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes gqIdle { 50% { transform: translateY(-5px) scale(1.01, .99); } }
+.gq-art img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 8px 6px rgba(0,0,0,.25)); pointer-events: none; }
+.gq-art .art-fallback { font-size: calc(var(--sz) * .6); }
+.gq.legend .gq-art { filter: drop-shadow(0 0 22px #fde047); }
+.gq.shiny .gq-art::after { content: '✨'; position: absolute; right: 8%; top: 6%; font-size: 34px; }
+.gq-ring { position: absolute; left: 50%; top: 52%; width: 82%; aspect-ratio: 1; transform: translate(-50%, -50%); opacity: 0; transition: opacity .3s; pointer-events: none; }
+.gq-ring.on { opacity: 1; } .gq-ring.hit { opacity: 0; }
+.gq-ring i { position: absolute; inset: 0; border-radius: 50%; }
+.gq-ring-out { border: 3px solid rgba(255,255,255,.9); box-shadow: 0 0 10px rgba(255,255,255,.6), inset 0 0 10px rgba(255,255,255,.35); }
+.gq-ring-goal { border: 2px solid rgba(253,224,71,.95); box-shadow: 0 0 8px rgba(253,224,71,.8); }
+.gq-ring-in { border: 6px solid var(--rc); box-shadow: 0 0 10px var(--rc); }
+.gq-ring-in.good { border-width: 7px; box-shadow: 0 0 14px var(--rc), 0 0 26px var(--rc); }
+/* 볼 */
+.gq-home { position: absolute; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 5; }
+.gq-ball { display: block; width: 92px; height: 92px; padding: 0; border: 0; background: none; border-radius: 50%; cursor: grab; touch-action: none; filter: drop-shadow(0 10px 10px rgba(0,0,0,.35)); }
+.gq-ball svg { width: 100%; height: 100%; display: block; }
+.gq-ball.held { cursor: grabbing; filter: drop-shadow(0 16px 14px rgba(0,0,0,.35)); }
+.gq-ball .b-top { fill: #e8393a; } .gq-ball .b-bot { fill: #fff; stroke: #22365c; stroke-width: 5; } .gq-ball .b-line { stroke: #22365c; stroke-width: 7; } .gq-ball .b-btn { fill: #fff; stroke: #22365c; stroke-width: 6; } .gq-ball .b-dot { fill: #fff; stroke: #22365c; stroke-width: 2; }
+.gq-ball.open svg .b-top { transform: translateY(-14px) rotate(-18deg); transform-origin: 10% 50%; transition: transform .15s; }
+.gq-ball.shaking svg .b-btn { animation: gqBtn .45s ease-in-out infinite alternate; }
+@keyframes gqBtn { to { fill: #fca5a5; } }
+.gq-ball.locked { filter: drop-shadow(0 0 16px #fde047); }
+.gq-ball.broke { animation: gqBroke .3s ease-out; }
+@keyframes gqBroke { 50% { filter: brightness(3); } }
+.gq-arrow { position: absolute; left: 50%; bottom: 70%; width: 10px; height: 200px; transform-origin: 50% 100%; opacity: 0; transition: opacity .15s; pointer-events: none; }
+.gq-arrow.on { opacity: 1; }
+.gq-arrow i { position: absolute; inset: 0; border-radius: 5px; background: linear-gradient(to top, rgba(255,255,255,0), rgba(255,255,255,.95)); }
+.gq-arrow::before { content: ''; position: absolute; left: 50%; top: -14px; transform: translateX(-50%); border: 12px solid transparent; border-bottom: 16px solid #fff; border-top: 0; }
+/* 말 · 효과 */
+.gq-word { position: absolute; left: 0; right: 0; top: 19%; z-index: 4; margin: 0; text-align: center; font-weight: 900; font-size: 28px; color: #fff; text-shadow: 0 3px 10px rgba(0,0,0,.5); opacity: 0; pointer-events: none; }
+.gq-word.show { animation: gqWord 1.3s ease-out forwards; }
+@keyframes gqWord { 0% { opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1.12); } 25% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+.gq-word.q.nice { color: #bbf7d0; } .gq-word.q.great { color: #fde047; } .gq-word.q.excellent { color: #fbbf24; font-size: 34px; text-shadow: 0 0 18px #f97316, 0 3px 10px rgba(0,0,0,.5); }
+.gq-fx { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.gq::after { content: ""; position: absolute; inset: 0; z-index: 6; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 42%, #fff 0, rgba(255,255,255,.85) 18%, rgba(255,236,170,.4) 40%, transparent 65%); transition: opacity .25s; }
+.gq.flash::after { opacity: 1; transition: none; }
+.gq.puff .gq-mon::after { content: '💨'; position: absolute; left: 40%; top: 40%; font-size: 60px; }
+.gq-burst { position: fixed; width: 0; height: 0; }
+.gq-burst span { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 2px; background: #fde047; box-shadow: 0 0 10px #fde047, 0 0 18px #f59e0b; opacity: 0; animation: gqSpark 1s cubic-bezier(.2, .9, .3, 1) forwards; }
+@keyframes gqSpark { 0% { opacity: 1; transform: rotate(var(--d)) translateY(0) rotate(45deg) scale(.4); } 70% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--d)) translateY(-90px) rotate(45deg) scale(1); } }
+.gq-burst .wave { position: absolute; left: -60px; top: -20px; width: 120px; height: 40px; border-radius: 50%; border: 3px solid rgba(253,224,71,.9); box-shadow: 0 0 12px rgba(253,224,71,.7); animation: gqWave .9s ease-out forwards; }
+@keyframes gqWave { 0% { opacity: 1; transform: scale(.3); } 100% { opacity: 0; transform: scale(2.2); } }
+.gq-conf { position: absolute; top: -20px; width: 8px; height: 14px; border-radius: 2px; animation: gqConf 2s cubic-bezier(.3,.6,.5,1) forwards; }
+@keyframes gqConf { to { transform: translate(var(--x), 110vh) rotate(var(--r)); } }
+@media (prefers-reduced-motion: reduce) { .gq-cloud, .gq-art, .gq-ball.shaking svg .b-btn { animation: none; } }
