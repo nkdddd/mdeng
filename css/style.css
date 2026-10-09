@@ -1787,3 +1787,52 @@ body.scene-open { overflow: hidden; }
 .gq-host .go-result.in { transform: translate(-50%, 0); }
 .gr-q { margin: -4px 0 0; font-size: 18px; color: #16a34a; }
 .gr-q.great { color: #ca8a04; } .gr-q.excellent { color: #ea580c; }
+
+/* 🌿 채집 숲 · 🔴 몬스터볼 */
+.ball-ico { display: inline-block; width: 1em; height: 1em; vertical-align: -0.12em; font-style: normal; }
+.ball-ico svg { width: 100%; height: 100%; display: block; }
+.stars.balls { margin-left: auto; padding-inline: 12px; }
+.stars.balls + .stars { margin-left: 6px; }
+.map-top { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.map-top .island.poke { grid-column: auto; min-width: 0; }
+.island.hunt { grid-column: auto; min-width: 0; display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; column-gap: 12px; text-align: left; padding-block: 14px; border-radius: 999px;
+  background: linear-gradient(180deg, #86efac 0 50%, var(--card) 50% 100%); }
+.island.hunt .i-icon { grid-row: 1 / span 2; font-size: 50px; }
+.island.hunt .i-name { align-self: end; }
+.island.hunt .i-sub { align-self: start; }
+.island.hunt .i-best { position: absolute; }
+.hunt-field { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 16px; border-radius: 26px; border: 3px solid var(--ink);
+  background: radial-gradient(circle at 30% 20%, #bbf7d0, #4ade80 70%, #16a34a); box-shadow: var(--shadow); }
+.hunt-field.empty { filter: grayscale(.6); }
+.bush-btn { aspect-ratio: 1; border: 0; background: none; font-size: clamp(54px, 18vw, 86px); line-height: 1; cursor: pointer; filter: drop-shadow(0 6px 4px rgba(0,0,0,.25)); }
+.bush-btn span { display: inline-block; transition: transform .2s; }
+.bush-btn:not(:disabled):hover span { transform: scale(1.08) rotate(-4deg); }
+.bush-btn.shake span { animation: bushShake .18s linear infinite; }
+.bush-btn.nothing { opacity: .35; }
+.bush-btn.glow span { animation: bushGlow 1.2s ease-in-out infinite alternate; }
+@keyframes bushShake { 25% { transform: rotate(-12deg) translateX(-4px); } 75% { transform: rotate(12deg) translateX(4px); } }
+@keyframes bushGlow { from { filter: drop-shadow(0 0 4px #fde047); } to { filter: drop-shadow(0 0 22px #facc15) brightness(1.2); } }
+.hunt-balls { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; font-size: 26px; min-height: 30px; align-items: center; }
+.hunt-balls b { font-family: var(--display); font-weight: 400; font-size: 20px; }
+.ball-cta { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 16px; border: 3px solid var(--ink); border-radius: 20px; background: #dcfce7; color: var(--ink); font: inherit; text-align: left; cursor: pointer; box-shadow: var(--shadow); }
+.ball-cta.none { background: var(--card); }
+.ball-cta .ball-row { display: flex; gap: 2px; font-size: 34px; }
+.ball-cta.none .ball-row { filter: grayscale(1); opacity: .4; }
+.ball-cta > span:last-child { display: flex; flex-direction: column; }
+.ball-cta b { font-family: var(--display); font-weight: 400; font-size: 22px; }
+.ball-cta small { color: var(--ink-soft); }
+.fin-notes .qn { margin: 2px 0; text-align: center; }
+.go-balls { display: inline-flex; align-items: center; gap: 4px; }
+.go-balls .ball-ico { font-size: 18px; }
+@media (max-width: 560px) {
+  .map-top { gap: 8px; }
+  .island.hunt, .map-top .island.poke { padding: 8px 10px; column-gap: 8px; }
+  .island.hunt .i-icon, .map-top .island.poke .i-icon { font-size: 34px; }
+  .island.hunt .i-name, .map-top .island.poke .i-name { font-size: 18px; }
+  .island.hunt .i-sub, .map-top .island.poke .i-sub { font-size: 12px; }
+  .stars.balls { padding-inline: 8px; }
+  .hunt-field { gap: 4px; padding: 10px; }
+  .ball-cta { padding: 6px 12px; }
+  .ball-cta .ball-row { font-size: 26px; }
+  .ball-cta b { font-size: 19px; }
+}

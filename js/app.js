@@ -34,6 +34,7 @@ function loadState() {
   S = Object.assign({ stars: 0, best: {} }, STORE.load());
   /* stars = 쓸 수 있는 별(포획 타임에 걸고, 카드 강화에 써요), earned = 지금까지 모은 별 전체 */
   if (S.earned == null) S.earned = S.stars;
+  if (S.balls == null) S.balls = 5; /* 🔴 처음 받는 몬스터볼 (BALL_START) */
   migrateEvo();
 }
 /* 🧬 진화: 같은 모습 EVO_NEED마리가 모이면 다음 단계 한 마리로 → [[전, 후], …]
@@ -200,7 +201,7 @@ function toast(html, ms = 2200) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
-function paintStars() { $('#starCount').textContent = S.stars; }
+function paintStars() { $('#starCount').textContent = S.stars; paintBalls(); }
 function addStar(n = 1) {
   S.stars += n;
   S.earned += n;
@@ -222,7 +223,8 @@ document.addEventListener('click', (e) => {
 
 /* ---------- 화면 이동 ---------- */
 const ISLANDS = [
-  { id: 'dex',   icon: '📖', name: '포켓몬 도감', sub: '공부하면 포켓몬을 만나요!', tone: 'poke' },
+  { id: 'dex',   icon: '📖', name: '포켓몬 도감', sub: '잡은 포켓몬 카드', tone: 'poke' },
+  { id: 'hunt',  icon: '🌿', name: '채집 숲',     sub: '몬스터볼로 포켓몬 잡기', tone: 'hunt' },
   { id: 'dict',  icon: '🎧', name: '받아쓰기 섬', sub: '듣고 쓰기',          tone: 't1' },
   { id: 'exam',  icon: '📝', name: '시험 대비',   sub: '학교 받아쓰기 1~10급', tone: 't5' },
   { id: 'josa',  icon: '🧩', name: '조사 마을',   sub: '이·가, 을·를',       tone: 't2' },
@@ -269,23 +271,27 @@ function dexHint() {
   if (S.qready) return `🔥 ${q.p} 등장 준비 완료!`;
   return `카드 ${have}/${POKEMON.length}장 · 🧩 ${q.p}까지 조각 ${q.steps.length - (S.qstep || 0)}개`;
 }
+function huntHint() {
+  if (S.qready && questNow()) return `🔥 ${questNow().p}${josaPick(questNow().p, ['이', '가'])} 숲에 나타났어요!`;
+  return S.balls ? `몬스터볼 ${S.balls}개로 포켓몬 잡기` : '공부해서 몬스터볼을 모아요';
+}
 SCREENS.home = () => {
   const math = S.subject === 'math';
   const card = (s) => `
         <button class="island ${s.tone}${SHARED_ISLANDS.includes(s.id) ? ' mini' : ''}" data-go="${s.id}">
           <span class="i-icon" aria-hidden="true">${s.icon}</span>
           <span class="i-name">${s.name}</span>
-          <span class="i-sub">${s.id === 'dex' ? dexHint() : s.id === 'friends' ? friendsHint() : s.sub}</span>
+          <span class="i-sub">${s.id === 'dex' ? dexHint() : s.id === 'hunt' ? huntHint() : s.id === 'friends' ? friendsHint() : s.sub}</span>
           ${DIFFICULTY[s.id] ? diffTag(s.id) : ['dict', 'exam', ...MATH_ISLANDS.map((x) => x.id)].includes(s.id) ? `<span class="diff-tag">${rangeTag(s.id)}</span>` : ''}
           ${S.best[s.id] ? `<span class="i-best">최고 ${S.best[s.id]}점</span>` : ''}
         </button>`;
   const by = (id) => ISLANDS.find((x) => x.id === id);
-  const list = math ? MATH_ISLANDS : ISLANDS.filter((x) => !['dex', ...SHARED_ISLANDS].includes(x.id));
+  const list = math ? MATH_ISLANDS : ISLANDS.filter((x) => !['dex', 'hunt', ...SHARED_ISLANDS].includes(x.id));
   app.innerHTML = `
     <h1 class="title">또박또박 <span>${math ? '수학' : '받아쓰기'}</span></h1>
     ${bubble(math ? LINES.mathHome : LINES.home)}
     <div class="map">
-      ${card(by('dex'))}
+      <div class="map-top">${card(by('hunt'))}${card(by('dex'))}</div>
       <div class="subject-tabs" role="tablist" aria-label="과목">
         <button role="tab" data-subj="ko" aria-selected="${!math}">📚 국어</button>
         <button role="tab" data-subj="math" aria-selected="${math}">🔢 수학</button>
@@ -325,7 +331,9 @@ function finish(key, score, total, again, extra) {
           <p class="diff-note">${diffStars(diffOf(key))} ${DIFF_INFO[diffOf(key)].name}</p>
         </div>
       </div>
-      ${extra && extra.caught && extra.caught.length ? `<div class="caught-row" aria-label="이번에 잡은 포켓몬"><small>이번에 잡은 포켓몬</small>${extra.caught.map((q) => `<span class="mini">${artImg(q.m, q.shiny)}<small>${q.name}</small></span>`).join('')}</div>` : ''}
+      ${extra && extra.stars ? `<button class="ball-cta${extra.balls ? '' : ' none'}" id="toHunt"><span class="ball-row">${Array.from({ length: Math.max(1, extra.balls || 0) }, () => `<i class="ball-ico">${ballSvg}</i>`).join('')}</span>
+        <span><b>${extra.balls ? `몬스터볼 +${extra.balls}` : '몬스터볼은 60점부터'}</b><small>🌿 채집 숲에서 포켓몬 잡기 (볼 ${S.balls || 0}개) ▶</small></span></button>` : ''}
+      ${extra && extra.notes && extra.notes.length ? `<div class="fin-notes">${extra.notes.map((n) => `<p class="qn ${n.kind}">${n.text}</p>`).join('')}</div>` : ''}
       ${extra && extra.badge ? `<div class="badge-won"><span class="badge got big" style="--bc:${extra.badge[2]}"><i>${extra.badge[1]}</i></span><p><b>${extra.badge[0]}</b>를 받았어요!</p></div>` : ''}
       <div class="fin-grid">
         ${packCount() ? `<button class="pack-cta" id="toPacks">${packArt(packList()[0].k, packList()[0].p)}<span><b>🎴 카드팩 뜯기!</b><small>${packCount()}팩이 기다려요</small></span></button>` : ''}
@@ -339,11 +347,12 @@ function finish(key, score, total, again, extra) {
     </div>`;
   if (great) { confetti(); sfx('star'); }
   speak([LINES.score(total, score), ...(extra && extra.stars && extra.stars.bonus ? [LINES.perfect(extra.stars.bonus)] : []), great ? LINES.finishGreat : LINES.finishSoso,
-    ...(extra && extra.badge ? [LINES.badge(extra.badge[0])] : [])]);
+    ...(extra && extra.balls ? [LINES.ballGot(extra.balls)] : []), ...(extra && extra.notes ? extra.notes.filter((n) => n.say).map((n) => n.say) : [])]);
   $('#again').onclick = again;
   $('#toDex').onclick = () => go('dex');
   $('#toMap').onclick = () => go('home');
   $('#toPacks')?.addEventListener('click', () => { sfx('pop'); go('packs', () => go('home')); });
+  $('#toHunt')?.addEventListener('click', () => { sfx('pop'); go('hunt'); });
 }
 
 /* 문제 풀이 틀: items를 하나씩 render로 넘기고 끝나면 결과 화면 */
@@ -353,35 +362,22 @@ MATH.ALL.forEach((l) => { DIFFICULTY[l.id] = l.diff; }); /* 🔢 수학 단계 *
 const diffOf = (key) => DIFFICULTY[key] || 2;
 const diffStars = (d) => '★'.repeat(d) + '☆'.repeat(4 - d);
 function runQuiz(key, items, render) {
-  let i = 0, score = 0, streak = 0, maxStreak = 0, lastOk = false, gained = 0;
+  let i = 0, score = 0, streak = 0, maxStreak = 0, gained = 0;
   const D = DIFF_INFO[diffOf(key)];
-  const seen = []; /* 이번 판에 만난 포켓몬 */
   const next = () => {
     if (i >= items.length) {
       /* 다 맞히면 난이도만큼 보너스 별 */
       const bonus = score === items.length ? D.bonus : 0;
       if (bonus) addStar(bonus);
-      return endRound(key, score, items.length, maxStreak, seen, () => go(key, true), { gained: gained + bonus, bonus });
+      return endRound(key, score, items.length, maxStreak, () => go(key, true), { gained: gained + bonus, bonus });
     }
     app.innerHTML = '';
     render(items[i], i, items.length, (ok) => {
-      lastOk = ok;
       if (!ok) { streak = 0; return; }
       score++; streak++; addStar(D.stars); gained += D.stars;
       maxStreak = Math.max(maxStreak, streak);
       if (streak >= 3) showCombo(streak);
-    }, () => {
-      i++;
-      /* 정답 뒤에 가끔 풀숲이 흔들려요 (한 판에 최대 3마리, 한 마리도 못 만났으면 끝나기 전에 꼭) */
-      const left = items.length - i;
-      const want = lastOk && left > 0 && seen.length < ENCOUNTER_MAX
-        && (Math.random() < 0.35 || (seen.length === 0 && left <= 2));
-      if (want) {
-        const e = rollWild(streak, seen, diffOf(key));
-        seen.push(e);
-        showWild(e, next);
-      } else next();
-    });
+    }, () => { i++; next(); });
   };
   next();
 }
@@ -861,7 +857,7 @@ function checkQuest(key, pct, maxStreak) {
     notes.push({ kind: 'piece', text: `🧩 퀘스트 조각 획득! <b>${q.p}</b> ${S.qstep}/${q.steps.length}`, say: LINES.piece(q.p) });
     if (S.qstep >= q.steps.length) {
       S.qready = true;
-      notes.push({ kind: 'ready', text: `🔥 조각을 다 모았어요! 포획 타임에 <b>${q.p}</b>${josaPick(q.p, ['이', '가'])} 나타나요!`, say: LINES.ready(q.p, josaPick(q.p, ['이', '가'])) });
+      notes.push({ kind: 'ready', text: `🔥 조각을 다 모았어요! 🌿 채집 숲에 <b>${q.p}</b>${josaPick(q.p, ['이', '가'])} 나타나요!`, say: LINES.ready(q.p, josaPick(q.p, ['이', '가'])) });
     }
   } else {
     notes.push({ kind: 'step', text: `🗺️ 미션 진행: ${missionText(ms, true)} (${S.qcount}/${ms.times}번)` });
@@ -896,68 +892,97 @@ function questPanel(full) {
       <b>${q.p}</b>
       <div class="pieces" aria-label="조각 ${step}/${q.steps.length}">${pieces}</div>
       ${S.qready
-        ? '<p>🔥 준비 완료! 아무 섬이나 공부를 마치면 포획 타임에 나타나요.</p>'
+        ? '<p>🔥 준비 완료! 🌿 채집 숲에서 빛나는 풀숲을 찾아봐요.</p>'
         : `<p>다음 미션: <b>${missionText(ms, true)}</b>${(ms.times || 1) > 1 ? ` (${S.qcount || 0}/${ms.times}번)` : ''}</p>`}
       ${full && !S.qready && go ? `<button class="btn small" data-go-mode="${go}">하러 가기 ▶</button>` : ''}
     </div>
   </div>`;
 }
 
-/* ---------- 🌿 공부 중에 만나는 포켓몬 ---------- */
-const ENCOUNTER_MAX = 3;
-function rollWild(streak, seen, diff) {
+/* ---------- 🔴 몬스터볼: 공부하면 받고, 🌿 채집 숲에서 던져요 ----------
+ * 한 판이 끝나면 점수에 따라 몬스터볼 (60점 넘으면 1개, 다 맞히면 +1, 5연속 정답 +1)
+ * 포켓몬은 공부 중에는 나오지 않고, 채집 숲의 풀숲을 뒤져야 나와요. 볼 하나 = 한 번 던지기 */
+function ballsFor(score, total, maxStreak) {
+  const pct = score / total;
+  return (pct >= 0.6 ? 1 : 0) + (score === total ? 1 : 0) + (maxStreak >= 5 ? 1 : 0);
+}
+function addBalls(n) {
+  if (!n) return;
+  S.balls = (S.balls || 0) + n;
+  save();
+  paintBalls();
+}
+function paintBalls() {
+  let pill = $('#ballPill');
+  if (!pill) {
+    pill = document.createElement('span');
+    pill.className = 'stars balls';
+    pill.id = 'ballPill';
+    $('#starPill').before(pill);
+  }
+  pill.innerHTML = `<i class="ball-ico">${ballSvg}</i> <b>${S.balls || 0}</b>`;
+  pill.setAttribute('aria-label', `몬스터볼 ${S.balls || 0}개`);
+}
+/* 채집 숲에서 나올 포켓몬 (희귀 15% · 색 다른 포켓몬은 전설·신화를 잡은 뒤에) */
+function rollWild() {
   const caughtBig = (S.dex || []).some((n) => POKE_BY[n] && 'lms'.includes(POKE_BY[n][5]));
-  /* 어려운 섬일수록, 연속 정답이 길수록 희귀 확률이 올라가요 (예: 쉬움 0연속 8% · 도전 3연속 65%, 최대 75%) */
-  const grade = Math.random() < Math.min(0.75, DIFF_INFO[diff].rare + 0.1 * streak) ? 'r' : 'c';
+  const grade = Math.random() < 0.15 ? 'r' : 'c';
   /* 풀숲에는 가족마다 지금 모습만 나와요 (파이리 → 리자드를 얻으면 리자드가 나와요) */
-  const now = (g) => POKEMON.filter((m) => m[5] === g && spawnable(m[0]) && !seen.some((e) => e.name === m[0]));
+  const now = (g) => POKEMON.filter((m) => m[5] === g && spawnable(m[0]));
   const pool = now(grade).length ? now(grade) : now(grade === 'r' ? 'c' : 'r');
   const fresh = pool.filter((m) => !dexHas(m[0]));
-  const m = pick(fresh.length && Math.random() < 0.7 ? fresh : pool);
-  /* ✨ 시크릿(이로치)은 전설·신화를 잡은 뒤에만, 연속 정답일수록 잘 나와요 */
-  const shiny = caughtBig && Math.random() < (streak >= 5 ? 0.12 : 0.04);
-  return { m, name: m[0], id: m[3], type: m[2], grade: m[5], genus: m[4], shiny, diff };
+  const m = pick(fresh.length && Math.random() < 0.6 ? fresh : pool);
+  const shiny = caughtBig && Math.random() < 0.05;
+  return { m, name: m[0], id: m[3], type: m[2], grade: m[5], genus: m[4], shiny, diff: 2 };
 }
-function showWild(e, cont) {
-  const N = e.name, subj = josaPick(N, ['이', '가']);
-  app.innerHTML = `
-    <div class="wild ${TYPE_TONE[e.type] || 'tn'}${e.shiny ? ' shiny' : ''}">
-      <div class="bush" aria-hidden="true">🌿🌿🌿</div>
-      <div class="wild-mon" aria-hidden="true">${artImg(e.m, e.shiny)}</div>
-    </div>
-    <p class="wild-line" aria-live="polite">${esc(LINES.rustle)}</p>
-    <div class="row wild-after" hidden>
-      ${gradeChip(e.grade, e.shiny)}
-      <p class="small-note">${esc(LINES.wildLater)}</p>
-      <button class="btn primary big" id="wildGo">계속 공부하기 ▶</button>
-    </div>`;
-  sfx('rustle');
-  speak(LINES.rustle);
-  setTimeout(() => {
-    const wild = $('.wild', app);
-    if (!wild) return;
-    wild.classList.add('out');
-    playCry(e.id);
-    sfx(e.grade === 'r' || e.shiny ? 'star' : 'ok');
-    $('.wild-line', app).innerHTML = `<b>${esc(LINES.appear(N, subj))}</b>`;
-    $('.wild-after', app).hidden = false;
-    $('#wildGo').onclick = () => { sfx('pop'); cont(); };
-    setTimeout(() => speak([...(e.shiny ? [LINES.shiny] : []), LINES.appear(N, subj), LINES.wildLater]), 700);
-  }, reduceMotion ? 100 : 1100);
-}
+const legendWild = () => { const q = questNow(); const m = q && S.qready && POKE_BY[q.p]; return m && { m, name: m[0], id: m[3], type: m[2], grade: m[5], genus: m[4], shiny: false, legend: true, diff: 4 }; };
 
-/* 한 판이 끝나면: 퀘스트 확인 → 포획 타임 → 결과 */
-function endRound(key, score, total, maxStreak, seen, again, stars) {
+/* 🌿 채집 숲: 풀숲을 눌러 포켓몬을 찾고, 몬스터볼로 잡아요 */
+const BUSH_N = 6;
+SCREENS.hunt = () => {
+  const balls = S.balls || 0;
+  const legend = legendWild();
+  const glow = legend ? Math.floor(Math.random() * BUSH_N) : -1;
+  const line = !balls ? LINES.huntNoBall : legend ? LINES.huntLegend(legend.name, josaPick(legend.name, ['이', '가'])) : LINES.huntHome;
+  app.innerHTML = `
+    <h2 class="h">🌿 채집 숲 <small class="h-note">몬스터볼 ${balls}개</small></h2>
+    ${bubble(line, 'tight')}
+    <div class="hunt-field${balls ? '' : ' empty'}">
+      ${Array.from({ length: BUSH_N }, (_, k) => `<button class="bush-btn${k === glow ? ' glow' : ''}" data-b="${k}" aria-label="풀숲 ${k + 1}"${balls ? '' : ' disabled'}><span>🌿</span></button>`).join('')}
+    </div>
+    <div class="hunt-balls" aria-hidden="true">${Array.from({ length: Math.min(balls, 10) }, () => `<i class="ball-ico">${ballSvg}</i>`).join('')}${balls > 10 ? `<b>+${balls - 10}</b>` : ''}</div>
+    <p class="small-note center-note">🔴 볼 하나로 한 번 던져요 · 잡으면 🎴 카드 1장이 든 카드팩!</p>
+    <div class="row">${packCount() ? `<button class="btn primary" id="huntPacks">🎴 카드팩 뜯기 (${packCount()})</button>` : ''}<button class="btn" id="huntDex">📖 도감</button>${balls ? '' : '<button class="btn primary" id="huntStudy">📚 공부하러 가기</button>'}</div>`;
+  speak(line);
+  let busy = false;
+  $$('.bush-btn', app).forEach((b) => b.addEventListener('click', async () => {
+    if (busy || !(S.balls > 0)) return;
+    busy = true;
+    b.classList.add('shake');
+    sfx('rustle');
+    await new Promise((r) => setTimeout(r, reduceMotion ? 80 : 700));
+    const isLegend = +b.dataset.b === glow;
+    /* 가끔은 빈 풀숲 (볼은 그대로) */
+    if (!isLegend && Math.random() < 0.2) {
+      b.classList.remove('shake'); b.classList.add('nothing'); b.disabled = true;
+      toast(LINES.huntEmpty); speak(LINES.huntEmpty);
+      busy = false;
+      return;
+    }
+    catchScene([isLegend ? legend : rollWild()], () => go('hunt'));
+  }));
+  $('#huntPacks')?.addEventListener('click', () => { sfx('pop'); go('packs', () => go('hunt')); });
+  $('#huntDex').onclick = () => go('dex');
+  $('#huntStudy')?.addEventListener('click', () => go('home'));
+};
+
+/* 한 판이 끝나면: 퀘스트 확인 → 몬스터볼 → 결과 */
+function endRound(key, score, total, maxStreak, again, stars) {
   const pct = Math.round((score / total) * 100);
   const notes = checkQuest(key, pct, maxStreak);
-  const list = seen.slice();
-  const q = questNow();
-  if (S.qready && q) {
-    const m = POKE_BY[q.p];
-    list.push({ m, name: m[0], id: m[3], type: m[2], grade: m[5], genus: m[4], shiny: false, legend: true, diff: diffOf(key) });
-  }
-  const done = (caught, badge) => finish(key, score, total, again, { caught, notes, badge, stars });
-  if (list.length) catchScene(list, done, notes); else done([], null);
+  const balls = ballsFor(score, total, maxStreak);
+  addBalls(balls);
+  finish(key, score, total, again, { balls, notes, stars });
 }
 
 /* ---------- 🔴 포획 타임: 만난 포켓몬을 하나씩 던져서 잡아요 (포켓몬 GO처럼) ----------
@@ -1003,7 +1028,7 @@ function catchScene(list, onEnd, notes) {
     scene.className = 'go-scene gq-host';
     scene.innerHTML = `
       <div class="go-top">
-        <span class="go-count">${k + 1} / ${list.length}</span>
+        <span class="go-count go-balls" id="goBalls"><i class="ball-ico">${ballSvg}</i> ×${S.balls || 0}</span>
         <div class="go-name"><b>${esc(N)}</b>${gradeChip(q.grade, q.shiny)}</div>
       </div>
       ${k === 0 && notes && notes.length ? `<div class="go-notes">${notes.map((n) => `<p class="qn ${n.kind}">${n.text}</p>`).join('')}</div>` : ''}
@@ -1033,14 +1058,17 @@ function catchScene(list, onEnd, notes) {
     const g = GoCatch.create(scene, {
       art: artImg(q.m, q.shiny), grade: q.grade, shiny: q.shiny, legend: q.legend, ring: R, color: RING_COLOR[q.grade] || '#4ade80',
       maxThrows: 3, slow: () => SWEEP_MS[bet] / 1300, /* 별을 걸수록 고리가 느려져요 (예전과 같은 빠르기) */
+      canThrow: () => (S.balls || 0) > 0, /* 🔴 볼 하나 = 한 번 던지기 (볼이 떨어지거나 3번 놓치면 도망가요) */
       onThrow: () => {
         hush();
+        S.balls = Math.max(0, (S.balls || 0) - 1); save(); paintBalls();
+        $('#goBalls', scene).innerHTML = `<i class="ball-ico">${ballSvg}</i> ×${S.balls}`;
         if (!thrownOnce) { thrownOnce = true; if (bet) { S.stars -= bet; save(); paintStars(); } }
         paintBet();
         ['#betBox', '#betNote', '#goHint'].forEach((s2) => $(s2, scene)?.classList.add('gone'));
       },
       sfx, cry: () => playCry(q.id),
-      say: (kind) => { if (kind === 'miss') speak(LINES.missed); },
+      say: (kind) => { if (kind === 'miss') speak([LINES.missed, ...(S.balls > 0 ? [LINES.throwAgain(S.balls)] : [])]); },
       introMs: 1500,
     });
     scene.cleanupKeys = () => g.stop();
@@ -1049,7 +1077,7 @@ function catchScene(list, onEnd, notes) {
     (async () => {
       if (q.legend) confetti();
       const intro = q.legend ? [LINES.bigAppear(bigName, N, subj), LINES.throwAsk]
-        : [LINES.appear(N, subj), ...(k === 0 ? [...(notes || []).filter((n) => n.say).map((n) => n.say), LINES.catchIntro] : []), LINES.throwAsk];
+        : [LINES.appear(N, subj), ...(k === 0 && notes && notes.length ? notes.filter((n) => n.say).map((n) => n.say) : []), LINES.throwAsk];
       speak(intro);
       setTimeout(() => $('#goBanner', scene)?.classList.add('gone'), 1800);
       const r = await g.start();
@@ -1090,15 +1118,16 @@ function catchScene(list, onEnd, notes) {
         <div class="gr-card">${pokeCard(q.m, q.shiny)}</div>
         <ul class="gr-list">
           ${isNew ? `<li><span>📖 도감 새로 등록</span><b>NEW!</b></li>` : ''}
+          ${q.legend && badge ? `<li><span>🏅 ${esc(badge[0])}</span><b>배지!</b></li>` : ''}
           ${q.shiny ? '<li><span>✨ 색이 다른 포켓몬</span><b>대박!</b></li>' : ''}
-          <li><span>🎴 ${PACK_ODDS[packKind].name}</span><b>+1</b></li>
+          <li><span>🎴 ${PACK_ODDS[packKind].name} (카드 1장)</span><b>+1</b></li>
           ${bet ? `<li><span>⭐ 건 별</span><b>−${bet}</b></li>` : ''}
           ${!q.legend && evoNext(N) && !canEvolve(N) ? `<li><span>🧬 ${esc(evoNext(N))}까지</span><b>${evoDots(N)} ${S.catches[N]}/${EVO_NEED}</b></li>` : ''}
         </ul>
         ${!q.legend && canEvolve(N) ? `<button class="btn evo-cta" id="evoNow">🧬 ${N} ${EVO_NEED}마리 모였어요! 눌러서 진화!</button>` : ''}
         <button class="btn primary big gr-ok" id="nextMon">${lastOne ? '확인 ▶' : '다음 포켓몬 ▶'}</button>`
         : `<p class="gr-title miss">💨 ${esc(N)}${subj} 도망쳤어요</p>
-        <p class="small-note">${q.legend ? LINES.legendAway : '볼을 포켓몬 쪽으로 알맞은 세기로 휙! 색 고리가 작을 때 맞히면 Great · Excellent로 더 잘 잡혀요'}</p>
+        <p class="small-note">${!(S.balls > 0) ? LINES.huntNoBall : q.legend ? LINES.legendAway : '볼을 포켓몬 쪽으로 알맞은 세기로 휙! 색 고리가 작을 때 맞히면 Great · Excellent로 더 잘 잡혀요'}</p>
         <button class="btn primary big gr-ok" id="nextMon">${lastOne ? '확인 ▶' : '다음 포켓몬 ▶'}</button>`;
       box.hidden = false;
       requestAnimationFrame(() => box.classList.add('in'));
