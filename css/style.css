@@ -1771,3 +1771,19 @@ body.scene-open { overflow: hidden; }
 .dex-gens button small { font-size: 12px; color: #64748B; }
 .dex-gens button.on { background: #1C1B22; color: #fff; }
 .dex-gens button.on small { color: #e2e8f0; }
+
+/* 🔴 포켓몬 GO 장면(css/gocatch.css · js/gocatch.js) 위에 얹는 것들 */
+.go-scene.gq-host { background: #9ad7f5; }
+.gq-host .go-top, .gq-host .go-banner, .gq-host .go-msg, .gq-host .go-notes { z-index: 7; }
+.gq-host .go-name { opacity: 1; }
+.gq-host .go-count, .gq-host .go-name { background: rgba(15,23,42,.38); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.25); }
+.gq-host .go-bottom.gq-bet { bottom: calc(126px + env(safe-area-inset-bottom)); z-index: 7; gap: 6px; }
+.gq-host .go-bet { background: rgba(255,255,255,.88); }
+.gq-host .go-hint { font-size: 14px; padding: 5px 14px; border-radius: 999px; background: rgba(15,23,42,.42); text-shadow: none; animation: none; }
+.gq-host .go-msg { transition: opacity .3s; } .gq-host .go-msg.fade { opacity: 0; }
+.gq-host::after { content: ""; position: absolute; inset: 0; z-index: 8; background: rgba(15,23,42,0); pointer-events: none; transition: background .35s; }
+.gq-host:has(.go-result.in)::after { background: rgba(15,23,42,.35); }
+.gq-host .go-result { z-index: 9; bottom: 0; width: min(100vw, 480px); max-height: 78vh; overflow-y: auto; border-radius: 26px 26px 0 0; padding: 20px 18px calc(18px + env(safe-area-inset-bottom)); transform: translate(-50%, 105%); transition: transform .5s cubic-bezier(.2, .9, .25, 1); }
+.gq-host .go-result.in { transform: translate(-50%, 0); }
+.gr-q { margin: -4px 0 0; font-size: 18px; color: #16a34a; }
+.gr-q.great { color: #ca8a04; } .gr-q.excellent { color: #ea580c; }
