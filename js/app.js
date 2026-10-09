@@ -2313,6 +2313,8 @@ SCREENS.friends = (tab, quiet) => {
       <div class="setbox"><p class="small-note">한 이메일(Google 계정)이 우리 가족 계정이에요. 로그인한 뒤 친구 부모님의 이메일로 친구를 맺어요.</p>
       ${c.enabled ? `<button class="btn primary" id="frSignIn" ${c.ready ? '' : 'disabled'}>👨‍👩‍👧 부모님 로그인</button>` : '<p class="small-note">가족 계정 설정(js/firebase-config.js)이 필요해요.</p>'}
       ${authError ? `<p class="auth-error" role="alert">⚠️ ${authError}</p>` : ''}</div>`;
+    app.insertAdjacentHTML('beforeend', practiceBox());
+    wirePractice(app);
     $('#frSignIn')?.addEventListener('click', async () => { await doSignIn(); if (app.className === 'screen-friends') SCREENS.friends(); });
     if (!quiet) speak('친구와 놀려면 부모님이 로그인해야 해요.');
     return;
@@ -2335,7 +2337,7 @@ function friendsBody(quiet) {
   const ok = list.filter((f) => f.status === 'ok');
   const incoming = list.filter((f) => f.incoming);
   const outgoing = list.filter((f) => f.status === 'pending' && !f.incoming);
-  box.innerHTML = `
+  box.innerHTML = `${practiceBox()}
     ${ok.length ? `<div class="fam-list">${ok.map((f) => `<div class="fam-card">
       <div class="fam-head"><b>${esc(f.name)}</b> <small>가족</small></div>
       <div class="fam-kids">${f.kids.length ? f.kids.map((k) => `<div class="fk${k.online ? ' on' : ''}">
@@ -2354,6 +2356,7 @@ function friendsBody(quiet) {
       ${outgoing.map((f) => `<div class="req">⏳ <span>${esc(f.email || f.name)}<br><small>수락을 기다려요</small></span><button class="btn small" data-drop="${f.pid}">취소</button></div>`).join('')}
       ${ok.map((f) => `<div class="req">👫 <span>${esc(f.name)} <small>${esc(f.email)}</small></span><button class="btn small" data-drop="${f.pid}" data-confirm="1">친구 끊기</button></div>`).join('')}
     </details>`;
+  wirePractice(box);
   $$('[data-fight]', box).forEach((b) => b.addEventListener('click', () => { const [uid, kidId] = b.dataset.fight.split('|'); askFight(uid, kidId); }));
   $$('[data-accept]', box).forEach((b) => b.addEventListener('click', async () => { b.disabled = true; await SOCIAL.acceptFriend(b.dataset.accept).catch(() => toast('수락하지 못했어요')); sfx('star'); }));
   $$('[data-drop]', box).forEach((b) => b.addEventListener('click', async () => {
@@ -2373,6 +2376,47 @@ function friendsBody(quiet) {
     if ($('#frMsg')) $('#frMsg').textContent = frMsg;
   });
   if (!quiet) speak(ok.some((f) => f.kids.some((k) => k.online)) ? '온라인 친구에게 카드 대결을 신청해 봐!' : '친구가 앱을 켜면 초록불이 들어와요.');
+}
+
+/* 🤖 연습봇 대결 (로그인 없이 이 기기에서만 · 우리집 학습플래너와 같은 규칙)
+ * 내 카드와 같은 등급 · 같은 강화의 봇 카드와 👆 탭 대결. 봇은 5초에 41~56번
+ * 이기면 봇 카드를 받고, 지면 건 카드가 사라져요 (카드는 끝났을 때 정리해요 — 중간에 그만두면 그대로) */
+const LOCAL_MATCH = {};
+const matchOf = (id) => LOCAL_MATCH[id] || (SOCIAL.ready ? SOCIAL.match(id) : null);
+const meOf = (m) => (m && m.local ? 'me' : SOCIAL.uid);
+const botTaps = () => 41 + Math.floor(Math.random() * 16); /* 41~56 */
+const practiceBox = () => `<div class="fam-card practice-card"><div class="fam-head"><b>🤖 연습봇</b> <small>언제나 온라인</small></div>
+  <p class="small-note">내 카드와 같은 등급 · 같은 강화 카드로 👆 탭 대결! 이기면 봇 카드를 받고, 지면 건 카드가 사라져요.</p>
+  <button class="btn small primary" data-practice="1">⚔️ 연습 대결</button></div>`;
+const wirePractice = (box) => $$('[data-practice]', box).forEach((b) => b.addEventListener('click', startPractice));
+function startPractice() {
+  if (!Object.keys(S.cards || {}).length) { toast('카드가 있어야 대결할 수 있어요. 카드팩을 뜯어 봐요!'); return; }
+  const id = 'local-' + Date.now();
+  LOCAL_MATCH[id] = { id, local: true, stake: true, status: 'pick', users: ['me', 'cpu'], kids: {}, picks: {},
+    who: { me: kidInfo(), cpu: { id: 'cpu', name: '연습봇', avatar: '🤖' } } };
+  sfx('pop');
+  go('battle', id);
+}
+/* 봇 카드: 같은 등급에서 (되도록 다른 카드) 하나, 강화도 똑같이 */
+function cpuCard(mine) {
+  const all = (window.CARD_POOL || {})[mine.cls] || CARDS;
+  const pool = all.length > 1 ? all.filter((c) => c[0] !== mine.id) : all;
+  return cardInfo(pool[Math.floor(Math.random() * pool.length)], mine.lv);
+}
+/* 👆 한 판 탭 수 내기: 연습이면 봇도 바로 내요 */
+function sendTap(m, who, round, n) {
+  if (!m.local) return SOCIAL.tap(m.id, who, round, n);
+  let upd = TapBattle.addTaps(m, who, round, n);
+  if (!upd) return Promise.resolve(false);
+  Object.assign(m, upd);
+  if (m.status === 'roll') { upd = TapBattle.addTaps(m, 'cpu', round, botTaps()); if (upd) Object.assign(m, upd); }
+  if (m.status === 'done' && !m.settledLocal) { /* 끝: 이기면 봇 카드 받기, 지면 건 카드 한 장 사라짐 */
+    m.settledLocal = true;
+    if (m.winner === 'me') giveCard(m.picks.cpu.id, m.picks.cpu.lv); else takeCard(m.picks.me.id);
+    save();
+  }
+  if (app.className === 'screen-battle' && battleId === m.id) renderBattle();
+  return Promise.resolve(true);
 }
 
 /* 대결 신청: 카드를 걸까, 친선으로 할까 */
@@ -2404,18 +2448,21 @@ SCREENS.battle = (id) => {
 const battleCache = {}; /* 끝난 대결 기록은 곧 지워져서, 보고 있는 동안은 여기 남겨 둬요 */
 function renderBattle() {
   if (!window.CARD_BY) return;
-  const m = SOCIAL.match(battleId) || battleCache[battleId];
+  const m = matchOf(battleId) || battleCache[battleId];
   if (m) battleCache[battleId] = m;
   const back = '<div class="row"><button class="btn primary" id="bBack">🤝 친구 광장으로</button></div>';
   const wireBack = () => { $('#bBack')?.addEventListener('click', () => go('friends', 'fr')); };
   if (!m) { app.innerHTML = `<h2 class="h">⚔️ 카드 대결</h2><p class="small-note">이 대결은 끝났어요.</p>${back}`; wireBack(); return; }
-  const me = SOCIAL.uid, other = m.users.find((u) => u !== me);
+  const me = meOf(m), other = m.users.find((u) => u !== me);
   const mine = m.who[me], them = m.who[other];
-  const top = `<h2 class="h">⚔️ 카드 대결</h2>
+  const top = `<h2 class="h">⚔️ ${m.local ? '연습 대결' : '카드 대결'}</h2>
     <div class="vs"><span class="vs-kid">${mine.avatar}<b>${esc(mine.name)}</b></span><span class="vs-x">VS</span><span class="vs-kid">${them.avatar}<b>${esc(them.name)}</b></span></div>
-    <p class="small-note center-note">${m.stake ? '🎴 카드 걸기 대결 · 이기면 친구 카드를 가져와요' : '🤝 친선 대결 · 카드는 그대로, 이기면 ⭐1'}</p>`;
+    <p class="small-note center-note">${m.local ? '🤖 같은 등급 · 같은 강화 봇 카드 · 이기면 봇 카드를 받고, 지면 건 카드가 사라져요' : m.stake ? '🎴 카드 걸기 대결 · 이기면 친구 카드를 가져와요' : '🤝 친선 대결 · 카드는 그대로, 이기면 ⭐1'}</p>`;
   const quit = '<button class="btn ghost" id="bQuit">그만하기</button>';
-  const wireQuit = () => { $('#bQuit')?.addEventListener('click', async () => { await SOCIAL.cancel(m.id).catch(() => {}); go('friends', 'fr'); }); };
+  const wireQuit = () => { $('#bQuit')?.addEventListener('click', async () => {
+    if (m.local) delete LOCAL_MATCH[m.id]; else await SOCIAL.cancel(m.id).catch(() => {});
+    go('friends', 'fr');
+  }); };
   if (m.status === 'invite') {
     app.innerHTML = `${top}<div class="wait">⏳ <b>${esc(them.name)}</b>의 대답을 기다려요…</div><div class="row">${quit}</div>`;
     wireQuit();
@@ -2437,13 +2484,13 @@ function renderBattle() {
     }
     const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean)
       .map((c) => ({ c, p: SOCIAL.power(cardInfo(c, cardLv(c[0]))) })).sort((a, b) => b.p - a.p);
-    app.innerHTML = `${top}${bubble(m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
+    app.innerHTML = `${top}${bubble(m.local ? '걸 카드를 골라! 같은 등급 · 같은 강화의 봇 카드와 대결해. 지면 이 카드는 사라져.' : m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
       <p class="small-note center-note">👆 탭 대결: 한 판 점수 = ⚡카드 힘 × 5초 동안 탭한 수 (컴퓨터는 스페이스바) · 3판 2선승</p>
       <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}${c[7] ? ` ${c[7]}` : ''}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}</button>`).join('')}</div>
       <div class="row">${quit}</div>`;
     wireQuit();
     $$('[data-pick]', app).forEach((b) => b.addEventListener('click', () => confirmPick(m, CARD_BY[b.dataset.pick])));
-    speak(m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라!');
+    speak(m.local ? '연습봇과 대결할 카드를 골라!' : m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라!');
     return;
   }
   if (m.status === 'roll' || m.status === 'done') rollView(m, top);
@@ -2452,11 +2499,18 @@ function confirmPick(m, c) {
   const info = cardInfo(c, cardLv(c[0]));
   const el = sheet(`${cardFace(c)}<p class="inv-t"><b>${esc(c[1])}</b> · ⚡ ${SOCIAL.power(info)}</p>
     <p class="small-note">점수 = ⚡${SOCIAL.power(info)} × 👆탭 수</p>
-    <p class="small-note">${m.stake ? '이 카드로 할까요? 지면 친구에게 가요.' : '이 카드로 할까요?'}</p>
+    <p class="small-note">${m.local ? '이 카드를 걸까요? 이기면 봇 카드를 받고, 지면 이 카드는 사라져요.' : m.stake ? '이 카드로 할까요? 지면 친구에게 가요.' : '이 카드로 할까요?'}</p>
     <div class="row"><button class="btn primary" id="pYes">⚔️ 이 카드로!</button><button class="btn" id="pNo">다시 고를래</button></div>`);
   $('#pNo', el).onclick = closeSheet;
   $('#pYes', el).onclick = async () => {
     closeSheet();
+    if (m.local) { /* 연습: 봇 카드는 같은 등급 · 같은 강화. 카드 정리는 끝났을 때 */
+      m.picks = { me: info, cpu: cpuCard(info) };
+      Object.assign(m, TapBattle.startFields());
+      sfx('pop');
+      renderBattle();
+      return;
+    }
     S.social = S.social || { escrow: {}, done: {} };
     let card = info;
     if (m.stake) { /* 이 카드를 맡겨 둬요 (이기면 돌아와요) */
@@ -2480,7 +2534,7 @@ const PIPS = { 1: [[50, 50]], 2: [[28, 28], [72, 72]], 3: [[26, 26], [50, 50], [
 const dieSvg = (n) => `<svg viewBox="0 0 100 100" aria-label="${n}"><rect x="5" y="5" width="90" height="90" rx="20" class="die-body"/>${PIPS[n].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${n === 1 ? 13 : 9}" class="${n === 1 ? 'pip one' : 'pip'}"/>`).join('')}</svg>`;
 let revealChain = Promise.resolve();
 function rollSides(m) {
-  const me = SOCIAL.uid, other = m.users.find((u) => u !== me);
+  const me = meOf(m), other = m.users.find((u) => u !== me);
   const meFirst = m.users[0] === me; /* rounds는 users[0] 기준이라 내 쪽으로 돌려요 */
   const rounds = (m.rounds || []).map((r) => (meFirst ? r : { ta: r.tb, tb: r.ta, da: r.db, db: r.da, sa: r.sb, sb: r.sa, w: r.w === -1 ? -1 : 1 - r.w }));
   return { me, other, rounds, A: m.picks[me], B: m.picks[other] };
@@ -2509,7 +2563,7 @@ function rollView(m, top) {
       <div class="rounds" id="bRounds" aria-live="polite"></div>
       <div id="bEnd"></div>`;
     root = $('#arena');
-    if (m.status === 'roll') speak('화면을 톡톡톡! 많이 누를수록 힘이 세져!');
+    if (m.status === 'roll') speak(m.local ? '연습봇이랑 탭 대결! 화면을 톡톡톡!' : '화면을 톡톡톡! 많이 누를수록 힘이 세져!');
   }
   const taps = m.taps || {};
   const mine = (taps[me] || []).length, theirs = (taps[other] || []).length;
@@ -2547,7 +2601,7 @@ function rollView(m, top) {
     $('#rollBtn').disabled = true;
     const n = await TapBattle.play({ label: tension ? '🔥 마지막 판!' : `${cur + 1}판`, who: `${m.who[me].avatar || ''} ${esc(m.who[me].name)} · ${esc(A.name)}`, power: SOCIAL.power(A) });
     if ($('#dA')) $('#dA').textContent = `👆${n}`;
-    SOCIAL.tap(m.id, me, cur, n).catch(() => toast('앗, 연결이 끊겼어요. 다시 눌러 봐요'));
+    sendTap(m, me, cur, n).catch(() => toast('앗, 연결이 끊겼어요. 다시 눌러 봐요'));
   };
 }
 /* 🎲 주사위 무대: 화면을 둘로 나눠요 (가로 화면: 왼쪽 나 · 오른쪽 친구 / 세로 화면(휴대폰): 위 나 · 아래 친구)
@@ -2642,15 +2696,16 @@ const scoreHow = (P, taps, sc) => `⚡${SOCIAL.power(P)} × 👆${taps} = <b>${s
 async function revealRound(rounds, i, A, B) {
   if (!$('#arena')) return;
   const r = rounds[i];
+  const foe = (matchOf(battleId) || {}).local ? '봇' : '친구';
   $('#dA').textContent = `👆${r.ta}`;
   if ($('#dB')) $('#dB').textContent = `👆${r.tb}`;
   $('#nB').textContent = '';
   const win = r.w === -1 ? null : r.w === 0;
   sfx(win === true ? 'roundWin' : win === false ? 'roundLose' : 'pop');
-  await TapBattle.banner(`<b>${win === null ? '🤝 비겼어요! 한 번 더!' : win ? '👍 이 판은 내가 이겼어!' : '💥 이 판은 친구가 이겼어!'}</b><small>나 ${scoreHow(A, r.ta, r.sa)}</small><small>친구 ${scoreHow(B, r.tb, r.sb)}</small>`, win === true ? 'win' : win === false ? 'lose' : '');
+  await TapBattle.banner(`<b>${win === null ? '🤝 비겼어요! 한 번 더!' : win ? '👍 이 판은 내가 이겼어!' : `💥 이 판은 ${foe === '봇' ? '봇이' : '친구가'} 이겼어!`}</b><small>나 ${scoreHow(A, r.ta, r.sa)}</small><small>${foe} ${scoreHow(B, r.tb, r.sb)}</small>`, win === true ? 'win' : win === false ? 'lose' : '');
   const lines = $('#bRounds');
   if (!lines) return;
-  lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: ${scoreHow(A, r.ta, r.sa)} vs ${scoreHow(B, r.tb, r.sb)} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : '💥 친구가 이겼어!'}</p>`);
+  lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: ${scoreHow(A, r.ta, r.sa)} vs ${scoreHow(B, r.tb, r.sb)} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : `💥 ${foe === '봇' ? '봇이' : '친구가'} 이겼어!`}</p>`);
   const won = rounds.slice(0, i + 1);
   $('#bScore').textContent = `${won.filter((x) => x.w === 0).length} : ${won.filter((x) => x.w === 1).length}`;
   const f = r.w === 0 ? $('#fA') : r.w === 1 ? $('#fB') : null;
@@ -2658,7 +2713,7 @@ async function revealRound(rounds, i, A, B) {
   await new Promise((res) => setTimeout(res, reduceMotion ? 60 : 300));
 }
 /* 🏆 승리 / 😢 패배 장면 (card: 이기면 가져온 카드, 지면 보낸 카드) */
-async function battleScene(won, stake, card) {
+async function battleScene(won, stake, card, bot) {
   const w = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? Math.min(ms, 60) : ms));
   const c = card && CARD_BY[card.id];
   const el = document.createElement('div');
@@ -2666,11 +2721,11 @@ async function battleScene(won, stake, card) {
   el.innerHTML = won
     ? `<div class="evo-rays gold" aria-hidden="true"></div>
        <p class="bt-big">🏆</p><p class="bt-word">승리!</p>
-       ${stake && c ? `<div class="bt-card">${cardFace(c, false, card.lv)}<span class="bt-get">GET!</span></div><p class="bt-sub"><b>${esc(card.name)}</b> 카드를 가져왔어요!</p>` : '<p class="bt-sub">🤝 친선 대결 승리! ⭐ +1</p>'}
+       ${stake && c ? `<div class="bt-card">${cardFace(c, false, card.lv)}<span class="bt-get">GET!</span></div><p class="bt-sub"><b>${esc(card.name)}</b> 카드를 ${bot ? '받았어요' : '가져왔어요'}!</p>` : '<p class="bt-sub">🤝 친선 대결 승리! ⭐ +1</p>'}
        <button class="btn primary big bt-ok">좋아! 👍</button>`
     : `<div class="rain" aria-hidden="true">${Array.from({ length: 28 }, () => `<i style="left:${Math.random() * 100}%;animation-delay:${(Math.random() * 1.2).toFixed(2)}s;animation-duration:${(0.7 + Math.random() * 0.6).toFixed(2)}s"></i>`).join('')}</div>
        <p class="bt-big">😢</p><p class="bt-word">아쉽다…</p>
-       ${stake && c ? `<div class="bt-card gone">${cardFace(c, false, card.lv)}</div><p class="bt-sub"><b>${esc(card.name)}</b> 카드가 친구에게 갔어요</p>` : ''}
+       ${stake && c ? `<div class="bt-card gone">${cardFace(c, false, card.lv)}</div><p class="bt-sub"><b>${esc(card.name)}</b> 카드가 ${bot ? '사라졌어요' : '친구에게 갔어요'}</p>` : ''}
        <p class="bt-sub">괜찮아! 다음엔 꼭 이길 거야 💪</p>
        <button class="btn primary big bt-ok">다시 힘내기 💪</button>`;
   document.body.appendChild(el);
@@ -2696,7 +2751,17 @@ async function battleEnd(m) {
   const { me, other, A, B } = rollSides(m);
   const them = m.who[other];
   const won = m.winner === me;
-  await battleScene(won, m.stake, won ? B : A);
+  await battleScene(won, m.stake, won ? B : A, m.local);
+  if (m.local) {
+    $('#bEnd').innerHTML = `<p class="bt-result ${won ? 'win' : 'lose'}">${won ? '🏆 연습봇을 이겼어요!' : '😢 연습봇에게 졌어요'}</p>
+      <p class="small-note center-note">${won ? `🎴 봇의 <b>${esc(B.name)}</b> 카드를 받았어요!` : `🎴 <b>${esc(A.name)}</b> 카드가 사라졌어요. 다음엔 이길 거야!`}</p>
+      <div class="row"><button class="btn primary" id="bAgain">🤖 한 번 더</button><button class="btn" id="bBack">🤝 친구 광장</button></div>`;
+    speak(won ? `이겼어! ${B.name} 카드를 받았어!` : '아쉽게 졌어. 다음엔 이길 거야!');
+    delete LOCAL_MATCH[m.id];
+    $('#bBack').onclick = () => go('friends', 'fr');
+    $('#bAgain').onclick = startPractice;
+    return;
+  }
   $('#bEnd').innerHTML = `<p class="bt-result ${won ? 'win' : 'lose'}">${won ? '🏆 이겼어요!' : '😢 아쉽게 졌어요'}</p>
     <p class="small-note center-note">${m.stake ? (won ? `🎴 <b>${esc(B.name)}</b> 카드를 가져왔어요! (내 카드도 돌아와요)` : `🎴 <b>${esc(A.name)}</b> 카드가 ${esc(them.name)}에게 갔어요. 다음엔 이길 거야!`) : won ? '🤝 친선 대결 승리! ⭐1' : '🤝 친선 대결이라 카드는 그대로예요.'}</p>
     <div class="row"><button class="btn primary" id="bAgain">⚔️ 한 번 더</button><button class="btn" id="bBack">🤝 친구 광장</button></div>`;
@@ -3042,5 +3107,5 @@ paintSplashAcct();
 SOCIAL.setKid(STORE.current().id);
 STORE.init();
 /* 테스트용: 주소에 ?gqtest 를 붙이면 포획 장면을 바로 열 수 있어요 */
-if (location.search.includes('gqtest')) window.__gq = { catchScene, rollWild, POKE_BY };
+if (location.search.includes('gqtest')) window.__gq = { catchScene, rollWild, POKE_BY, loadCards, go, save, startPractice, get S() { return S; } };
 })();
