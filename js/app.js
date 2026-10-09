@@ -34,7 +34,7 @@ function loadState() {
   S = Object.assign({ stars: 0, best: {} }, STORE.load());
   /* stars = 쓸 수 있는 별(포획 타임에 걸고, 카드 강화에 써요), earned = 지금까지 모은 별 전체 */
   if (S.earned == null) S.earned = S.stars;
-  if (S.balls == null) S.balls = 5; /* 🔴 처음 받는 몬스터볼 (BALL_START) */
+  if (S.balls == null) S.balls = 1; /* 🔴 처음 받는 몬스터볼 하나 (그다음은 별 10개마다 하나) */
   migrateEvo();
 }
 /* 🧬 진화: 같은 모습 EVO_NEED마리가 모이면 다음 단계 한 마리로 → [[전, 후], …]
@@ -202,9 +202,22 @@ function toast(html, ms = 2200) {
   toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
 function paintStars() { $('#starCount').textContent = S.stars; paintBalls(); }
-function addStar(n = 1) {
+/* 별을 모아요. 모은 별(earned)이 10개를 넘을 때마다 🔴 몬스터볼 하나 */
+const STARS_PER_BALL = 10;
+function earnStars(n) {
+  const before = S.earned || 0;
   S.stars += n;
-  S.earned += n;
+  S.earned = before + n;
+  const got = Math.floor(S.earned / STARS_PER_BALL) - Math.floor(before / STARS_PER_BALL);
+  if (got > 0) {
+    S.balls = (S.balls || 0) + got;
+    setTimeout(() => toast(`<i class="ball-ico">${ballSvg}</i> 별 ${STARS_PER_BALL}개를 모아서 몬스터볼 +${got}!`), 300);
+  }
+  return got;
+}
+const starsToBall = () => STARS_PER_BALL - ((S.earned || 0) % STARS_PER_BALL);
+function addStar(n = 1) {
+  earnStars(n);
   save();
   paintStars();
   const pill = $('#starPill');
@@ -273,7 +286,7 @@ function dexHint() {
 }
 function huntHint() {
   if (S.qready && questNow()) return `🔥 ${questNow().p}${josaPick(questNow().p, ['이', '가'])} 숲에 나타났어요!`;
-  return S.balls ? `몬스터볼 ${S.balls}개로 포켓몬 잡기` : '공부해서 몬스터볼을 모아요';
+  return S.balls ? `몬스터볼 ${S.balls}개로 포켓몬 잡기` : `별 ${starsToBall()}개 더 모으면 몬스터볼!`;
 }
 SCREENS.home = () => {
   const math = S.subject === 'math';
@@ -332,7 +345,7 @@ function finish(key, score, total, again, extra) {
         </div>
       </div>
       ${extra && extra.stars ? `<button class="ball-cta${extra.balls ? '' : ' none'}" id="toHunt"><span class="ball-row">${Array.from({ length: Math.max(1, extra.balls || 0) }, () => `<i class="ball-ico">${ballSvg}</i>`).join('')}</span>
-        <span><b>${extra.balls ? `몬스터볼 +${extra.balls}` : '몬스터볼은 60점부터'}</b><small>🌿 채집 숲에서 포켓몬 잡기 (볼 ${S.balls || 0}개) ▶</small></span></button>` : ''}
+        <span><b>${extra.balls ? `몬스터볼 +${extra.balls}` : `다음 몬스터볼까지 ⭐ ${starsToBall()}개`}</b><small>🌿 채집 숲에서 포켓몬 잡기 (볼 ${S.balls || 0}개) ▶</small></span></button>` : ''}
       ${extra && extra.notes && extra.notes.length ? `<div class="fin-notes">${extra.notes.map((n) => `<p class="qn ${n.kind}">${n.text}</p>`).join('')}</div>` : ''}
       ${extra && extra.badge ? `<div class="badge-won"><span class="badge got big" style="--bc:${extra.badge[2]}"><i>${extra.badge[1]}</i></span><p><b>${extra.badge[0]}</b>를 받았어요!</p></div>` : ''}
       <div class="fin-grid">
@@ -364,12 +377,13 @@ const diffStars = (d) => '★'.repeat(d) + '☆'.repeat(4 - d);
 function runQuiz(key, items, render) {
   let i = 0, score = 0, streak = 0, maxStreak = 0, gained = 0;
   const D = DIFF_INFO[diffOf(key)];
+  const balls0 = S.balls || 0; /* 이번 판에 받은 몬스터볼을 세려고 */
   const next = () => {
     if (i >= items.length) {
       /* 다 맞히면 난이도만큼 보너스 별 */
       const bonus = score === items.length ? D.bonus : 0;
       if (bonus) addStar(bonus);
-      return endRound(key, score, items.length, maxStreak, () => go(key, true), { gained: gained + bonus, bonus });
+      return endRound(key, score, items.length, maxStreak, () => go(key, true), { gained: gained + bonus, bonus, balls: Math.max(0, (S.balls || 0) - balls0) });
     }
     app.innerHTML = '';
     render(items[i], i, items.length, (ok) => {
@@ -899,19 +913,8 @@ function questPanel(full) {
   </div>`;
 }
 
-/* ---------- 🔴 몬스터볼: 공부하면 받고, 🌿 채집 숲에서 던져요 ----------
- * 한 판이 끝나면 점수에 따라 몬스터볼 (60점 넘으면 1개, 다 맞히면 +1, 5연속 정답 +1)
- * 포켓몬은 공부 중에는 나오지 않고, 채집 숲의 풀숲을 뒤져야 나와요. 볼 하나 = 한 번 던지기 */
-function ballsFor(score, total, maxStreak) {
-  const pct = score / total;
-  return (pct >= 0.6 ? 1 : 0) + (score === total ? 1 : 0) + (maxStreak >= 5 ? 1 : 0);
-}
-function addBalls(n) {
-  if (!n) return;
-  S.balls = (S.balls || 0) + n;
-  save();
-  paintBalls();
-}
+/* ---------- 🔴 몬스터볼: 공부해서 별 10개를 모을 때마다 1개, 🌿 채집 숲에서 던져요 ----------
+ * 포켓몬은 공부 중에는 나오지 않고, 채집 숲의 풀숲을 뒤져야 나와요. 볼 하나 = 한 번 던지기 (earnStars) */
 function paintBalls() {
   let pill = $('#ballPill');
   if (!pill) {
@@ -945,13 +948,13 @@ SCREENS.hunt = () => {
   const glow = legend ? Math.floor(Math.random() * BUSH_N) : -1;
   const line = !balls ? LINES.huntNoBall : legend ? LINES.huntLegend(legend.name, josaPick(legend.name, ['이', '가'])) : LINES.huntHome;
   app.innerHTML = `
-    <h2 class="h">🌿 채집 숲 <small class="h-note">몬스터볼 ${balls}개</small></h2>
+    <h2 class="h">🌿 채집 숲 <small class="h-note">몬스터볼 ${balls}개 · 다음 볼까지 ⭐${starsToBall()}</small></h2>
     ${bubble(line, 'tight')}
     <div class="hunt-field${balls ? '' : ' empty'}">
       ${Array.from({ length: BUSH_N }, (_, k) => `<button class="bush-btn${k === glow ? ' glow' : ''}" data-b="${k}" aria-label="풀숲 ${k + 1}"${balls ? '' : ' disabled'}><span>🌿</span></button>`).join('')}
     </div>
     <div class="hunt-balls" aria-hidden="true">${Array.from({ length: Math.min(balls, 10) }, () => `<i class="ball-ico">${ballSvg}</i>`).join('')}${balls > 10 ? `<b>+${balls - 10}</b>` : ''}</div>
-    <p class="small-note center-note">🔴 볼 하나로 한 번 던져요 · 잡으면 🎴 카드 1장이 든 카드팩!</p>
+    <p class="small-note center-note">⭐ 별 ${STARS_PER_BALL}개 = 몬스터볼 1개 · 볼 하나로 한 번 던져요 · 잡으면 🎴 카드 1장이 든 카드팩!</p>
     <div class="row">${packCount() ? `<button class="btn primary" id="huntPacks">🎴 카드팩 뜯기 (${packCount()})</button>` : ''}<button class="btn" id="huntDex">📖 도감</button>${balls ? '' : '<button class="btn primary" id="huntStudy">📚 공부하러 가기</button>'}</div>`;
   speak(line);
   let busy = false;
@@ -980,9 +983,7 @@ SCREENS.hunt = () => {
 function endRound(key, score, total, maxStreak, again, stars) {
   const pct = Math.round((score / total) * 100);
   const notes = checkQuest(key, pct, maxStreak);
-  const balls = ballsFor(score, total, maxStreak);
-  addBalls(balls);
-  finish(key, score, total, again, { balls, notes, stars });
+  finish(key, score, total, again, { balls: stars.balls || 0, notes, stars });
 }
 
 /* ---------- 🔴 포획 타임: 만난 포켓몬을 하나씩 던져서 잡아요 (포켓몬 GO처럼) ----------
@@ -2168,7 +2169,7 @@ function settleSocial() {
           if (mine) giveCard(mine.id, mine.lv);
           giveCard(got.id, got.lv);
           notes.push(`⚔️ ${esc(them.name)}${josaPick(them.name, ['과', '와'])}의 대결에서 이겨서 <b>${esc(got.name)}</b> 카드를 받았어요!`);
-        } else { S.stars += 1; S.earned += 1; notes.push(`🤝 ${esc(them.name)}${josaPick(them.name, ['과', '와'])}의 친선 대결에서 이겨서 ⭐1!`); }
+        } else { earnStars(1); notes.push(`🤝 ${esc(them.name)}${josaPick(them.name, ['과', '와'])}의 친선 대결에서 이겨서 ⭐1!`); }
       } else if (m.stake && mine) notes.push(`⚔️ ${esc(them.name)}에게 <b>${esc(mine.name)}</b> 카드를 보냈어요. 다음엔 이길 거야!`);
     } else if (m.status === 'cancel' || m.status === 'declined' || expired) {
       if (mine) giveCard(mine.id, mine.lv);
