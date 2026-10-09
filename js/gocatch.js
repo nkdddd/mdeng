@@ -14,6 +14,40 @@
 (function(){
 const reduce=window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const wait=ms=>new Promise(r=>setTimeout(r, reduce? Math.min(ms,80) : ms));
+/* 🎞️ 움직임 엔진: 브라우저 애니메이션(WAAPI) 대신 한 장면씩 style을 직접 바꿔요
+   (아이폰 사파리에서 WAAPI 이동이 안 보이던 문제 — 손으로 끌 때처럼 style.transform은 어디서나 보여요) */
+const BZ={linear:[0,0,1,1], ease:[.25,.1,.25,1], "ease-in":[.42,0,1,1], "ease-out":[0,0,.58,1], "ease-in-out":[.42,0,.58,1]};
+const bez=e=>{ let p=BZ[e||"linear"]; if(!p){ const m=/cubic-bezier\(([^)]+)\)/.exec(e||""); p=m? m[1].split(",").map(Number) : BZ.linear; }
+  const [x1,y1,x2,y2]=p; if(x1===y1 && x2===y2) return t=>t;
+  const cx=3*x1, bx=3*(x2-x1)-cx, ax=1-cx-bx, cy=3*y1, by=3*(y2-y1)-cy, ay=1-cy-by;
+  const X=s=>((ax*s+bx)*s+cx)*s, Y=s=>((ay*s+by)*s+cy)*s;
+  return t=>{ let lo=0, hi=1, s=t; for(let i=0;i<22;i++){ const x=X(s); if(Math.abs(x-t)<1e-4) break; if(x<t) lo=s; else hi=s; s=(lo+hi)/2; } return Y(s); }; };
+const NUM=/-?\d*\.?\d+/g;
+const mix=(a,b,t)=>{ a=String(a); b=String(b); if(a===b) return a;
+  const na=a.match(NUM)||[], nb=b.match(NUM)||[], ta=a.replace(NUM,"\u0001"), tb=b.replace(NUM,"\u0001");
+  if(ta!==tb) return t<1? a : b;
+  let i=0; return ta.replace(/\u0001/g,()=>{ const v=+na[i]+(+nb[i]-+na[i])*t; i++; return String(+v.toFixed(4)); }); };
+const RUN=new WeakMap();
+function A(el, kf, o){
+  o=typeof o==="number"? {duration:o} : (o||{});
+  const n=kf.length, ks=kf.map((k,i)=>({...k, offset:k.offset!=null? k.offset : (n<2? 1 : i/(n-1))}));
+  const props=[...new Set(ks.flatMap(k=>Object.keys(k).filter(p=>p!=="offset" && p!=="easing")))];
+  const before={}; props.forEach(p=>before[p]=el.style[p]);
+  const ez=bez(o.easing), segE=ks.map(k=>bez(k.easing)), ms=reduce? 1 : Math.max(1, o.duration||1);
+  let done, raf=0, over=false; const finished=new Promise(r=>done=r);
+  const paint=g=>{ let i=0; while(i<n-2 && g>ks[i+1].offset) i++;
+    const a=ks[i], b=ks[Math.min(i+1,n-1)], span=(b.offset-a.offset)||1, u=segE[i](Math.min(1,Math.max(0,(g-a.offset)/span)));
+    props.forEach(p=>{ const va=a[p]!=null? a[p] : before[p], vb=b[p]!=null? b[p] : va; el.style[p]=mix(va, vb, u); }); };
+  const end=keep=>{ if(over) return; over=true; cancelAnimationFrame(raf); const set=RUN.get(el); set && set.delete(api);
+    if(!keep) props.forEach(p=>el.style[p]=before[p]); done(); };
+  const t0=performance.now();
+  const step=now=>{ if(over) return; const t=Math.min(1, Math.max(0,(now-t0)/ms)); paint(ez(t)); if(t<1) raf=requestAnimationFrame(step); else end(o.fill==="forwards"); };
+  const api={finished, cancel:()=>{ if(over) props.forEach(p=>el.style[p]=before[p]); else end(false); }};   // 끝난 뒤 cancel = 원래대로
+  if(!RUN.has(el)) RUN.set(el, new Set()); RUN.get(el).add(api);
+  paint(0); raf=requestAnimationFrame(step);
+  return api;
+}
+const stopAll=el=>{ const set=RUN.get(el); if(set) [...set].forEach(a=>a.cancel()); };
 let uid=0;
 // 입체 몬스터볼 (그라데이션 · 반짝이) — 화면마다 id가 겹치지 않게 새로 만들어요
 const ballSVG=()=>{ const k="gqb"+(++uid);
@@ -73,11 +107,11 @@ function create(root, o){
     if(charge){ aimT+=dt; aim=Math.sin(2*Math.PI*aimT/1500); arrow.style.transform=`translateX(-50%) rotate(${(aim*24).toFixed(1)}deg)`; }
     raf=requestAnimationFrame(tick);
   };
-  const hop=()=>body.animate([{transform:"translateY(0)"},{transform:"translateY(-18%) scaleY(1.04)",offset:.45},{transform:"translateY(0) scaleY(.96)",offset:.85},{transform:"translateY(0)"}],{duration:620,easing:"ease-out"});
+  const hop=()=>A(body, [{transform:"translateY(0%) scaleY(1)"},{transform:"translateY(-18%) scaleY(1.04)",offset:.45},{transform:"translateY(0%) scaleY(.96)",offset:.85},{transform:"translateY(0%) scaleY(1)"}],{duration:620,easing:"ease-out"});
 
   /* ---------- 손에 든 볼: 끌기 · 빙글빙글(커브볼) · 튕겨 던지기 ---------- */
   let drag=null, curve=0;
-  const spring=()=>{ ball.animate([{transform:ball.style.transform||"none"},{transform:"translate(0,0)"}],{duration:260,easing:"cubic-bezier(.3,1.6,.5,1)"}); ball.style.transform=""; };
+  const spring=()=>{ A(ball, [{transform:ball.style.transform||"translate(0px, 0px)"},{transform:"translate(0px, 0px)"}],{duration:260,easing:"cubic-bezier(.3,1.6,.5,1)"}); ball.style.transform=""; };
   ball.addEventListener("pointerdown", e=>{
     if(!live||busy) return; e.preventDefault();
     const r=ball.getBoundingClientRect();
@@ -156,7 +190,7 @@ function create(root, o){
     const inRing=onBody && Math.abs(landX-RG.x)<=RG.w/2*ringNow*1.02;
     const quality=!inRing? "none" : ringNow<=thr*0.75? "excellent" : ringNow<=Math.max(thr+0.12,0.5)? "great" : "nice";
     // 손에 든 볼 → 날아가는 볼로 바꿔요
-    ball.getAnimations().forEach(a=>a.cancel()); ball.style.transform=""; ballSvg.style.transform=""; ball.classList.remove("curve");
+    stopAll(ball); ball.style.transform=""; ballSvg.style.transform=""; ball.classList.remove("curve");
     ball.style.visibility="hidden"; fly.className="gq-fly on"+(cv?" curve":"");
     ringEl.classList.add("hide");
     o.sfx("throw");
@@ -193,7 +227,7 @@ function create(root, o){
         await move(420, t=>({x:T.x+sd*70*t, y:T.y+M.h*.4*ease.in(t), s:end.s*(1-.2*t), r:end.r+260*t, gy:feetY, so:.4, o:1-t}));
         say("앗, 빗나갔다!", "miss");
       }
-      if(!reduce) body.animate([{transform:"translateY(0)"},{transform:`translate(${-sd*6}%, -14%) rotate(${-sd*6}deg)`,offset:.4},{transform:"translateY(0)"}],{duration:480,easing:"ease-out"});
+      if(!reduce) A(body, [{transform:"translate(0%, 0%) rotate(0deg)"},{transform:`translate(${-sd*6}%, -14%) rotate(${-sd*6}deg)`,offset:.4},{transform:"translate(0%, 0%) rotate(0deg)"}],{duration:480,easing:"ease-out"});
       o.say("miss");
       fly.className="gq-fly"; fsh.style.opacity=0;
       await wait(700);
@@ -205,7 +239,7 @@ function create(root, o){
     const hitP=await arc(P, 1, depth*.48, 700);
     o.sfx("hit");
     bonk(P, hitP.s);
-    if(!reduce) body.animate([{transform:"scale(1,1)"},{transform:"scale(1.08,.88)",offset:.3},{transform:"scale(.97,1.04)",offset:.65},{transform:"scale(1,1)"}],{duration:300,easing:"ease-out"});
+    if(!reduce) A(body, [{transform:"scale(1,1)"},{transform:"scale(1.08,.88)",offset:.3},{transform:"scale(.97,1.04)",offset:.65},{transform:"scale(1,1)"}],{duration:300,easing:"ease-out"});
     const q=[quality!=="none"&&WORD[quality], cv&&"커브볼!"].filter(Boolean).join(" ");
     if(q){ say(q, "q "+(quality!=="none"? quality : "curve")); o.say(quality!=="none"? quality : "curve"); }
     // 탁 튀어 올라 공중에서 멈춰요 (돌던 볼이 멈추며 똑바로)
@@ -218,23 +252,24 @@ function create(root, o){
     const beam=document.createElement("i"); beam.className="gq-beam";
     beam.style.cssText=`left:${P2.x.toFixed(0)}px;top:${P2.y.toFixed(0)}px;height:${len.toFixed(0)}px;width:${Math.max(18,B*sB*.7).toFixed(0)}px`;
     fx.appendChild(beam);
-    beam.animate([{transform:`translateX(-50%) rotate(${ang}deg) scaleY(0)`},{transform:`translateX(-50%) rotate(${ang}deg) scaleY(1)`}],{duration:reduce?1:180,easing:"ease-out",fill:"forwards"});
+    A(beam, [{transform:`translateX(-50%) rotate(${ang}deg) scaleY(0)`},{transform:`translateX(-50%) rotate(${ang}deg) scaleY(1)`}],{duration:reduce?1:180,easing:"ease-out",fill:"forwards"});
     const glow=document.createElement("i"); glow.className="gq-glow"; glow.style.cssText=`left:${P2.x.toFixed(0)}px;top:${P2.y.toFixed(0)}px`;
     fx.appendChild(glow);
-    glow.animate([{transform:"translate(-50%,-50%) scale(.2)",opacity:0},{transform:"translate(-50%,-50%) scale(1)",opacity:1}],{duration:reduce?1:260,easing:"ease-out",fill:"forwards"});
-    const tintA=tint.animate([{opacity:0},{opacity:1}],{duration:reduce?1:220,fill:"forwards"});
+    A(glow, [{transform:"translate(-50%,-50%) scale(.2)",opacity:0},{transform:"translate(-50%,-50%) scale(1)",opacity:1}],{duration:reduce?1:260,easing:"ease-out",fill:"forwards"});
+    const tintA=A(tint, [{opacity:0},{opacity:1}],{duration:reduce?1:220,fill:"forwards"});
     await wait(280);
     const mv=`translate(${(P2.x-M.x).toFixed(0)}px, ${(P2.y-M.y).toFixed(0)}px)`;
-    const suck=art.animate([{transform:"translate(0,0) scale(1)",opacity:1},{transform:"translate(0,0) scale(1.08,.9)",opacity:1,offset:.2},{transform:`${mv} scale(.04)`,opacity:.3}],{duration:reduce?1:520,easing:"cubic-bezier(.6,0,.9,.6)",fill:"forwards"});
+    art.classList.add("still");
+    const suck=A(art, [{transform:"translate(0px, 0px) scale(1, 1)",opacity:1},{transform:"translate(0px, 0px) scale(1.08, .9)",opacity:1,offset:.2},{transform:`${mv} scale(.04, .04)`,opacity:.3}],{duration:reduce?1:520,easing:"cubic-bezier(.6,0,.9,.6)",fill:"forwards"});
     await suck.finished;
     art.style.visibility="hidden"; shadow.classList.add("gone");
-    beam.animate([{opacity:1},{opacity:0}],{duration:reduce?1:180,fill:"forwards"});
+    A(beam, [{opacity:1},{opacity:0}],{duration:reduce?1:180,fill:"forwards"});
     fly.classList.remove("open"); o.sfx("click");
     // ===== 볼로 확대! 하늘에서 풀밭으로 떨어져요 =====
-    await glow.animate([{transform:"translate(-50%,-50%) scale(1)",opacity:1},{transform:"translate(-50%,-50%) scale(9)",opacity:1}],{duration:reduce?1:300,easing:"ease-in",fill:"forwards"}).finished;
+    await A(glow, [{transform:"translate(-50%,-50%) scale(1)",opacity:1},{transform:"translate(-50%,-50%) scale(9)",opacity:1}],{duration:reduce?1:300,easing:"ease-in",fill:"forwards"}).finished;
     const Z=zoomIn();
     fly.className="gq-fly"; fsh.style.opacity=0;
-    glow.animate([{opacity:1},{opacity:0}],{duration:reduce?1:420,fill:"forwards"});
+    A(glow, [{opacity:1},{opacity:0}],{duration:reduce?1:420,fill:"forwards"});
     setTimeout(()=>{ beam.remove(); glow.remove(); }, 600);
     await Z.drop();
     // 흔들흔들 (1~3번) — 고리 · 커브볼 보너스가 좋을수록 잘 잡혀요
@@ -250,7 +285,8 @@ function create(root, o){
     o.sfx("pop");
     await Z.burst();
     tintA.cancel(); suck.cancel(); art.style.visibility="";
-    art.animate([{transform:"scale(.1)",opacity:0},{transform:"scale(1.12)",opacity:1,offset:.6},{transform:"scale(1)",opacity:1}],{duration:reduce?1:520,easing:"cubic-bezier(.3,1.6,.5,1)"});
+    setTimeout(()=>art.classList.remove("still"), reduce? 1 : 560);
+    A(art, [{transform:"scale(.1)",opacity:0},{transform:"scale(1.12)",opacity:1,offset:.6},{transform:"scale(1)",opacity:1}],{duration:reduce?1:520,easing:"cubic-bezier(.3,1.6,.5,1)"});
     shadow.classList.remove("gone");
     say("앗! 튀어나왔어!", "miss"); o.say("break");
     await wait(1000);
@@ -278,8 +314,8 @@ function create(root, o){
       async drop(){
         await wait(520);                                             // 하늘에서 빛나는 볼 (파란 고리)
         zb.classList.add("fall");
-        zw.animate([{transform:"translateY(0)"},{transform:"translateY(-34%)"}],{duration:d(950),easing:"cubic-bezier(.5,0,.3,1)",fill:"forwards"});
-        await zb.animate([
+        A(zw, [{transform:"translateY(0%)"},{transform:"translateY(-34%)"}],{duration:d(950),easing:"cubic-bezier(.5,0,.3,1)",fill:"forwards"});
+        await A(zb, [
           {transform:at(y0),easing:"cubic-bezier(.5,0,1,.6)"},
           {transform:at(y1),offset:.56,easing:"cubic-bezier(0,.4,.5,1)"},
           {transform:at(y1-H*.08),offset:.72,easing:"cubic-bezier(.5,0,1,.6)"},
@@ -291,12 +327,12 @@ function create(root, o){
       async wobble(k){
         const s=k%2? -1 : 1;
         zball.classList.add("wob");
-        await zball.animate([{transform:"rotate(0)"},{transform:`translateX(${-6*s}px) rotate(${-24*s}deg)`,offset:.28},{transform:`translateX(${5*s}px) rotate(${18*s}deg)`,offset:.62},{transform:`translateX(${-2*s}px) rotate(${-6*s}deg)`,offset:.84},{transform:"rotate(0)"}],{duration:d(720),easing:"ease-in-out"}).finished;
+        await A(zball, [{transform:"translateX(0px) rotate(0deg)"},{transform:`translateX(${-6*s}px) rotate(${-24*s}deg)`,offset:.28},{transform:`translateX(${5*s}px) rotate(${18*s}deg)`,offset:.62},{transform:`translateX(${-2*s}px) rotate(${-6*s}deg)`,offset:.84},{transform:"translateX(0px) rotate(0deg)"}],{duration:d(720),easing:"ease-in-out"}).finished;
         zball.classList.remove("wob");
       },
       lock(){
         zball.classList.add("locked");
-        zball.animate([{transform:"scale(1)"},{transform:"scale(1.06,.94)",offset:.3},{transform:"scale(1)"}],{duration:d(320)});
+        A(zball, [{transform:"scale(1, 1)"},{transform:"scale(1.06, .94)",offset:.3},{transform:"scale(1, 1)"}],{duration:d(320)});
         zfx.innerHTML=`<i class="gq-halo"></i>${[-1,0,1].map(i=>`<b class="gq-star" style="--i:${i}">★</b>`).join("")}`+
           Array.from({length:12},(_,i)=>`<i class="gq-dot" style="--a:${i*30}deg;--c:${["#fde047","#4ade80","#f87171","#60a5fa"][i%4]}"></i>`).join("");
         setTimeout(()=>{ zsay.textContent="신난다~!"; zsay.classList.add("show"); }, reduce? 0 : 500);
@@ -307,7 +343,7 @@ function create(root, o){
         zball.classList.add("open");
         zfx.innerHTML=`<i class="gq-rays"></i>`;
         await wait(380);
-        await z.animate([{opacity:1},{opacity:0}],{duration:d(320),fill:"forwards"}).finished;
+        await A(z, [{opacity:1},{opacity:0}],{duration:d(320),fill:"forwards"}).finished;
         z.remove();
       },
     };
@@ -315,9 +351,9 @@ function create(root, o){
 
   // 새 볼이 아래에서 올라와요
   function freshBall(){
-    ball.getAnimations().forEach(a=>a.cancel()); ball.style.transform=""; ball.style.visibility=""; ball.className="gq-ball"; ballSvg.style.transform="";
+    stopAll(ball); ball.style.transform=""; ball.style.visibility=""; ball.className="gq-ball"; ballSvg.style.transform="";
     fly.className="gq-fly"; fsh.style.opacity=0;
-    ball.animate([{transform:"translateY(120%) scale(.6)",opacity:0},{transform:"translateY(0) scale(1)",opacity:1}],{duration:reduce?1:380,easing:"cubic-bezier(.3,1.5,.5,1)"});
+    A(ball, [{transform:"translateY(120%) scale(.6)",opacity:0},{transform:"translateY(0%) scale(1)",opacity:1}],{duration:reduce?1:380,easing:"cubic-bezier(.3,1.5,.5,1)"});
     ringEl.classList.remove("hide"); say("");
   }
   function confetti(host){
@@ -346,7 +382,7 @@ function create(root, o){
         // 도망가요
         ringEl.classList.add("hide"); say(""); busy=true;
         layer.classList.add("puff");
-        await body.animate([{opacity:1, transform:"translate(0,0) scale(1)"},{opacity:1, transform:"translate(0,-12%) scale(1.05)",offset:.25},{opacity:0, transform:"translate(220px,-8%) scale(.6)"}],{duration:reduce?1:800,easing:"ease-in",fill:"forwards"}).finished;
+        await A(body, [{opacity:1, transform:"translate(0px, 0%) scale(1)"},{opacity:1, transform:"translate(0px, -12%) scale(1.05)",offset:.25},{opacity:0, transform:"translate(220px, -8%) scale(.6)"}],{duration:reduce?1:800,easing:"ease-in",fill:"forwards"}).finished;
         stop(); return {caught:false, fled:true, quality:best, throws, curve:anyCurve};
       }
       freshBall(); busy=false;

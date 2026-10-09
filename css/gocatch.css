@@ -26,6 +26,7 @@
 .gq-shadow.gone { opacity: 0; }
 .gq-body { position: absolute; inset: 0; transform-origin: 50% 100%; }
 .gq-art { position: absolute; inset: 0; display: grid; place-items: center; animation: gqIdle 2.6s ease-in-out infinite; transform-origin: 50% 60%; will-change: transform; }
+.gq-art.still { animation: none; }
 .gq-tint { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; pointer-events: none; }
 .gq-tint img { filter: brightness(0) invert(1) sepia(1) saturate(12) hue-rotate(-50deg) brightness(.95) drop-shadow(0 0 10px #fff) !important; }
 .gq-tint .art-fallback { filter: brightness(0) invert(1) sepia(1) saturate(12) hue-rotate(-50deg) brightness(.95); }
