@@ -46,7 +46,8 @@ const SOCIAL = (() => {
   const STAGE_EATS = { 1: 3, 3: 2, 2: 1 };
   const FOOD_MUL = 1.5, STAGE_MUL = 1.2;
   const stageOf = (kind) => (/2진화|VMAX|VSTAR|M진화|BREAK|메가진화|V-UNION/.test(kind || '') ? 3 : /1진화|레벨업/.test(kind || '') ? 2 : 1);
-  const power = (c) => (CLASS_POWER[c.cls] || 10) + (c.lv || 0) * 2;
+  /* 🐾 짝꿍 포켓몬 보너스까지 (js/tapbattle.js와 같은 계산) */
+  const power = (c) => (window.TapBattle ? TapBattle.power(c) : (CLASS_POWER[c.cls] || 10) + (c.lv || 0) * 2);
   /* a가 b를 만났을 때 받는 배수와 그 이유 */
   function bonus(a, b) {
     let mul = 1;
