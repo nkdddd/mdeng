@@ -2524,7 +2524,7 @@ function renderBattle() {
     const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean)
       .map((c) => ({ c, p: SOCIAL.power(cardInfo(c, cardLv(c[0]))) })).sort((a, b) => b.p - a.p);
     app.innerHTML = `${top}${bubble(m.local ? '걸 카드를 골라! 봇이 비슷한 카드를 내면, 보고 싫으면 거부해도 돼. 지면 이 카드는 사라져.' : m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
-      <p class="small-note center-note">👆 탭 대결: 한 판 점수 = ⚡카드 힘 × 5초 동안 탭한 수 (컴퓨터는 스페이스바) · 3판 2선승</p>
+      <p class="small-note center-note">👆 탭 대결: 한 판 점수 = ⚡카드 힘 × 5초 동안 탭한 수 (컴퓨터는 Esc 뺀 아무 키나) · 3판 2선승</p>
       <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}${c[7] ? ` ${c[7]}` : ''}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}${TapBattle.partners(cardInfo(c, 0), myCatches()).length ? '<span class="pk-mark">🐾</span>' : ''}</button>`).join('')}</div>
       <p class="small-note center-note">🐾 표시 카드는 짝꿍 포켓몬(잡은 포켓몬 중 같은 포켓몬 · 진화 가족)과 함께 나갈 수 있어요</p>
       <div class="row">${quit}</div>`;
@@ -2595,7 +2595,7 @@ function rollSides(m) {
   const rounds = (m.rounds || []).map((r) => (meFirst ? r : { ta: r.tb, tb: r.ta, da: r.db, db: r.da, sa: r.sb, sb: r.sa, w: r.w === -1 ? -1 : 1 - r.w }));
   return { me, other, rounds, A: m.picks[me], B: m.picks[other] };
 }
-/* 👆 탭 대결 (js/tapbattle.js): 판마다 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 스페이스바 → ⚡힘 × 👆탭 수. 두 사람이 다 해야 그 판 결과가 나와요 */
+/* 👆 탭 대결 (js/tapbattle.js): 판마다 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 Esc를 뺀 아무 키나 두 손으로 → ⚡힘 × 👆탭 수. 두 사람이 다 해야 그 판 결과가 나와요 */
 function rollView(m, top) {
   if (m.mode !== 'tap') { /* 업데이트 전에 시작한 주사위 대결 */
     app.innerHTML = `${top}<div class="wait">🎲 예전 주사위 방식으로 시작한 대결이에요. 그만하고 새로 신청해 주세요. 건 카드는 돌아와요.</div><div class="row"><button class="btn primary" id="bDrop">그만하기</button></div>`;
