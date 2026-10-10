@@ -2545,7 +2545,7 @@ function confirmPick(m, c) {
       <button class="pk-opt none on" data-pk="-1"><b>카드만</b><small>⚡${base}</small></button></div>` : ''}
     <p class="small-note" id="pScore">점수 = ⚡${base} × 👆탭 수</p>
     <p class="small-note">${m.local ? '이 카드를 걸까요? 봇 카드를 보고 대결할지 정해요. 이기면 봇 카드를 받고, 지면 이 카드는 사라져요.' : m.stake ? '이 카드로 할까요? 지면 친구에게 가요.' : '이 카드로 할까요?'}</p>
-    <div class="row"><button class="btn primary" id="pYes">⚔️ 이 카드로!</button><button class="btn" id="pNo">다시 고를래</button></div>`);
+    <div class="row"><button class="btn primary" id="pYes">⚔️ 이 카드로!</button><button class="btn" id="pNo">다시 고를래</button></div>`, 'bt-sheet');
   $$('[data-pk]', el).forEach((b) => b.addEventListener('click', () => {
     pk = +b.dataset.pk >= 0 ? opts[+b.dataset.pk] : null;
     $$('[data-pk]', el).forEach((x) => x.classList.toggle('on', x === b));
@@ -2614,7 +2614,7 @@ function rollView(m, top) {
         <div class="fighter" id="fB">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}</span>${pkLine(B)}
           <span class="die" id="dB" aria-label="상대 점수">👆</span><small class="die-how" id="hB"></small><small class="die-note" id="nB"></small></div>
       </div>
-      <p class="small-note center-note">한 판 점수 = ⚡카드 힘(🐾 짝꿍 보너스 포함) × 👆5초 동안 탭한 수 · 점수가 큰 쪽이 이겨요 · 3판 2선승</p>
+      <p class="small-note center-note bt-rule">점수 = ⚡카드 힘(🐾 포함) × 👆5초 탭 수 · 3판 2선승</p>
       <div class="roll-ctl" id="rollCtl" aria-live="polite"></div>
       <div class="rounds" id="bRounds" aria-live="polite"></div>
       <div id="bEnd"></div>`;
@@ -2762,7 +2762,7 @@ async function revealRound(rounds, i, A, B) {
   await TapBattle.banner(`<b>${win === null ? '🤝 비겼어요! 한 번 더!' : win ? '👍 이 판은 내가 이겼어!' : `💥 이 판은 ${foe === '봇' ? '봇이' : '친구가'} 이겼어!`}</b><small>나 ${scoreHow(A, r.ta, r.sa)}</small><small>${foe} ${scoreHow(B, r.tb, r.sb)}</small>`, win === true ? 'win' : win === false ? 'lose' : '');
   const lines = $('#bRounds');
   if (!lines) return;
-  lines.insertAdjacentHTML('beforeend', `<p class="rd">${i + 1}판: ${scoreHow(A, r.ta, r.sa)} vs ${scoreHow(B, r.tb, r.sb)} ${r.w === -1 ? '🤝 비겼어요, 한 번 더!' : r.w === 0 ? '👍 내가 이겼어!' : `💥 ${foe === '봇' ? '봇이' : '친구가'} 이겼어!`}</p>`);
+  lines.insertAdjacentHTML('beforeend', `<span class="rd ${r.w === 0 ? 'w' : r.w === 1 ? 'l' : ''}">${i + 1}판 <b>${r.sa}</b> : <b>${r.sb}</b> ${r.w === -1 ? '🤝' : r.w === 0 ? '👍' : '💥'}</span>`);
   const won = rounds.slice(0, i + 1);
   $('#bScore').textContent = `${won.filter((x) => x.w === 0).length} : ${won.filter((x) => x.w === 1).length}`;
   const f = r.w === 0 ? $('#fA') : r.w === 1 ? $('#fB') : null;
@@ -2805,6 +2805,7 @@ async function battleScene(won, stake, card, bot) {
 }
 async function battleEnd(m) {
   if (!$('#arena')) return;
+  $('#arena').classList.add('done'); /* 결과가 한 화면에 들어오게 카드를 조금 작게 */
   const { me, other, A, B } = rollSides(m);
   const them = m.who[other];
   const won = m.winner === me;
