@@ -2655,7 +2655,7 @@ function rollView(m, top) {
   const tension = counted.filter((x) => x.w === 0).length === 1 && counted.filter((x) => x.w === 1).length === 1;
   const mode = TapBattle.roundMode(cur); /* 1 · 2판 👆 탭, 3판부터 🧠 화살표 기억 */
   ctl.innerHTML = `<button class="btn primary big roll-btn" id="rollBtn" data-r="${cur}">${mode === 'memory' ? '🧠' : '👆'} ${tension ? '🔥 마지막 판' : `${cur + 1}판`} ${mode === 'memory' ? '화살표 기억 대결!' : '탭 시작!'}</button>
-    <p class="small-note center-note" id="rollHint">${mode === 'memory' ? '화살표 15개를 한 번 보고 순서대로 · 처음 틀리기 전까지 맞힌 수 × ⚡카드 힘' : ''}${hint ? ' ' + hint : ''}</p>`;
+    <p class="small-note center-note" id="rollHint">${mode === 'memory' ? '화살표 10개를 한 번 보고 순서대로 · 처음 틀리기 전까지 맞힌 수 × ⚡카드 힘' : ''}${hint ? ' ' + hint : ''}</p>`;
   $('#rollBtn').onclick = async () => {
     $('#rollBtn').disabled = true;
     const n = await TapBattle.play({ mode, label: tension ? '🔥 마지막 판!' : `${cur + 1}판`, who: `${m.who[me].avatar || ''} ${esc(m.who[me].name)} · ${esc(A.name)}`, power: SOCIAL.power(A) });
