@@ -3,7 +3,9 @@
  *  - 한 판 = 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 Esc를 뺀 아무 키나 두 손으로 번갈아 (클릭도 돼요)
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
- *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 2번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
+ *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 4번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
+ *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 순서를 외웠다가 그대로 눌러요. 4개부터 맞힐 때마다 하나씩 길어져요
+ *    점수 = ⚡카드 힘 × 맞힌 화살표 수 (휴대폰은 화면 버튼, 컴퓨터는 방향키 · WASD → 입력 방법 차이 없음)
  *  - 점수 = ⚡카드 파워(등급 10/12/14/17/20 + 강화×2 + 🐾짝꿍 포켓몬) × 👆탭 수
  *  - 🐾 짝꿍 포켓몬: 카드와 맞는 포켓몬만 함께 출전 — 같은 포켓몬 ⚡+4 · 같은 진화 가족 ⚡+2
  *    카드 걸기 대결이면 짝꿍도 함께 걸어요 (이기면 상대 짝꿍 한 마리를 받고, 지면 내 짝꿍 한 마리가 가요)
@@ -16,7 +18,7 @@
 (function(){
 const SECONDS=5, MAX_TAPS=9999, WIN=2, MAX_ROUNDS=9;   // 탭 수 상한은 없어요 (9999는 잘못된 기록만 막는 값)
 const TOUCH_W=.75;                // 👆 휴대폰 터치는 여러 손가락으로 아주 빨라서 한 번 = 0.75번 (40번 → 30번)
-const KEY_W=2;                    // ⌨️ 키보드는 한 번 = 2번 (휴대폰 · 마우스보다 느려서 두 배)
+const KEY_W=4;                    // ⌨️ 키보드는 한 번 = 4번 (휴대폰 · 마우스보다 많이 느려서)
 const MOUSE_W=1;                  // 🖱️ 마우스 클릭은 한 번 = 1번
 const CLASS_POWER={n:10, r:12, a:14, s:17, u:20};
 const PARTNER={same:4, family:2};
@@ -106,6 +108,18 @@ function addCss(){
 .tap-stage .tp-bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#fde047,#f97316);transform-origin:left;transition:transform .1s linear}
 .tap-stage .tp-hint{margin:0;font-size:16px;font-weight:800}
 .tap-stage .tp-hint kbd{background:#fff;color:#1c1b22;border-radius:6px;padding:1px 8px;font-family:inherit}
+.mem-stage .tp-shake{display:flex;flex-direction:column;align-items:center;gap:8px}
+.mem-stage .tp-shake,.mem-stage .mem-pad,.mem-stage .mem-btn{pointer-events:auto}
+.mem-say{margin:0;font-size:19px;font-weight:900;color:#fde68a;min-height:1.4em}
+.mem-show{width:min(40vw,170px);height:min(40vw,170px);border-radius:24px;background:rgba(255,255,255,.08);display:grid;place-items:center}
+.mem-arrow{font-size:min(28vw,120px);line-height:1;opacity:0;transform:scale(.6);transition:opacity .08s,transform .12s}
+.mem-arrow.show{opacity:1;transform:scale(1)}
+.mem-dots{display:flex;gap:6px;min-height:14px;flex-wrap:wrap;justify-content:center}.mem-dots i{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.25)}.mem-dots i.ok{background:#4ade80}
+.mem-pad{display:grid;grid-template-areas:". u ." "l . r" ". d .";grid-template-columns:repeat(3,min(22vw,92px));grid-template-rows:repeat(3,min(22vw,92px));gap:6px;margin-top:4px}
+.mem-btn{border:0;border-radius:18px;background:#fff;font-size:min(10vw,44px);box-shadow:0 6px 0 #94a3b8;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .06s,box-shadow .06s,background .1s}
+.mem-btn[data-d=U]{grid-area:u}.mem-btn[data-d=L]{grid-area:l}.mem-btn[data-d=R]{grid-area:r}.mem-btn[data-d=D]{grid-area:d}
+.mem-btn.on{transform:translateY(5px);box-shadow:0 1px 0 #94a3b8;background:#bbf7d0}.mem-btn.demo{background:#fde68a}.mem-btn.bad{background:#fecaca}.mem-btn.hint{background:#bbf7d0;outline:4px solid #4ade80}
+.mem-stage.watch .mem-btn{pointer-events:none;opacity:.85}
 .tap-stage .tp-keys{display:flex;gap:min(6vw,28px);margin-top:4px}
 .tap-stage .tp-key{width:min(16vw,76px);height:min(16vw,76px);border-radius:14px;background:#fff;color:#1c1b22;font-weight:900;font-size:min(8vw,38px);display:grid;place-items:center;box-shadow:0 6px 0 #94a3b8;transition:transform .05s,box-shadow .05s}
 .tap-stage .tp-key small{display:block;font-size:11px;font-weight:800;color:#64748b;margin-top:-6px}
@@ -213,8 +227,12 @@ function ding(n){
     g.gain.setValueAtTime(.12, t+dt); g.gain.exponentialRampToValueAtTime(.001, t+dt+.16);
     o.connect(g).connect(c.destination); o.start(t+dt); o.stop(t+dt+.17); });
 }
-// opts: {label, who, power, seconds}
+// 판 종류: 1 · 2판은 👆 탭, 3판부터(결승 · 다시 하는 판)는 🧠 화살표 기억
+const roundMode=i=>i>=2? "memory" : "tap";
+const MODE_ICON={tap:"👆", memory:"🧠"};
+// opts: {label, who, power, seconds, mode}
 function play(opts){
+  if(opts && opts.mode==="memory") return memory(opts);
   ac();                                                           // 버튼을 누른 순간 소리를 켜 둬요 (휴대폰은 터치해야 소리가 나요)
   addCss();
   const sec=(opts&&opts.seconds)||SECONDS, pw=(opts&&opts.power)||10;
@@ -223,7 +241,7 @@ function play(opts){
   el.className="tap-stage";
   el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""}</p><p class="tp-who">${opts.who||""}</p>
     <p class="tp-count">3</p><p class="tp-unit"></p><p class="tp-score">준비!</p><div class="tp-bar"><i></i></div>
-    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ 아무 키나 두 손으로 번갈아 빠르게! <small>(Esc 빼고 · 키보드는 한 번에 2번!)</small>"}</p>
+    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ 아무 키나 두 손으로 번갈아 빠르게! <small>(Esc 빼고 · 키보드는 한 번에 4번!)</small>"}</p>
     ${touch? "" : `<div class="tp-keys"><div class="tp-key" data-k="L">F<small>왼손</small></div><div class="tp-key" data-k="M">␣<small>가운데</small></div><div class="tp-key" data-k="R">J<small>오른손</small></div></div>`}</div><div class="tp-ring"></div><div class="tp-flash"></div>`;
   document.body.appendChild(el);
   const cnt=el.querySelector(".tp-count"), score=el.querySelector(".tp-score"), unit=el.querySelector(".tp-unit"), bar=el.querySelector(".tp-bar i");
@@ -236,7 +254,7 @@ function play(opts){
       if(!live) return;
       if(kind==="touch") tN++; else if(kind==="key") kN++; else mN++;
       n=Math.min(MAX_TAPS, Math.round(tN*TOUCH_W+kN*KEY_W+mN*MOUSE_W));
-      unit.textContent=`점수 (⚡카드 힘 × 👆탭 수)`+[tN? ` · 👆 ${tN}번 ×0.75` : "", kN? ` · ⌨️ ${kN}번 ×2` : "", mN? ` · 🖱️ ${mN}번` : ""].join("");
+      unit.textContent=`점수 (⚡카드 힘 × 👆탭 수)`+[tN? ` · 👆 ${tN}번 ×0.75` : "", kN? ` · ⌨️ ${kN}번 ×4` : "", mN? ` · 🖱️ ${mN}번` : ""].join("");
       const t=performance.now(); recent.push(t); while(recent.length && t-recent[0]>600) recent.shift();
       const speed=recent.length;                                   // 0.6초 안에 누른 수 → 빠를수록 세게
       cnt.textContent=pw*n; cnt.classList.remove("bump"); void cnt.offsetWidth; cnt.classList.add("bump");
@@ -295,6 +313,75 @@ function play(opts){
     res(n);
   });
 }
+/* ----- 🧠 화살표 기억 대결 (DDR · 사이먼 게임처럼) → 맞힌 화살표 수 Promise -----
+   화살표가 하나씩 나와요 → 다 나오면 같은 순서로 누르기. 다 맞히면 하나 더 길게 (4 → 5 → 6 …, 최대 12)
+   틀리거나 5초 동안 안 누르면 끝. 점수 = 지금까지 맞힌 화살표 수 (틀린 줄에서 맞힌 것까지) */
+const DIRS=["U","R","D","L"], ARROW={U:"⬆️",R:"➡️",D:"⬇️",L:"⬅️"}, TONE={U:660,R:784,D:523,L:587};
+const KEYDIR={ArrowUp:"U",ArrowRight:"R",ArrowDown:"D",ArrowLeft:"L",KeyW:"U",KeyD:"R",KeyS:"D",KeyA:"L"};
+function tone(dir, bad){
+  const c=ac(); if(!c) return;
+  const t=c.currentTime, o=c.createOscillator(), g=c.createGain();
+  o.type=bad? "sawtooth" : "triangle"; o.frequency.setValueAtTime(bad? 110 : TONE[dir], t);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(bad? .3 : .25, t+.01); g.gain.exponentialRampToValueAtTime(.001, t+(bad? .45 : .22));
+  o.connect(g).connect(bus(c)); o.start(t); o.stop(t+.5);
+}
+function memory(opts){
+  ac(); addCss();
+  const pw=(opts&&opts.power)||10, START=4, MAXLEN=12, IDLE=5000;
+  const el=document.createElement("div");
+  el.className="tap-stage mem-stage";
+  el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""} · 🧠 기억 대결</p><p class="tp-who">${opts.who||""}</p>
+    <p class="mem-say">화살표 순서를 기억했다가 똑같이 눌러요!</p>
+    <div class="mem-show"><span class="mem-arrow"></span></div><div class="mem-dots"></div>
+    <p class="tp-score">⚡${pw} × 🧠0 = 0점</p>
+    <div class="mem-pad">${["U","L","R","D"].map(d=>`<button class="mem-btn" data-d="${d}" aria-label="${ARROW[d]}">${ARROW[d]}</button>`).join("")}</div>
+    <p class="tp-hint">${("ontouchstart" in window)||navigator.maxTouchPoints>0? "👆 화살표 버튼을 순서대로!" : "⌨️ 방향키(또는 W A S D)로 순서대로!"}</p></div>`;
+  document.body.appendChild(el);
+  const say=el.querySelector(".mem-say"), arrow=el.querySelector(".mem-arrow"), dots=el.querySelector(".mem-dots"), score=el.querySelector(".tp-score");
+  requestAnimationFrame(()=>el.classList.add("in"));
+  return new Promise(async res=>{
+    let got=0, seq=[], pos=0, accept=false, idleT=0, done=false;
+    const btn=d=>el.querySelector(`.mem-btn[data-d="${d}"]`);
+    const flashBtn=(d,cls)=>{ const b=btn(d); if(!b) return; b.classList.add(cls||"on"); setTimeout(()=>b.classList.remove(cls||"on"), 180); };
+    const paintDots=()=>{ dots.innerHTML=seq.map((_,i)=>`<i class="${i<pos? "ok" : ""}"></i>`).join(""); };
+    const paintScore=()=>{ score.textContent=`⚡${pw} × 🧠${got} = ${pw*got}점`; };
+    const finish=async why=>{
+      if(done) return; done=true; accept=false; clearTimeout(idleT);
+      window.removeEventListener("keydown", onKey, true);
+      say.textContent= why==="bad"? `앗, 틀렸어! 🧠 ${got}개 기억!` : why==="idle"? `시간이 다 됐어! 🧠 ${got}개 기억!` : `와, 끝까지 다 기억했어! 🧠 ${got}개!`;
+      score.textContent=`끝! ⚡${pw} × 🧠${got} = ${pw*got}점`; sfx("star");
+      await wait(reduce? 80 : 1400);
+      el.classList.add("out"); await wait(220); el.remove(); res(got);
+    };
+    const idle=()=>{ clearTimeout(idleT); idleT=setTimeout(()=>finish("idle"), IDLE); };
+    const input=d=>{
+      if(!accept || done) return;
+      if(d!==seq[pos]){ tone(d, true); flashBtn(d,"bad"); flashBtn(seq[pos],"hint"); try{ navigator.vibrate && navigator.vibrate([40,40,40]); }catch(_){} return finish("bad"); }
+      tone(d); flashBtn(d); pos++; got++; paintDots(); paintScore(); idle();
+      try{ navigator.vibrate && navigator.vibrate(12); }catch(_){}
+      if(pos>=seq.length){ accept=false; clearTimeout(idleT); sfx("star");
+        if(seq.length>=MAXLEN) return finish("all");
+        say.textContent="딩동댕! 하나 더 길게 →"; setTimeout(()=>round(seq.length+1), reduce? 60 : 700); }
+    };
+    const onKey=e=>{ const d=KEYDIR[e.code]; if(!d) return; e.preventDefault(); if(e.repeat) return; input(d); };
+    el.querySelectorAll(".mem-btn").forEach(b=>b.addEventListener("pointerdown", e=>{ e.preventDefault(); input(b.dataset.d); }));
+    window.addEventListener("keydown", onKey, true);
+    // 한 줄 보여 주기 → 입력 받기
+    const round=async len=>{
+      seq=Array.from({length:len},()=>DIRS[Math.floor(Math.random()*4)]); pos=0; paintDots();
+      el.dataset.seq=seq.join("");                                   // 테스트용
+      say.textContent=`👀 ${len}개를 잘 봐!`; el.classList.add("watch");
+      await wait(reduce? 60 : 600);
+      const on=Math.max(320, 620-len*30), off=Math.max(120, 200-len*8);
+      for(const d of seq){ if(done) return; arrow.textContent=ARROW[d]; arrow.className="mem-arrow show"; tone(d); flashBtn(d,"demo");
+        await wait(reduce? 30 : on); arrow.className="mem-arrow"; await wait(reduce? 20 : off); }
+      arrow.textContent=""; el.classList.remove("watch");
+      say.textContent="👉 이제 똑같이 눌러!"; accept=true; idle();
+    };
+    say.textContent="준비!"; await wait(reduce? 60 : 900);
+    round(START);
+  });
+}
 // 판 결과 배너 (잠깐 보여 주고 사라져요)
 async function banner(html, kind){
   addCss();
@@ -302,5 +389,5 @@ async function banner(html, kind){
   document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add("show"));
   await wait(reduce? 80 : 1800); el.classList.remove("show"); await wait(250); el.remove();
 }
-window.TapBattle={renderPunches, SECONDS, MAX_TAPS, TOUCH_W, KEY_W, MOUSE_W, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
+window.TapBattle={renderPunches, roundMode, MODE_ICON, memory, SECONDS, MAX_TAPS, TOUCH_W, KEY_W, MOUSE_W, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
 })();
