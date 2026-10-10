@@ -3,7 +3,7 @@
  *  - 한 판 = 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 Esc를 뺀 아무 키나 두 손으로 번갈아 (클릭도 돼요)
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
- *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
+ *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 2번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
  *  - 점수 = ⚡카드 파워(등급 10/12/14/17/20 + 강화×2 + 🐾짝꿍 포켓몬) × 👆탭 수
  *  - 🐾 짝꿍 포켓몬: 카드와 맞는 포켓몬만 함께 출전 — 같은 포켓몬 ⚡+4 · 같은 진화 가족 ⚡+2
  *    카드 걸기 대결이면 짝꿍도 함께 걸어요 (이기면 상대 짝꿍 한 마리를 받고, 지면 내 짝꿍 한 마리가 가요)
@@ -16,7 +16,8 @@
 (function(){
 const SECONDS=5, MAX_TAPS=9999, WIN=2, MAX_ROUNDS=9;   // 탭 수 상한은 없어요 (9999는 잘못된 기록만 막는 값)
 const TOUCH_W=.75;                // 👆 휴대폰 터치는 여러 손가락으로 아주 빨라서 한 번 = 0.75번 (40번 → 30번)
-const KEY_W=1;                    // ⌨️ 키보드 · 🖱️ 마우스는 한 번 = 1번 (휴대폰보다 1/3 유리하게 맞춘 값)
+const KEY_W=2;                    // ⌨️ 키보드는 한 번 = 2번 (휴대폰 · 마우스보다 느려서 두 배)
+const MOUSE_W=1;                  // 🖱️ 마우스 클릭은 한 번 = 1번
 const CLASS_POWER={n:10, r:12, a:14, s:17, u:20};
 const PARTNER={same:4, family:2};
 const power=c=>(CLASS_POWER[c&&c.cls]||10)+Math.max(0,Math.min(5,Number(c&&c.lv)||0))*2+(c&&c.pk? PARTNER[c.pm]||0 : 0);
@@ -222,7 +223,7 @@ function play(opts){
   el.className="tap-stage";
   el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""}</p><p class="tp-who">${opts.who||""}</p>
     <p class="tp-count">3</p><p class="tp-unit"></p><p class="tp-score">준비!</p><div class="tp-bar"><i></i></div>
-    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ 아무 키나 두 손으로 번갈아 빠르게! <small>(Esc 빼고 · 클릭도 돼요)</small>"}</p>
+    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ 아무 키나 두 손으로 번갈아 빠르게! <small>(Esc 빼고 · 키보드는 한 번에 2번!)</small>"}</p>
     ${touch? "" : `<div class="tp-keys"><div class="tp-key" data-k="L">F<small>왼손</small></div><div class="tp-key" data-k="M">␣<small>가운데</small></div><div class="tp-key" data-k="R">J<small>오른손</small></div></div>`}</div><div class="tp-ring"></div><div class="tp-flash"></div>`;
   document.body.appendChild(el);
   const cnt=el.querySelector(".tp-count"), score=el.querySelector(".tp-score"), unit=el.querySelector(".tp-unit"), bar=el.querySelector(".tp-bar i");
@@ -230,12 +231,12 @@ function play(opts){
   return new Promise(async res=>{
     let n=0, live=false;
     const flash=el.querySelector(".tp-flash"), recent=[];
-    let tN=0, kN=0, nextM=10;                                                  // 👆 터치 수 · ⌨️🖱️ 키보드 · 마우스 수
+    let tN=0, kN=0, mN=0, nextM=10;                                   // 👆 터치 · ⌨️ 키보드 · 🖱️ 마우스 수                                                  // 👆 터치 수 · ⌨️🖱️ 키보드 · 마우스 수
     const hit=(x,y,kind)=>{
       if(!live) return;
-      if(kind==="touch") tN++; else kN++;
-      n=Math.min(MAX_TAPS, Math.round(tN*TOUCH_W+kN*KEY_W));
-      unit.textContent= tN? `점수 (⚡카드 힘 × 👆탭 수 · 터치 ${tN}번 → ${Math.round(tN*TOUCH_W)})${kN? ` · ⌨️ ${kN}` : ""}` : `점수 (⚡카드 힘 × ⌨️탭 수)`;
+      if(kind==="touch") tN++; else if(kind==="key") kN++; else mN++;
+      n=Math.min(MAX_TAPS, Math.round(tN*TOUCH_W+kN*KEY_W+mN*MOUSE_W));
+      unit.textContent=`점수 (⚡카드 힘 × 👆탭 수)`+[tN? ` · 👆 ${tN}번 ×0.75` : "", kN? ` · ⌨️ ${kN}번 ×2` : "", mN? ` · 🖱️ ${mN}번` : ""].join("");
       const t=performance.now(); recent.push(t); while(recent.length && t-recent[0]>600) recent.shift();
       const speed=recent.length;                                   // 0.6초 안에 누른 수 → 빠를수록 세게
       cnt.textContent=pw*n; cnt.classList.remove("bump"); void cnt.offsetWidth; cnt.classList.add("bump");
@@ -288,7 +289,7 @@ function play(opts){
     await new Promise(r=>{ const tick=()=>{ const p=Math.min(1,(performance.now()-t0)/D); bar.style.transform=`scaleX(${1-p})`; if(p>=1) r(); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
     live=false; el.classList.remove("go");
     el.removeEventListener("pointerdown", onPtr); window.removeEventListener("keydown", onKey, true);
-    score.textContent=`끝! ⚡${pw} × 👆${n} = ${pw*n}점${tN? ` (터치 ${tN}번 × 0.75)` : ""}`; sfx("star");
+    score.textContent=`끝! ⚡${pw} × 👆${n} = ${pw*n}점`; sfx("star");
     await wait(reduce? 80 : 1100);
     el.classList.add("out"); await wait(220); el.remove();
     res(n);
@@ -301,5 +302,5 @@ async function banner(html, kind){
   document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add("show"));
   await wait(reduce? 80 : 1800); el.classList.remove("show"); await wait(250); el.remove();
 }
-window.TapBattle={renderPunches, SECONDS, MAX_TAPS, TOUCH_W, KEY_W, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
+window.TapBattle={renderPunches, SECONDS, MAX_TAPS, TOUCH_W, KEY_W, MOUSE_W, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
 })();
