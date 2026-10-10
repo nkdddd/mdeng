@@ -2404,7 +2404,7 @@ function botTaps(m, round, mine) {
     const bias = (0.5 - botWinRate(m)) / 0.14; /* 승률 1%p ≈ 탭 0.07번 (모의 실험) */
     m.botBase = Math.max(0, mine + Math.round(Math.random() * 6 - 3 + bias)); raw = m.botBase;
   } else if (TapBattle.roundMode(round) === 'memory') { /* 🧠 기억 대결: 내가 맞힌 수 ±3 근처 (같은 승률 보정) */
-    raw = Math.max(0, mine + Math.round(Math.random() * 6 - 3 + (0.5 - botWinRate(m)) / 0.14 * 0.5));
+    raw = Math.min(TapBattle.MEM_LEN, Math.max(0, mine + Math.round(Math.random() * 6 - 3 + (0.5 - botWinRate(m)) / 0.14 * 0.5)));
   } else raw = Math.max(0, m.botBase + (Math.random() < 0.5 ? 1 : -1) * rnd(0, 7));
   return Math.round(raw * TapBattle.power(m.picks.me) / TapBattle.power(m.picks.cpu)); /* ⚡힘 차이만큼 봇 탭 수를 맞춰요 (위 승률이 되게) */
 }
@@ -2655,7 +2655,7 @@ function rollView(m, top) {
   const tension = counted.filter((x) => x.w === 0).length === 1 && counted.filter((x) => x.w === 1).length === 1;
   const mode = TapBattle.roundMode(cur); /* 1 · 2판 👆 탭, 3판부터 🧠 화살표 기억 */
   ctl.innerHTML = `<button class="btn primary big roll-btn" id="rollBtn" data-r="${cur}">${mode === 'memory' ? '🧠' : '👆'} ${tension ? '🔥 마지막 판' : `${cur + 1}판`} ${mode === 'memory' ? '화살표 기억 대결!' : '탭 시작!'}</button>
-    <p class="small-note center-note" id="rollHint">${mode === 'memory' ? '화살표 순서를 외웠다가 똑같이 눌러요 · 맞힌 개수 × ⚡카드 힘' : ''}${hint ? ' ' + hint : ''}</p>`;
+    <p class="small-note center-note" id="rollHint">${mode === 'memory' ? '화살표 15개를 한 번 보고 순서대로 · 처음 틀리기 전까지 맞힌 수 × ⚡카드 힘' : ''}${hint ? ' ' + hint : ''}</p>`;
   $('#rollBtn').onclick = async () => {
     $('#rollBtn').disabled = true;
     const n = await TapBattle.play({ mode, label: tension ? '🔥 마지막 판!' : `${cur + 1}판`, who: `${m.who[me].avatar || ''} ${esc(m.who[me].name)} · ${esc(A.name)}`, power: SOCIAL.power(A) });
