@@ -2528,7 +2528,7 @@ function renderBattle() {
     const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean)
       .map((c) => ({ c, p: SOCIAL.power(cardInfo(c, cardLv(c[0]))) })).sort((a, b) => b.p - a.p);
     app.innerHTML = `${top}${bubble(m.local ? '걸 카드를 골라! 봇이 비슷한 카드를 내면, 보고 싫으면 거부해도 돼. 지면 이 카드는 사라져.' : m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
-      <p class="small-note center-note">👆 1판 = ⚡카드 힘 × 5초 동안 탭한 수 (휴대폰 한 번 0.75 · 컴퓨터 키 한 번 4) · 🃏 2판 = 카드 짝 맞추기 (포켓몬 카드 9장 1.5초 보고, 틀려도 계속 · 먼저 다 찾을수록 이겨요) · 🧠 3판 = 화살표 순서 기억 · 3판 2선승</p>
+      <p class="small-note center-note">👆 1판 = ⚡카드 힘 × 5초 동안 탭한 수 (휴대폰 한 번 1 · 컴퓨터 키·클릭 한 번 2) · 🃏 2판 = 카드 짝 맞추기 (포켓몬 카드 9장 1.5초 보고, 틀려도 계속 · 먼저 다 찾을수록 이겨요) · 🧠 3판 = 화살표 순서 기억 · 3판 2선승</p>
       <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}${c[7] ? ` ${c[7]}` : ''}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}${TapBattle.partners(cardInfo(c, 0), myCatches()).length ? '<span class="pk-mark">🐾</span>' : ''}</button>`).join('')}</div>
       <p class="small-note center-note">🐾 표시 카드는 짝꿍 포켓몬(잡은 포켓몬 중 같은 포켓몬 · 진화 가족)과 함께 나갈 수 있어요</p>
       <div class="row">${quit}</div>`;
