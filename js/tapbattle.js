@@ -2,7 +2,8 @@
  *  👆 탭 대결 (우리집 학습플래너 · 또박또박 받아쓰기 공용 — 두 앱이 같은 파일을 써요)
  *  - 한 판 = 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 Esc를 뺀 아무 키나 두 손으로 번갈아 (클릭도 돼요)
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
- *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요 → 최대 1초에 20번 (휴대폰과 비슷)
+ *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
+ *    그래도 휴대폰보다 느려서 ⌨️ 키보드 · 🖱️ 마우스로 친 수에는 1/3을 더해 줘요 (30번 → 40번 · 휴대폰 터치는 그대로)
  *  - 점수 = ⚡카드 파워(등급 10/12/14/17/20 + 강화×2 + 🐾짝꿍 포켓몬) × 👆탭 수
  *  - 🐾 짝꿍 포켓몬: 카드와 맞는 포켓몬만 함께 출전 — 같은 포켓몬 ⚡+4 · 같은 진화 가족 ⚡+2
  *    카드 걸기 대결이면 짝꿍도 함께 걸어요 (이기면 상대 짝꿍 한 마리를 받고, 지면 내 짝꿍 한 마리가 가요)
@@ -13,7 +14,8 @@
  *    (rounds · w 는 users[0] 기준, w: 0=users[0] 승, 1=users[1] 승, -1=비김)
  * ============================================================ */
 (function(){
-const SECONDS=5, MAX_TAPS=100, WIN=2, MAX_ROUNDS=9;
+const SECONDS=5, MAX_TAPS=140, WIN=2, MAX_ROUNDS=9;
+const KEY_BONUS=4/3;              // ⌨️ 키보드 · 🖱️ 마우스는 휴대폰 터치보다 느려서 친 수에 1/3을 더해 줘요 (30번 → 40번)
 const CLASS_POWER={n:10, r:12, a:14, s:17, u:20};
 const PARTNER={same:4, family:2};
 const power=c=>(CLASS_POWER[c&&c.cls]||10)+Math.max(0,Math.min(5,Number(c&&c.lv)||0))*2+(c&&c.pk? PARTNER[c.pm]||0 : 0);
@@ -219,7 +221,7 @@ function play(opts){
   el.className="tap-stage";
   el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""}</p><p class="tp-who">${opts.who||""}</p>
     <p class="tp-count">3</p><p class="tp-unit"></p><p class="tp-score">준비!</p><div class="tp-bar"><i></i></div>
-    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ 아무 키나 두 손으로 번갈아 빠르게! <small>(Esc 빼고 · 클릭도 돼요)</small>"}</p>
+    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ 아무 키나 두 손으로 번갈아 빠르게! <small>(Esc 빼고 · 클릭도 돼요 · 키보드는 +1/3 보너스)</small>"}</p>
     ${touch? "" : `<div class="tp-keys"><div class="tp-key" data-k="L">F<small>왼손</small></div><div class="tp-key" data-k="M">␣<small>가운데</small></div><div class="tp-key" data-k="R">J<small>오른손</small></div></div>`}</div><div class="tp-ring"></div><div class="tp-flash"></div>`;
   document.body.appendChild(el);
   const cnt=el.querySelector(".tp-count"), score=el.querySelector(".tp-score"), unit=el.querySelector(".tp-unit"), bar=el.querySelector(".tp-bar i");
@@ -227,8 +229,12 @@ function play(opts){
   return new Promise(async res=>{
     let n=0, live=false;
     const flash=el.querySelector(".tp-flash"), recent=[];
-    const hit=(x,y)=>{
-      if(!live) return; n=Math.min(MAX_TAPS, n+1);
+    let tN=0, kN=0;                                                  // 👆 터치 수 · ⌨️🖱️ 키보드 · 마우스 수
+    const hit=(x,y,kind)=>{
+      if(!live) return;
+      if(kind==="touch") tN++; else kN++;
+      n=Math.min(MAX_TAPS, tN+Math.round(kN*KEY_BONUS));
+      if(kN) unit.textContent=`점수 (⚡카드 힘 × 👆탭 수 · ⌨️ +1/3 보너스 ${Math.round(kN*KEY_BONUS)-kN}번)`;
       const t=performance.now(); recent.push(t); while(recent.length && t-recent[0]>600) recent.shift();
       const speed=recent.length;                                   // 0.6초 안에 누른 수 → 빠를수록 세게
       cnt.textContent=pw*n; cnt.classList.remove("bump"); void cnt.offsetWidth; cnt.classList.add("bump");
@@ -255,7 +261,7 @@ function play(opts){
         w.style.left=x+"px"; w.style.top=y+"px"; w.style.setProperty("--r",((Math.random()-.5)*30).toFixed(0)+"deg"); el.appendChild(w); setTimeout(()=>w.remove(),460); }
     };
     const combo=k=>{ if(reduce) return; const c=document.createElement("div"); c.className="tp-combo"; c.textContent=`🔥 ${k}!`; el.appendChild(c); setTimeout(()=>c.remove(),720); };
-    const onPtr=e=>{ e.preventDefault(); hit(e.clientX, e.clientY); };
+    const onPtr=e=>{ e.preventDefault(); hit(e.clientX, e.clientY, e.pointerType==="touch" || e.pointerType==="pen"? "touch" : "mouse"); };
     // ⌨️ Esc를 뺀 대부분의 키 = 한 번 탭 (Shift · Ctrl · Alt · Cmd · CapsLock · Tab · F1~F12는 빼요)
     //    꾹 누르고 있기(자동 반복)는 안 세고, 0.05초 안에 같이 눌린 키는 한 번만 세요 (여러 손가락으로 문질러도 최대 1초에 20번)
     const SKIP=/^(Escape|Shift|Control|Alt|Meta|OS|CapsLock|Tab|ContextMenu|Fn|F\d{1,2}|AudioVolume.*|MediaPlay.*|Unidentified)/;
@@ -271,7 +277,7 @@ function play(opts){
       const side= LEFTK.test(e.code)? "L" : (e.code==="Space"||e.key===" ")? "M" : "R";
       press(side);
       const x= side==="L"? innerWidth*.28 : side==="R"? innerWidth*.72 : innerWidth/2;
-      hit(x+(Math.random()*80-40), innerHeight/2+(Math.random()*120-60));
+      hit(x+(Math.random()*80-40), innerHeight/2+(Math.random()*120-60), "key");
     };
     el.addEventListener("pointerdown", onPtr);
     window.addEventListener("keydown", onKey, true);
@@ -281,7 +287,7 @@ function play(opts){
     await new Promise(r=>{ const tick=()=>{ const p=Math.min(1,(performance.now()-t0)/D); bar.style.transform=`scaleX(${1-p})`; if(p>=1) r(); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
     live=false; el.classList.remove("go");
     el.removeEventListener("pointerdown", onPtr); window.removeEventListener("keydown", onKey, true);
-    score.textContent=`끝! ⚡${pw} × 👆${n} = ${pw*n}점`; sfx("star");
+    score.textContent=`끝! ⚡${pw} × 👆${n} = ${pw*n}점${kN? ` (⌨️ ${kN}번 +${n-tN-kN} 보너스)` : ""}`; sfx("star");
     await wait(reduce? 80 : 1100);
     el.classList.add("out"); await wait(220); el.remove();
     res(n);
@@ -294,5 +300,5 @@ async function banner(html, kind){
   document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add("show"));
   await wait(reduce? 80 : 1800); el.classList.remove("show"); await wait(250); el.remove();
 }
-window.TapBattle={renderPunches, SECONDS, MAX_TAPS, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
+window.TapBattle={renderPunches, SECONDS, MAX_TAPS, KEY_BONUS, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
 })();
