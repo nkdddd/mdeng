@@ -4,6 +4,8 @@
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
  *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 4번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
+ *  - 🃏 2판은 '카드 짝 맞추기': 9장(4쌍 + ⭐ 1장)을 0.2초 보여 주고 덮어요 → 2장씩 뒤집어 짝 찾기. 틀리면 바로 끝
+ *    값 = 찾은 짝 × 10 + (4쌍 다 찾으면 남은 시간 보너스, 20초 - 걸린 초) → 점수 = ⚡카드 힘 × 값
  *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 10개를 한 번 보여 주면 외웠다가 그대로 눌러요. 처음 틀릴 때까지 맞힌 수가 점수
  *    점수 = ⚡카드 힘 × 맞힌 화살표 수 (휴대폰은 화면 버튼, 컴퓨터는 방향키 · WASD → 입력 방법 차이 없음)
  *  - 점수 = ⚡카드 파워(등급 10/12/14/17/20 + 강화×2 + 🐾짝꿍 포켓몬) × 👆탭 수
@@ -120,6 +122,13 @@ function addCss(){
 .mem-btn[data-d=U]{grid-area:u}.mem-btn[data-d=L]{grid-area:l}.mem-btn[data-d=R]{grid-area:r}.mem-btn[data-d=D]{grid-area:d}
 .mem-btn.on{transform:translateY(5px);box-shadow:0 1px 0 #94a3b8;background:#bbf7d0}.mem-btn.demo{background:#fde68a}.mem-btn.bad{background:#fecaca}.mem-btn.hint{background:#bbf7d0;outline:4px solid #4ade80}
 .mem-stage.watch .mem-btn{pointer-events:none;opacity:.85}
+.pair-grid{display:grid;grid-template-columns:repeat(3,min(24vw,100px));gap:8px}
+.pair-card{position:relative;aspect-ratio:3/4;border:0;border-radius:14px;background:#fff;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;box-shadow:0 5px 0 #94a3b8;font-size:min(10vw,44px);padding:0;transition:transform .15s,background .15s}
+.pair-card .pc-back,.pair-card .pc-face{position:absolute;inset:0;display:grid;place-items:center}
+.pair-card .pc-face{opacity:0}.pair-card .pc-back{background:linear-gradient(135deg,#6366f1,#a855f7);border-radius:14px;color:#fff;font-size:.8em}
+.pair-card.open .pc-face{opacity:1}.pair-card.open .pc-back{opacity:0}.pair-card.open{transform:rotateY(0) scale(1.03)}
+.pair-card.got{background:#bbf7d0}.pair-card.bad{background:#fecaca;animation:tpBump .2s}
+.pair-stage .pair-grid,.pair-stage .pair-card{pointer-events:auto}
 .tap-stage .tp-keys{display:flex;gap:min(6vw,28px);margin-top:4px}
 .tap-stage .tp-key{width:min(16vw,76px);height:min(16vw,76px);border-radius:14px;background:#fff;color:#1c1b22;font-weight:900;font-size:min(8vw,38px);display:grid;place-items:center;box-shadow:0 6px 0 #94a3b8;transition:transform .05s,box-shadow .05s}
 .tap-stage .tp-key small{display:block;font-size:11px;font-weight:800;color:#64748b;margin-top:-6px}
@@ -228,11 +237,12 @@ function ding(n){
     o.connect(g).connect(c.destination); o.start(t+dt); o.stop(t+dt+.17); });
 }
 // 판 종류: 1 · 2판은 👆 탭, 3판부터(결승 · 다시 하는 판)는 🧠 화살표 기억
-const roundMode=i=>i>=2? "memory" : "tap";
-const MODE_ICON={tap:"👆", memory:"🧠"};
+const roundMode=i=>i===1? "pairs" : i>=2? "memory" : "tap";          // 1판 👆 탭 · 2판 🃏 카드 짝 · 3판부터 🧠 화살표 기억
+const MODE_ICON={tap:"👆", pairs:"🃏", memory:"🧠"};
 // opts: {label, who, power, seconds, mode}
 function play(opts){
   if(opts && opts.mode==="memory") return memory(opts);
+  if(opts && opts.mode==="pairs") return pairs(opts);
   ac();                                                           // 버튼을 누른 순간 소리를 켜 둬요 (휴대폰은 터치해야 소리가 나요)
   addCss();
   const sec=(opts&&opts.seconds)||SECONDS, pw=(opts&&opts.power)||10;
@@ -381,6 +391,70 @@ function memory(opts){
     round(LEN);
   });
 }
+/* ----- 🃏 카드 짝 맞추기 → 값(찾은 짝 × 10 + 시간 보너스) Promise -----
+   9장(4쌍 + 짝 없는 ⭐)을 0.2초 보여 주고 덮어요 → 2장씩 뒤집기: 같으면 짝, 다르면 바로 끝 (그때까지 찾은 짝만)
+   4쌍을 다 찾으면 빨리 찾을수록 보너스 (20초 - 걸린 초). 20초가 지나거나 5초 동안 안 누르면 끝
+   컴퓨터는 숫자 1~9(키패드 배치)로도 뒤집어요 */
+const PAIR_FACES=["⚡","🔥","💧","🌱","❄️","🌙","🍄","🐉","🌈","🎵","🍎","🦋"], PAIR_N=4, PAIR_TIME=20, PAIR_PEEK=200;
+function pairs(opts){
+  ac(); addCss();
+  const pw=(opts&&opts.power)||10, IDLE=5000;
+  const pick=[...PAIR_FACES].sort(()=>Math.random()-.5).slice(0,PAIR_N);
+  const faces=[...pick, ...pick, "⭐"].sort(()=>Math.random()-.5);
+  const el=document.createElement("div");
+  el.className="tap-stage mem-stage pair-stage";
+  el.dataset.faces=faces.join(",");                                   // 테스트용
+  el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""} · 🃏 카드 짝 맞추기</p><p class="tp-who">${opts.who||""}</p>
+    <p class="mem-say">0.2초만 보여 줘요! 잘 봐!</p>
+    <div class="pair-grid">${faces.map((f,i)=>`<button class="pair-card" data-i="${i}"><span class="pc-back">🎴</span><span class="pc-face">${f}</span></button>`).join("")}</div>
+    <p class="tp-score">⚡${pw} × 🃏0 = 0점</p><div class="tp-bar"><i></i></div>
+    <p class="tp-hint">${("ontouchstart" in window)||navigator.maxTouchPoints>0? "👆 카드 두 장씩 뒤집어 짝을 찾아요 · 틀리면 끝!" : "🖱️ 클릭 또는 숫자 1~9 · 틀리면 끝!"}</p></div>`;
+  document.body.appendChild(el);
+  const say=el.querySelector(".mem-say"), score=el.querySelector(".tp-score"), bar=el.querySelector(".tp-bar i"), cards=[...el.querySelectorAll(".pair-card")];
+  requestAnimationFrame(()=>el.classList.add("in"));
+  return new Promise(async res=>{
+    let found=0, first=null, live=false, done=false, t0=0, idleT=0, raf=0, busy=false;
+    const value=all=>found*10+(all? Math.max(0, PAIR_TIME-Math.floor((performance.now()-t0)/1000)) : 0);
+    const paint=all=>{ const v=value(all); score.textContent=`⚡${pw} × 🃏${v} = ${pw*v}점 (짝 ${found}개${all? ` + 시간 ${v-found*10}` : ""})`; };
+    const finish=async why=>{
+      if(done) return; done=true; live=false; clearTimeout(idleT); cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKey, true);
+      const all=why==="all", v=value(all);
+      if(why!=="all") cards.forEach(c=>c.classList.add("open"));          // 끝나면 다 보여 줘요
+      say.textContent= all? `와, 4쌍 다 찾았어! 🃏 ${v}` : why==="bad"? `앗, 틀렸어! 짝 ${found}개 🃏 ${v}` : `시간이 다 됐어! 짝 ${found}개 🃏 ${v}`;
+      score.textContent=`끝! ⚡${pw} × 🃏${v} = ${pw*v}점`; sfx("star");
+      await wait(reduce? 80 : 1600);
+      el.classList.add("out"); await wait(220); el.remove(); res(v);
+    };
+    const idle=()=>{ clearTimeout(idleT); idleT=setTimeout(()=>finish("idle"), IDLE); };
+    const flip=async i=>{
+      if(!live || busy || done) return;
+      const c=cards[i]; if(!c || c.classList.contains("open")) return;
+      c.classList.add("open"); idle();
+      if(faces[i]==="⭐"){ tone("U"); return; }                           // ⭐은 짝이 없어요 (그냥 열려 있어요)
+      if(first==null){ first=i; tone("R"); return; }
+      const a=first; first=null;
+      if(faces[a]===faces[i]){
+        found++; cards[a].classList.add("got"); c.classList.add("got"); tone("U"); try{ navigator.vibrate && navigator.vibrate(15); }catch(_){}
+        paint(found>=PAIR_N); if(found>=PAIR_N) return finish("all");
+      }else{
+        busy=true; tone("D", true); cards[a].classList.add("bad"); c.classList.add("bad"); try{ navigator.vibrate && navigator.vibrate([40,40,40]); }catch(_){}
+        await wait(reduce? 60 : 500); return finish("bad");
+      }
+    };
+    const KEYPAD={Numpad7:0,Numpad8:1,Numpad9:2,Numpad4:3,Numpad5:4,Numpad6:5,Numpad1:6,Numpad2:7,Numpad3:8,Digit1:0,Digit2:1,Digit3:2,Digit4:3,Digit5:4,Digit6:5,Digit7:6,Digit8:7,Digit9:8};
+    const onKey=e=>{ const i=KEYPAD[e.code]; if(i==null) return; e.preventDefault(); if(e.repeat) return; flip(i); };
+    cards.forEach(c=>c.addEventListener("pointerdown", e=>{ e.preventDefault(); flip(+c.dataset.i); }));
+    window.addEventListener("keydown", onKey, true);
+    await wait(reduce? 60 : 900);
+    cards.forEach(c=>c.classList.add("open","peek")); sfx("whoosh");
+    await wait(PAIR_PEEK);                                                // 👀 0.2초!
+    cards.forEach(c=>c.classList.remove("open","peek"));
+    say.textContent="👉 짝을 찾아! 틀리면 끝!"; live=true; t0=performance.now(); idle(); paint(false);
+    const D=PAIR_TIME*1000, tick=()=>{ if(done) return; const p=Math.min(1,(performance.now()-t0)/D); bar.style.transform=`scaleX(${1-p})`; if(p>=1) return finish("time"); raf=requestAnimationFrame(tick); };
+    raf=requestAnimationFrame(tick);
+  });
+}
 // 판 결과 배너 (잠깐 보여 주고 사라져요)
 async function banner(html, kind){
   addCss();
@@ -388,5 +462,5 @@ async function banner(html, kind){
   document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add("show"));
   await wait(reduce? 80 : 1800); el.classList.remove("show"); await wait(250); el.remove();
 }
-window.TapBattle={renderPunches, roundMode, MODE_ICON, memory, MEM_LEN, SECONDS, MAX_TAPS, TOUCH_W, KEY_W, MOUSE_W, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
+window.TapBattle={renderPunches, roundMode, MODE_ICON, memory, MEM_LEN, pairs, PAIR_N, PAIR_TIME, SECONDS, MAX_TAPS, TOUCH_W, KEY_W, MOUSE_W, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
 })();
