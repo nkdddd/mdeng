@@ -3,7 +3,7 @@
  *  - 한 판 = 5초 동안 휴대폰은 화면을 톡톡, 컴퓨터는 Esc를 뺀 아무 키나 두 손으로 번갈아 (클릭도 돼요)
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
- *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 4번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
+ *  - 세는 법: 👆 휴대폰 터치 한 번 = 1번 · ⌨️ 키보드 · 🖱️ 마우스 한 번 = 2번 (컴퓨터 2 : 휴대폰 1) · 상한 없음
  *  - 🃏 2판은 '카드 짝 맞추기': 포켓몬 카드 9장(4쌍 + ⭐ 1장)을 1.5초 보여 주고 덮어요 → 2장씩 뒤집어 짝 찾기
  *    틀리면 다시 덮고 계속! 4쌍을 먼저(빨리) 다 찾을수록 이겨요: 값 = 찾은 짝 × 10 + 남은 시간(30초 - 걸린 시간) × 2
  *    → 점수 = ⚡카드 힘 × 값 (30초 안에 못 찾으면 찾은 짝만)
@@ -20,9 +20,9 @@
  * ============================================================ */
 (function(){
 const SECONDS=5, MAX_TAPS=9999, WIN=2, MAX_ROUNDS=9;   // 탭 수 상한은 없어요 (9999는 잘못된 기록만 막는 값)
-const TOUCH_W=.75;                // 👆 휴대폰 터치는 여러 손가락으로 아주 빨라서 한 번 = 0.75번 (40번 → 30번)
-const KEY_W=4;                    // ⌨️ 키보드는 한 번 = 4번 (휴대폰 · 마우스보다 많이 느려서)
-const MOUSE_W=1;                  // 🖱️ 마우스 클릭은 한 번 = 1번
+const TOUCH_W=1;                  // 👆 휴대폰 터치는 한 번 = 1번
+const KEY_W=2;                    // ⌨️ 키보드는 한 번 = 2번 (컴퓨터 2 : 휴대폰 1)
+const MOUSE_W=2;                  // 🖱️ 마우스 클릭도 한 번 = 2번 (컴퓨터 2 : 휴대폰 1)
 const CLASS_POWER={n:10, r:12, a:14, s:17, u:20};
 const PARTNER={same:4, family:2};
 const power=c=>(CLASS_POWER[c&&c.cls]||10)+Math.max(0,Math.min(5,Number(c&&c.lv)||0))*2+(c&&c.pk? PARTNER[c.pm]||0 : 0);
@@ -255,7 +255,7 @@ function play(opts){
   el.className="tap-stage";
   el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""}</p><p class="tp-who">${opts.who||""}</p>
     <p class="tp-count">3</p><p class="tp-unit"></p><p class="tp-score">준비!</p><div class="tp-bar"><i></i></div>
-    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ 아무 키나 두 손으로 번갈아 빠르게! <small>(Esc 빼고 · 키보드는 한 번에 4번!)</small>"}</p>
+    <p class="tp-hint">${touch? "👆 화면을 최대한 빨리 톡톡톡!" : "⌨️ 아무 키나 두 손으로 번갈아 빠르게! <small>(Esc 빼고 · 컴퓨터는 한 번에 2번!)</small>"}</p>
     ${touch? "" : `<div class="tp-keys"><div class="tp-key" data-k="L">F<small>왼손</small></div><div class="tp-key" data-k="M">␣<small>가운데</small></div><div class="tp-key" data-k="R">J<small>오른손</small></div></div>`}</div><div class="tp-ring"></div><div class="tp-flash"></div>`;
   document.body.appendChild(el);
   const cnt=el.querySelector(".tp-count"), score=el.querySelector(".tp-score"), unit=el.querySelector(".tp-unit"), bar=el.querySelector(".tp-bar i");
@@ -268,7 +268,7 @@ function play(opts){
       if(!live) return;
       if(kind==="touch") tN++; else if(kind==="key") kN++; else mN++;
       n=Math.min(MAX_TAPS, Math.round(tN*TOUCH_W+kN*KEY_W+mN*MOUSE_W));
-      unit.textContent=`점수 (⚡카드 힘 × 👆탭 수)`+[tN? ` · 👆 ${tN}번 ×0.75` : "", kN? ` · ⌨️ ${kN}번 ×4` : "", mN? ` · 🖱️ ${mN}번` : ""].join("");
+      unit.textContent=`점수 (⚡카드 힘 × 👆탭 수)`+[tN? ` · 👆 ${tN}번` : "", kN? ` · ⌨️ ${kN}번 ×2` : "", mN? ` · 🖱️ ${mN}번 ×2` : ""].join("");
       const t=performance.now(); recent.push(t); while(recent.length && t-recent[0]>600) recent.shift();
       const speed=recent.length;                                   // 0.6초 안에 누른 수 → 빠를수록 세게
       cnt.textContent=pw*n; cnt.classList.remove("bump"); void cnt.offsetWidth; cnt.classList.add("bump");
