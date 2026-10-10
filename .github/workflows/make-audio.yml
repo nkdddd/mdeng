@@ -60,7 +60,7 @@ jobs:
             exit 0
           fi
           git commit -m "Update voice clips (${{ inputs.voice }}, ${{ inputs.rate }})"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git pull origin "${GITHUB_REF_NAME}" -X ours
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: 결과
