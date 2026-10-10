@@ -2403,6 +2403,8 @@ function botTaps(m, round, mine) {
   if (round === 0 || m.botBase == null) {
     const bias = (0.5 - botWinRate(m)) / 0.14; /* 승률 1%p ≈ 탭 0.07번 (모의 실험) */
     m.botBase = Math.max(0, mine + Math.round(Math.random() * 6 - 3 + bias)); raw = m.botBase;
+  } else if (TapBattle.roundMode(round) === 'memory') { /* 🧠 기억 대결: 내가 맞힌 수 ±3 근처 (같은 승률 보정) */
+    raw = Math.max(0, mine + Math.round(Math.random() * 6 - 3 + (0.5 - botWinRate(m)) / 0.14 * 0.5));
   } else raw = Math.max(0, m.botBase + (Math.random() < 0.5 ? 1 : -1) * rnd(0, 7));
   return Math.round(raw * TapBattle.power(m.picks.me) / TapBattle.power(m.picks.cpu)); /* ⚡힘 차이만큼 봇 탭 수를 맞춰요 (위 승률이 되게) */
 }
@@ -2524,7 +2526,7 @@ function renderBattle() {
     const owned = Object.keys(S.cards || {}).map((id) => CARD_BY[id]).filter(Boolean)
       .map((c) => ({ c, p: SOCIAL.power(cardInfo(c, cardLv(c[0]))) })).sort((a, b) => b.p - a.p);
     app.innerHTML = `${top}${bubble(m.local ? '걸 카드를 골라! 봇이 비슷한 카드를 내면, 보고 싫으면 거부해도 돼. 지면 이 카드는 사라져.' : m.stake ? '대결할 카드를 골라! 지면 이 카드가 친구에게 가.' : '대결할 카드를 골라! 친선 대결이라 카드는 그대로야.', 'tight')}
-      <p class="small-note center-note">👆 탭 대결: 한 판 점수 = ⚡카드 힘 × 5초 동안 탭한 수 (컴퓨터는 Esc 뺀 아무 키나) · 3판 2선승</p>
+      <p class="small-note center-note">👆 탭 대결: 1·2판 = ⚡카드 힘 × 5초 동안 탭한 수 (휴대폰 한 번 0.75 · 컴퓨터 키 한 번 4) · 🧠 3판 = 화살표 순서 기억 (맞힌 수 × ⚡) · 3판 2선승</p>
       <div class="album picker">${owned.map(({ c, p }) => `<button class="album-card" data-pick="${c[0]}">${cardFace(c, true)}<span class="pw">⚡${p}${c[7] ? ` ${c[7]}` : ''}</span>${S.cards[c[0]] > 1 ? `<span class="dup">×${S.cards[c[0]]}</span>` : ''}${TapBattle.partners(cardInfo(c, 0), myCatches()).length ? '<span class="pk-mark">🐾</span>' : ''}</button>`).join('')}</div>
       <p class="small-note center-note">🐾 표시 카드는 짝꿍 포켓몬(잡은 포켓몬 중 같은 포켓몬 · 진화 가족)과 함께 나갈 수 있어요</p>
       <div class="row">${quit}</div>`;
@@ -2614,7 +2616,7 @@ function rollView(m, top) {
         <div class="fighter" id="fB">${cb ? cardFace(cb, false, B.lv) : ''}<b>${esc(B.name)}</b><span class="pw">⚡${SOCIAL.power(B)}</span>${pkLine(B)}
           <span class="die" id="dB" aria-label="상대 점수">👆</span><small class="die-how" id="hB"></small><small class="die-note" id="nB"></small></div>
       </div>
-      <p class="small-note center-note bt-rule">점수 = ⚡카드 힘(🐾 포함) × 👆5초 탭 수 · 3판 2선승</p>
+      <p class="small-note center-note bt-rule">1·2판 ⚡힘 × 👆5초 탭 · 3판 ⚡힘 × 🧠화살표 기억 · 3판 2선승</p>
       <div class="roll-ctl" id="rollCtl" aria-live="polite"></div>
       <div class="rounds" id="bRounds" aria-live="polite"></div>
       <div id="bEnd"></div>`;
@@ -2651,12 +2653,13 @@ function rollView(m, top) {
   if (btn && +btn.dataset.r === cur) { $('#rollHint').textContent = hint; return; } /* 이번 판 버튼이 이미 있어요 */
   const counted = rounds.filter((x) => x.w !== -1);
   const tension = counted.filter((x) => x.w === 0).length === 1 && counted.filter((x) => x.w === 1).length === 1;
-  ctl.innerHTML = `<button class="btn primary big roll-btn" id="rollBtn" data-r="${cur}">👆 ${tension ? '🔥 마지막 판' : `${cur + 1}판`} 탭 시작!</button>
-    <p class="small-note center-note" id="rollHint">${hint}</p>`;
+  const mode = TapBattle.roundMode(cur); /* 1 · 2판 👆 탭, 3판부터 🧠 화살표 기억 */
+  ctl.innerHTML = `<button class="btn primary big roll-btn" id="rollBtn" data-r="${cur}">${mode === 'memory' ? '🧠' : '👆'} ${tension ? '🔥 마지막 판' : `${cur + 1}판`} ${mode === 'memory' ? '화살표 기억 대결!' : '탭 시작!'}</button>
+    <p class="small-note center-note" id="rollHint">${mode === 'memory' ? '화살표 순서를 외웠다가 똑같이 눌러요 · 맞힌 개수 × ⚡카드 힘' : ''}${hint ? ' ' + hint : ''}</p>`;
   $('#rollBtn').onclick = async () => {
     $('#rollBtn').disabled = true;
-    const n = await TapBattle.play({ label: tension ? '🔥 마지막 판!' : `${cur + 1}판`, who: `${m.who[me].avatar || ''} ${esc(m.who[me].name)} · ${esc(A.name)}`, power: SOCIAL.power(A) });
-    if ($('#dA')) { $('#dA').textContent = SOCIAL.power(A) * n; $('#hA').textContent = `⚡${SOCIAL.power(A)} × 👆${n}`; }
+    const n = await TapBattle.play({ mode, label: tension ? '🔥 마지막 판!' : `${cur + 1}판`, who: `${m.who[me].avatar || ''} ${esc(m.who[me].name)} · ${esc(A.name)}`, power: SOCIAL.power(A) });
+    if ($('#dA')) { $('#dA').textContent = SOCIAL.power(A) * n; $('#hA').textContent = `⚡${SOCIAL.power(A)} × ${TapBattle.MODE_ICON[mode]}${n}`; }
     sendTap(m, me, cur, n).catch(() => toast('앗, 연결이 끊겼어요. 다시 눌러 봐요'));
   };
 }
@@ -2754,8 +2757,9 @@ async function revealRound(rounds, i, A, B) {
   const r = rounds[i];
   const foe = (matchOf(battleId) || {}).local ? '봇' : '친구';
   /* 큰 숫자 = 점수 (⚡카드 힘 × 👆탭 수), 아래에 풀이 */
-  $('#dA').textContent = r.sa; $('#hA').textContent = `⚡${SOCIAL.power(A)} × 👆${r.ta}`;
-  if ($('#dB')) { $('#dB').textContent = r.sb; $('#hB').textContent = `⚡${SOCIAL.power(B)} × 👆${r.tb}`; }
+  const ic = TapBattle.MODE_ICON[TapBattle.roundMode(i)];
+  $('#dA').textContent = r.sa; $('#hA').textContent = `⚡${SOCIAL.power(A)} × ${ic}${r.ta}`;
+  if ($('#dB')) { $('#dB').textContent = r.sb; $('#hB').textContent = `⚡${SOCIAL.power(B)} × ${ic}${r.tb}`; }
   $('#nB').textContent = '';
   const win = r.w === -1 ? null : r.w === 0;
   sfx(win === true ? 'roundWin' : win === false ? 'roundLose' : 'pop');
