@@ -1848,3 +1848,41 @@ body.scene-open { overflow: hidden; }
 .album-card .pk-mark { position: absolute; right: 4px; bottom: 4px; font-size: 14px; background: var(--card, #fff); border-radius: 999px; padding: 0 3px; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 .fighter .die { width: auto; min-width: 72px; font-size: 44px; font-variant-numeric: tabular-nums; }
 @media (max-width: 420px) { .fighter .die { font-size: 34px; min-width: 58px; } }
+
+/* 📱 대결 화면은 휴대폰 한 화면 안에 (세로로 넘기지 않게) */
+.screen-battle .h { font-size: 22px; }
+.screen-battle .vs { font-size: 20px; gap: 10px; margin: 2px 0; }
+.screen-battle .vs-kid { flex-direction: row; gap: 4px; }
+.screen-battle .vs-kid b { font-size: 14px; }
+.screen-battle .vs-x { font-size: 20px; }
+.screen-battle .center-note { font-size: 12px; margin: 2px 0; line-height: 1.4; }
+.screen-battle .bubble { margin: 4px 0; }
+.screen-battle .fighter { gap: 2px; }
+.screen-battle .fighter .tcg { width: min(100%, 26vw, 17vh, 140px); }
+.screen-battle .fighter b { font-size: 13px; line-height: 1.2; }
+.screen-battle .fighter .pw { font-size: 12px; }
+.screen-battle .fighter .die { font-size: 30px; min-height: 34px; height: auto; }
+.screen-battle .bt-pk { font-size: 11px; }
+.screen-battle .score { font-size: 24px; }
+.screen-battle .rounds { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px 6px; min-height: 0; }
+.screen-battle .rd { font-size: 12.5px; background: var(--card, #fff); border: 1px solid var(--grid-soft, #e2e8f0); border-radius: 999px; padding: 1px 9px; }
+.screen-battle .rd.w { border-color: var(--red); }
+.screen-battle .roll-ctl .btn.big { padding-top: 10px; padding-bottom: 10px; font-size: 18px; }
+.screen-battle .bt-result { font-size: 22px; }
+.screen-battle #bEnd .center-note { margin: 0; }
+.screen-battle .rounds { margin: 2px 0; }
+.screen-battle .arena.done .fighter .tcg { width: min(100%, 20vw, 11vh, 110px); }
+.screen-battle .arena.done ~ .bt-rule { display: none; }
+.screen-battle .row { margin-top: 6px; }
+.screen-battle .bt-pick .tcg { width: min(30vw, 18vh, 150px); }
+.bt-sheet .zoom-in > .tcg, .bt-sheet .spin3d { width: min(30vw, 14vh, 150px); }
+.bt-sheet .zoom-in { gap: 6px; padding: 12px; }
+.bt-sheet .spin-hint { display: none; }
+.bt-sheet .inv-t { font-size: 18px; }
+.bt-sheet .small-note { margin: 4px 0; font-size: 12.5px; }
+.bt-sheet .pk-opts { gap: 6px; margin: 4px 0; }
+.bt-sheet .pk-opt { padding: 5px 11px; flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.bt-sheet .row { margin-top: 2px; }
+.screen-battle { gap: 8px; }
+.screen-battle .roll-ctl { min-height: 0; }
+.screen-battle .roll-ctl:empty, .screen-battle #bEnd:empty { display: none; }
