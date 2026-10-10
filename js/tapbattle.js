@@ -4,7 +4,7 @@
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
  *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 4번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
- *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 순서를 외웠다가 그대로 눌러요. 4개부터 맞힐 때마다 하나씩 길어져요
+ *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 15개를 한 번 보여 주면 외웠다가 그대로 눌러요. 처음 틀릴 때까지 맞힌 수가 점수
  *    점수 = ⚡카드 힘 × 맞힌 화살표 수 (휴대폰은 화면 버튼, 컴퓨터는 방향키 · WASD → 입력 방법 차이 없음)
  *  - 점수 = ⚡카드 파워(등급 10/12/14/17/20 + 강화×2 + 🐾짝꿍 포켓몬) × 👆탭 수
  *  - 🐾 짝꿍 포켓몬: 카드와 맞는 포켓몬만 함께 출전 — 같은 포켓몬 ⚡+4 · 같은 진화 가족 ⚡+2
@@ -313,9 +313,10 @@ function play(opts){
     res(n);
   });
 }
-/* ----- 🧠 화살표 기억 대결 (DDR · 사이먼 게임처럼) → 맞힌 화살표 수 Promise -----
-   화살표가 하나씩 나와요 → 다 나오면 같은 순서로 누르기. 다 맞히면 하나 더 길게 (4 → 5 → 6 …, 최대 12)
-   틀리거나 5초 동안 안 누르면 끝. 점수 = 지금까지 맞힌 화살표 수 (틀린 줄에서 맞힌 것까지) */
+/* ----- 🧠 화살표 기억 대결 (DDR처럼 · 한 번에 끝) → 맞힌 화살표 수 Promise -----
+   무작위 화살표 15개를 한 번만 하나씩 보여 줘요 → 같은 순서로 누르기
+   처음 틀리거나 5초 동안 안 누르면 끝. 점수 = 처음 틀리기 전까지 맞힌 수 (0~15) */
+const MEM_LEN=15;                 // 🧠 기억 대결 화살표 수
 const DIRS=["U","R","D","L"], ARROW={U:"⬆️",R:"➡️",D:"⬇️",L:"⬅️"}, TONE={U:660,R:784,D:523,L:587};
 const KEYDIR={ArrowUp:"U",ArrowRight:"R",ArrowDown:"D",ArrowLeft:"L",KeyW:"U",KeyD:"R",KeyS:"D",KeyA:"L"};
 function tone(dir, bad){
@@ -327,7 +328,7 @@ function tone(dir, bad){
 }
 function memory(opts){
   ac(); addCss();
-  const pw=(opts&&opts.power)||10, START=4, MAXLEN=12, IDLE=5000;
+  const pw=(opts&&opts.power)||10, LEN=MEM_LEN, IDLE=5000;
   const el=document.createElement("div");
   el.className="tap-stage mem-stage";
   el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""} · 🧠 기억 대결</p><p class="tp-who">${opts.who||""}</p>
@@ -348,7 +349,7 @@ function memory(opts){
     const finish=async why=>{
       if(done) return; done=true; accept=false; clearTimeout(idleT);
       window.removeEventListener("keydown", onKey, true);
-      say.textContent= why==="bad"? `앗, 틀렸어! 🧠 ${got}개 기억!` : why==="idle"? `시간이 다 됐어! 🧠 ${got}개 기억!` : `와, 끝까지 다 기억했어! 🧠 ${got}개!`;
+      say.textContent= why==="bad"? `앗, 틀렸어! 🧠 ${got}개 기억!` : why==="idle"? `시간이 다 됐어! 🧠 ${got}개 기억!` : `와, ${LEN}개 다 기억했어! 🧠 ${got}개!`;
       score.textContent=`끝! ⚡${pw} × 🧠${got} = ${pw*got}점`; sfx("star");
       await wait(reduce? 80 : 1400);
       el.classList.add("out"); await wait(220); el.remove(); res(got);
@@ -359,9 +360,7 @@ function memory(opts){
       if(d!==seq[pos]){ tone(d, true); flashBtn(d,"bad"); flashBtn(seq[pos],"hint"); try{ navigator.vibrate && navigator.vibrate([40,40,40]); }catch(_){} return finish("bad"); }
       tone(d); flashBtn(d); pos++; got++; paintDots(); paintScore(); idle();
       try{ navigator.vibrate && navigator.vibrate(12); }catch(_){}
-      if(pos>=seq.length){ accept=false; clearTimeout(idleT); sfx("star");
-        if(seq.length>=MAXLEN) return finish("all");
-        say.textContent="딩동댕! 하나 더 길게 →"; setTimeout(()=>round(seq.length+1), reduce? 60 : 700); }
+      if(pos>=seq.length) return finish("all");                     // 15개 다 맞혔어요!
     };
     const onKey=e=>{ const d=KEYDIR[e.code]; if(!d) return; e.preventDefault(); if(e.repeat) return; input(d); };
     el.querySelectorAll(".mem-btn").forEach(b=>b.addEventListener("pointerdown", e=>{ e.preventDefault(); input(b.dataset.d); }));
@@ -370,16 +369,16 @@ function memory(opts){
     const round=async len=>{
       seq=Array.from({length:len},()=>DIRS[Math.floor(Math.random()*4)]); pos=0; paintDots();
       el.dataset.seq=seq.join("");                                   // 테스트용
-      say.textContent=`👀 ${len}개를 잘 봐!`; el.classList.add("watch");
-      await wait(reduce? 60 : 600);
-      const on=Math.max(320, 620-len*30), off=Math.max(120, 200-len*8);
+      say.textContent=`👀 ${len}개를 잘 봐! 한 번만 보여 줘요`; el.classList.add("watch");
+      await wait(reduce? 60 : 700);
+      const on=430, off=150;                                        // 15개 ≈ 9초
       for(const d of seq){ if(done) return; arrow.textContent=ARROW[d]; arrow.className="mem-arrow show"; tone(d); flashBtn(d,"demo");
         await wait(reduce? 30 : on); arrow.className="mem-arrow"; await wait(reduce? 20 : off); }
       arrow.textContent=""; el.classList.remove("watch");
       say.textContent="👉 이제 똑같이 눌러!"; accept=true; idle();
     };
     say.textContent="준비!"; await wait(reduce? 60 : 900);
-    round(START);
+    round(LEN);
   });
 }
 // 판 결과 배너 (잠깐 보여 주고 사라져요)
@@ -389,5 +388,5 @@ async function banner(html, kind){
   document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add("show"));
   await wait(reduce? 80 : 1800); el.classList.remove("show"); await wait(250); el.remove();
 }
-window.TapBattle={renderPunches, roundMode, MODE_ICON, memory, SECONDS, MAX_TAPS, TOUCH_W, KEY_W, MOUSE_W, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
+window.TapBattle={renderPunches, roundMode, MODE_ICON, memory, MEM_LEN, SECONDS, MAX_TAPS, TOUCH_W, KEY_W, MOUSE_W, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
 })();
