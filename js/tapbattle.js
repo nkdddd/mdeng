@@ -4,7 +4,7 @@
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
  *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 4번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
- *  - 🃏 2판은 '카드 짝 맞추기': 포켓몬 카드 9장(4쌍 + ⭐ 1장)을 0.5초 보여 주고 덮어요 → 2장씩 뒤집어 짝 찾기. 틀리면 바로 끝
+ *  - 🃏 2판은 '카드 짝 맞추기': 포켓몬 카드 9장(4쌍 + ⭐ 1장)을 1.5초 보여 주고 덮어요 → 2장씩 뒤집어 짝 찾기. 틀리면 바로 끝
  *    값 = 찾은 짝 × 10 + (4쌍 다 찾으면 남은 시간 보너스, 20초 - 걸린 초) → 점수 = ⚡카드 힘 × 값
  *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 10개를 한 번 보여 주면 외웠다가 그대로 눌러요. 처음 틀릴 때까지 맞힌 수가 점수
  *    점수 = ⚡카드 힘 × 맞힌 화살표 수 (휴대폰은 화면 버튼, 컴퓨터는 방향키 · WASD → 입력 방법 차이 없음)
@@ -395,10 +395,10 @@ function memory(opts){
   });
 }
 /* ----- 🃏 카드 짝 맞추기 → 값(찾은 짝 × 10 + 시간 보너스) Promise -----
-   포켓몬 카드 9장(4쌍 + 짝 없는 ⭐)을 0.5초 보여 주고 덮어요 → 2장씩 뒤집기: 같으면 짝, 다르면 바로 끝 (그때까지 찾은 짝만)
+   포켓몬 카드 9장(4쌍 + 짝 없는 ⭐)을 1.5초 보여 주고 덮어요 → 2장씩 뒤집기: 같으면 짝, 다르면 바로 끝 (그때까지 찾은 짝만)
    4쌍을 다 찾으면 빨리 찾을수록 보너스 (20초 - 걸린 초). 20초가 지나거나 5초 동안 안 누르면 끝
    컴퓨터는 숫자 1~9(키패드 배치)로도 뒤집어요 */
-const PAIR_FACES=["⚡","🔥","💧","🌱","❄️","🌙","🍄","🐉","🌈","🎵","🍎","🦋"], PAIR_N=4, PAIR_TIME=20, PAIR_PEEK=500;
+const PAIR_FACES=["⚡","🔥","💧","🌱","❄️","🌙","🍄","🐉","🌈","🎵","🍎","🦋"], PAIR_N=4, PAIR_TIME=20, PAIR_PEEK=1500;
 // 카드 그림: 도감 1~3세대(1~386번) 포켓몬 중 무작위 4마리 (그림을 못 받으면 이모지로)
 const POKE_IMG=no=>`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${no}.png`;
 const loadImg=(src,ms)=>new Promise(r=>{ const im=new Image(); let ok=false; im.onload=()=>{ ok=true; r(true); }; im.onerror=()=>r(false); im.referrerPolicy="no-referrer"; im.src=src; setTimeout(()=>{ if(!ok) r(false); }, ms); });
@@ -458,9 +458,9 @@ function pairs(opts){
     cards.forEach(c=>c.addEventListener("pointerdown", e=>{ e.preventDefault(); flip(+c.dataset.i); }));
     window.addEventListener("keydown", onKey, true);
     await Promise.all([wait(reduce? 60 : 900), ...pick.filter(p=>p.img).map(p=>loadImg(p.img, 2500))]);   // 그림을 먼저 받아 둬요
-    say.textContent="👀 0.5초만 보여 줘요! 잘 봐!"; await wait(reduce? 60 : 500);
+    say.textContent="👀 1.5초만 보여 줘요! 잘 봐!"; await wait(reduce? 60 : 500);
     cards.forEach(c=>c.classList.add("open","peek")); sfx("whoosh");
-    await wait(PAIR_PEEK);                                                // 👀 0.5초!
+    await wait(PAIR_PEEK);                                                // 👀 1.5초!
     cards.forEach(c=>c.classList.remove("open","peek"));
     say.textContent="👉 짝을 찾아! 틀리면 끝!"; live=true; t0=performance.now(); idle(); paint(false);
     const D=PAIR_TIME*1000, tick=()=>{ if(done) return; const p=Math.min(1,(performance.now()-t0)/D); bar.style.transform=`scaleX(${1-p})`; if(p>=1) return finish("time"); raf=requestAnimationFrame(tick); };
