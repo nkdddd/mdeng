@@ -4,8 +4,9 @@
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
  *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 4번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
- *  - 🃏 2판은 '카드 짝 맞추기': 포켓몬 카드 9장(4쌍 + ⭐ 1장)을 1.5초 보여 주고 덮어요 → 2장씩 뒤집어 짝 찾기. 틀리면 바로 끝
- *    값 = 찾은 짝 × 10 + (4쌍 다 찾으면 남은 시간 보너스, 20초 - 걸린 초) → 점수 = ⚡카드 힘 × 값
+ *  - 🃏 2판은 '카드 짝 맞추기': 포켓몬 카드 9장(4쌍 + ⭐ 1장)을 1.5초 보여 주고 덮어요 → 2장씩 뒤집어 짝 찾기
+ *    틀리면 다시 덮고 계속! 4쌍을 먼저(빨리) 다 찾을수록 이겨요: 값 = 찾은 짝 × 10 + 남은 시간(30초 - 걸린 시간) × 2
+ *    → 점수 = ⚡카드 힘 × 값 (30초 안에 못 찾으면 찾은 짝만)
  *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 10개를 한 번 보여 주면 외웠다가 그대로 눌러요. 처음 틀릴 때까지 맞힌 수가 점수
  *    점수 = ⚡카드 힘 × 맞힌 화살표 수 (휴대폰은 화면 버튼, 컴퓨터는 방향키 · WASD → 입력 방법 차이 없음)
  *  - 점수 = ⚡카드 파워(등급 10/12/14/17/20 + 강화×2 + 🐾짝꿍 포켓몬) × 👆탭 수
@@ -395,16 +396,16 @@ function memory(opts){
   });
 }
 /* ----- 🃏 카드 짝 맞추기 → 값(찾은 짝 × 10 + 시간 보너스) Promise -----
-   포켓몬 카드 9장(4쌍 + 짝 없는 ⭐)을 1.5초 보여 주고 덮어요 → 2장씩 뒤집기: 같으면 짝, 다르면 바로 끝 (그때까지 찾은 짝만)
-   4쌍을 다 찾으면 빨리 찾을수록 보너스 (20초 - 걸린 초). 20초가 지나거나 5초 동안 안 누르면 끝
+   포켓몬 카드 9장(4쌍 + 짝 없는 ⭐)을 1.5초 보여 주고 덮어요 → 2장씩 뒤집기: 같으면 짝, 다르면 잠깐 보여 주고 다시 덮어요 (계속 도전!)
+   4쌍을 다 찾으면 끝 · 빨리 찾을수록 보너스 (남은 시간 × 2). 30초가 지나거나 8초 동안 안 누르면 끝 (찾은 짝만)
    컴퓨터는 숫자 1~9(키패드 배치)로도 뒤집어요 */
-const PAIR_FACES=["⚡","🔥","💧","🌱","❄️","🌙","🍄","🐉","🌈","🎵","🍎","🦋"], PAIR_N=4, PAIR_TIME=20, PAIR_PEEK=1500;
+const PAIR_FACES=["⚡","🔥","💧","🌱","❄️","🌙","🍄","🐉","🌈","🎵","🍎","🦋"], PAIR_N=4, PAIR_TIME=30, PAIR_PEEK=1500;
 // 카드 그림: 도감 1~3세대(1~386번) 포켓몬 중 무작위 4마리 (그림을 못 받으면 이모지로)
 const POKE_IMG=no=>`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${no}.png`;
 const loadImg=(src,ms)=>new Promise(r=>{ const im=new Image(); let ok=false; im.onload=()=>{ ok=true; r(true); }; im.onerror=()=>r(false); im.referrerPolicy="no-referrer"; im.src=src; setTimeout(()=>{ if(!ok) r(false); }, ms); });
 function pairs(opts){
   ac(); addCss();
-  const pw=(opts&&opts.power)||10, IDLE=5000;
+  const pw=(opts&&opts.power)||10, IDLE=8000;
   const dex=(window.POKEDEX||[]).filter(p=>p[3]>=1 && p[3]<=386);
   const pick= dex.length>=PAIR_N? [...dex].sort(()=>Math.random()-.5).slice(0,PAIR_N).map(p=>({k:String(p[3]), name:p[0], emo:p[1], img:POKE_IMG(p[3])}))
     : [...PAIR_FACES].sort(()=>Math.random()-.5).slice(0,PAIR_N).map(e=>({k:e, name:e, emo:e, img:""}));
@@ -419,20 +420,20 @@ function pairs(opts){
     <p class="mem-say">포켓몬 카드를 섞는 중…</p>
     <div class="pair-grid">${faces.map((f,i)=>`<button class="pair-card" data-i="${i}"><span class="pc-back">🎴</span><span class="pc-face">${faceHTML(f)}</span></button>`).join("")}</div>
     <p class="tp-score">⚡${pw} × 🃏0 = 0점</p><div class="tp-bar"><i></i></div>
-    <p class="tp-hint">${("ontouchstart" in window)||navigator.maxTouchPoints>0? "👆 카드 두 장씩 뒤집어 짝을 찾아요 · 틀리면 끝!" : "🖱️ 클릭 또는 숫자 1~9 · 틀리면 끝!"}</p></div>`;
+    <p class="tp-hint">${("ontouchstart" in window)||navigator.maxTouchPoints>0? "👆 두 장씩 뒤집어 짝 찾기 · 틀려도 계속 · 빨리 다 찾으면 이겨요!" : "🖱️ 클릭 또는 숫자 1~9 · 틀려도 계속 · 빨리 다 찾으면 이겨요!"}</p></div>`;
   document.body.appendChild(el);
   const say=el.querySelector(".mem-say"), score=el.querySelector(".tp-score"), bar=el.querySelector(".tp-bar i"), cards=[...el.querySelectorAll(".pair-card")];
   requestAnimationFrame(()=>el.classList.add("in"));
   return new Promise(async res=>{
     let found=0, first=null, live=false, done=false, t0=0, idleT=0, raf=0, busy=false;
-    const value=all=>found*10+(all? Math.max(0, PAIR_TIME-Math.floor((performance.now()-t0)/1000)) : 0);
+    const value=all=>found*10+(all? Math.max(0, Math.round((PAIR_TIME-(performance.now()-t0)/1000)*2)) : 0);
     const paint=all=>{ const v=value(all); score.textContent=`⚡${pw} × 🃏${v} = ${pw*v}점 (짝 ${found}개${all? ` + 시간 ${v-found*10}` : ""})`; };
     const finish=async why=>{
       if(done) return; done=true; live=false; clearTimeout(idleT); cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKey, true);
       const all=why==="all", v=value(all);
-      if(why!=="all") cards.forEach(c=>c.classList.add("open"));          // 끝나면 다 보여 줘요
-      say.textContent= all? `와, 4쌍 다 찾았어! 🃏 ${v}` : why==="bad"? `앗, 틀렸어! 짝 ${found}개 🃏 ${v}` : `시간이 다 됐어! 짝 ${found}개 🃏 ${v}`;
+      if(why!=="all") cards.forEach(c=>c.classList.add("open"));          // 시간이 다 되면 다 보여 줘요
+      say.textContent= all? `와, ${((performance.now()-t0)/1000).toFixed(1)}초 만에 다 찾았어! 🃏 ${v}` : `시간이 다 됐어! 짝 ${found}개 🃏 ${v}`;
       score.textContent=`끝! ⚡${pw} × 🃏${v} = ${pw*v}점`; sfx("star");
       await wait(reduce? 80 : 1600);
       el.classList.add("out"); await wait(220); el.remove(); res(v);
@@ -449,8 +450,12 @@ function pairs(opts){
         found++; cards[a].classList.add("got"); c.classList.add("got"); tone("U"); try{ navigator.vibrate && navigator.vibrate(15); }catch(_){}
         paint(found>=PAIR_N); if(found>=PAIR_N) return finish("all");
       }else{
-        busy=true; tone("D", true); cards[a].classList.add("bad"); c.classList.add("bad"); try{ navigator.vibrate && navigator.vibrate([40,40,40]); }catch(_){}
-        await wait(reduce? 60 : 500); return finish("bad");
+        busy=true; tone("D", true); cards[a].classList.add("bad"); c.classList.add("bad"); try{ navigator.vibrate && navigator.vibrate([30,30]); }catch(_){}
+        say.textContent="앗, 아니야! 다시 찾아봐!";
+        await wait(reduce? 60 : 650);                                       // 잠깐 보여 주고 다시 덮어요
+        if(done) return;
+        cards[a].classList.remove("open","bad"); c.classList.remove("open","bad"); busy=false;
+        say.textContent="👉 짝을 찾아! 빨리 다 찾을수록 점수 ↑";
       }
     };
     const KEYPAD={Numpad7:0,Numpad8:1,Numpad9:2,Numpad4:3,Numpad5:4,Numpad6:5,Numpad1:6,Numpad2:7,Numpad3:8,Digit1:0,Digit2:1,Digit3:2,Digit4:3,Digit5:4,Digit6:5,Digit7:6,Digit8:7,Digit9:8};
@@ -462,7 +467,7 @@ function pairs(opts){
     cards.forEach(c=>c.classList.add("open","peek")); sfx("whoosh");
     await wait(PAIR_PEEK);                                                // 👀 1.5초!
     cards.forEach(c=>c.classList.remove("open","peek"));
-    say.textContent="👉 짝을 찾아! 틀리면 끝!"; live=true; t0=performance.now(); idle(); paint(false);
+    say.textContent="👉 짝을 찾아! 빨리 다 찾을수록 점수 ↑"; live=true; t0=performance.now(); idle(); paint(false);
     const D=PAIR_TIME*1000, tick=()=>{ if(done) return; const p=Math.min(1,(performance.now()-t0)/D); bar.style.transform=`scaleX(${1-p})`; if(p>=1) return finish("time"); raf=requestAnimationFrame(tick); };
     raf=requestAnimationFrame(tick);
   });
