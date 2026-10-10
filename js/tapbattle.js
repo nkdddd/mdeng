@@ -4,7 +4,7 @@
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
  *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 4번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
- *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 15개를 한 번 보여 주면 외웠다가 그대로 눌러요. 처음 틀릴 때까지 맞힌 수가 점수
+ *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 10개를 한 번 보여 주면 외웠다가 그대로 눌러요. 처음 틀릴 때까지 맞힌 수가 점수
  *    점수 = ⚡카드 힘 × 맞힌 화살표 수 (휴대폰은 화면 버튼, 컴퓨터는 방향키 · WASD → 입력 방법 차이 없음)
  *  - 점수 = ⚡카드 파워(등급 10/12/14/17/20 + 강화×2 + 🐾짝꿍 포켓몬) × 👆탭 수
  *  - 🐾 짝꿍 포켓몬: 카드와 맞는 포켓몬만 함께 출전 — 같은 포켓몬 ⚡+4 · 같은 진화 가족 ⚡+2
@@ -314,9 +314,9 @@ function play(opts){
   });
 }
 /* ----- 🧠 화살표 기억 대결 (DDR처럼 · 한 번에 끝) → 맞힌 화살표 수 Promise -----
-   무작위 화살표 15개를 한 번만 하나씩 보여 줘요 → 같은 순서로 누르기
-   처음 틀리거나 5초 동안 안 누르면 끝. 점수 = 처음 틀리기 전까지 맞힌 수 (0~15) */
-const MEM_LEN=15;                 // 🧠 기억 대결 화살표 수
+   무작위 화살표 10개를 한 번만 하나씩 보여 줘요 → 같은 순서로 누르기
+   처음 틀리거나 5초 동안 안 누르면 끝. 점수 = 처음 틀리기 전까지 맞힌 수 (0~10) */
+const MEM_LEN=10;                 // 🧠 기억 대결 화살표 수
 const DIRS=["U","R","D","L"], ARROW={U:"⬆️",R:"➡️",D:"⬇️",L:"⬅️"}, TONE={U:660,R:784,D:523,L:587};
 const KEYDIR={ArrowUp:"U",ArrowRight:"R",ArrowDown:"D",ArrowLeft:"L",KeyW:"U",KeyD:"R",KeyS:"D",KeyA:"L"};
 function tone(dir, bad){
@@ -360,7 +360,7 @@ function memory(opts){
       if(d!==seq[pos]){ tone(d, true); flashBtn(d,"bad"); flashBtn(seq[pos],"hint"); try{ navigator.vibrate && navigator.vibrate([40,40,40]); }catch(_){} return finish("bad"); }
       tone(d); flashBtn(d); pos++; got++; paintDots(); paintScore(); idle();
       try{ navigator.vibrate && navigator.vibrate(12); }catch(_){}
-      if(pos>=seq.length) return finish("all");                     // 15개 다 맞혔어요!
+      if(pos>=seq.length) return finish("all");                     // 다 맞혔어요!
     };
     const onKey=e=>{ const d=KEYDIR[e.code]; if(!d) return; e.preventDefault(); if(e.repeat) return; input(d); };
     el.querySelectorAll(".mem-btn").forEach(b=>b.addEventListener("pointerdown", e=>{ e.preventDefault(); input(b.dataset.d); }));
@@ -371,7 +371,7 @@ function memory(opts){
       el.dataset.seq=seq.join("");                                   // 테스트용
       say.textContent=`👀 ${len}개를 잘 봐! 한 번만 보여 줘요`; el.classList.add("watch");
       await wait(reduce? 60 : 700);
-      const on=430, off=150;                                        // 15개 ≈ 9초
+      const on=330, off=115;                                        // 1.3배 빠르게: 10개 ≈ 4.5초
       for(const d of seq){ if(done) return; arrow.textContent=ARROW[d]; arrow.className="mem-arrow show"; tone(d); flashBtn(d,"demo");
         await wait(reduce? 30 : on); arrow.className="mem-arrow"; await wait(reduce? 20 : off); }
       arrow.textContent=""; el.classList.remove("watch");
