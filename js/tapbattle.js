@@ -4,7 +4,7 @@
  *    스페이스바 하나만 누르면 휴대폰 두 엄지보다 느려서 대부분의 키를 인정해요.
  *    단, 0.05초 안에 같이 눌린 키는 한 번만 · 꾹 누르기(자동 반복)는 안 세요
  *  - 세는 법: 👆 휴대폰 터치 한 번 = 0.75번 (여러 손가락으로 아주 빨라서) · ⌨️ 키보드 한 번 = 4번 · 🖱️ 마우스 한 번 = 1번 · 상한 없음
- *  - 🃏 2판은 '카드 짝 맞추기': 9장(4쌍 + ⭐ 1장)을 0.2초 보여 주고 덮어요 → 2장씩 뒤집어 짝 찾기. 틀리면 바로 끝
+ *  - 🃏 2판은 '카드 짝 맞추기': 포켓몬 카드 9장(4쌍 + ⭐ 1장)을 0.5초 보여 주고 덮어요 → 2장씩 뒤집어 짝 찾기. 틀리면 바로 끝
  *    값 = 찾은 짝 × 10 + (4쌍 다 찾으면 남은 시간 보너스, 20초 - 걸린 초) → 점수 = ⚡카드 힘 × 값
  *  - 🧠 3판부터는 '화살표 기억 대결' (DDR처럼): 화살표 10개를 한 번 보여 주면 외웠다가 그대로 눌러요. 처음 틀릴 때까지 맞힌 수가 점수
  *    점수 = ⚡카드 힘 × 맞힌 화살표 수 (휴대폰은 화면 버튼, 컴퓨터는 방향키 · WASD → 입력 방법 차이 없음)
@@ -126,7 +126,10 @@ function addCss(){
 .pair-card{position:relative;aspect-ratio:3/4;border:0;border-radius:14px;background:#fff;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;box-shadow:0 5px 0 #94a3b8;font-size:min(10vw,44px);padding:0;transition:transform .15s,background .15s}
 .pair-card .pc-back,.pair-card .pc-face{position:absolute;inset:0;display:grid;place-items:center}
 .pair-card .pc-face{opacity:0}.pair-card .pc-back{background:linear-gradient(135deg,#6366f1,#a855f7);border-radius:14px;color:#fff;font-size:.8em}
-.pair-card.open .pc-face{opacity:1}.pair-card.open .pc-back{opacity:0}.pair-card.open{transform:rotateY(0) scale(1.03)}
+.pair-card.open .pc-face{opacity:1}
+.pair-card .pc-face img{width:88%;height:88%;object-fit:contain;image-rendering:pixelated;position:relative;z-index:1}
+.pair-card .pc-face{flex-direction:column}.pair-card .pc-emo{position:absolute;inset:0;display:grid;place-items:center}.pair-card .pc-face img+.pc-emo{display:none}
+.pair-card .pc-name{position:absolute;left:0;right:0;bottom:3px;font-size:10px;font-weight:800;color:#475569;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 3px}.pair-card.open .pc-back{opacity:0}.pair-card.open{transform:rotateY(0) scale(1.03)}
 .pair-card.got{background:#bbf7d0}.pair-card.bad{background:#fecaca;animation:tpBump .2s}
 .pair-stage .pair-grid,.pair-stage .pair-card{pointer-events:auto}
 .tap-stage .tp-keys{display:flex;gap:min(6vw,28px);margin-top:4px}
@@ -392,21 +395,29 @@ function memory(opts){
   });
 }
 /* ----- 🃏 카드 짝 맞추기 → 값(찾은 짝 × 10 + 시간 보너스) Promise -----
-   9장(4쌍 + 짝 없는 ⭐)을 0.2초 보여 주고 덮어요 → 2장씩 뒤집기: 같으면 짝, 다르면 바로 끝 (그때까지 찾은 짝만)
+   포켓몬 카드 9장(4쌍 + 짝 없는 ⭐)을 0.5초 보여 주고 덮어요 → 2장씩 뒤집기: 같으면 짝, 다르면 바로 끝 (그때까지 찾은 짝만)
    4쌍을 다 찾으면 빨리 찾을수록 보너스 (20초 - 걸린 초). 20초가 지나거나 5초 동안 안 누르면 끝
    컴퓨터는 숫자 1~9(키패드 배치)로도 뒤집어요 */
-const PAIR_FACES=["⚡","🔥","💧","🌱","❄️","🌙","🍄","🐉","🌈","🎵","🍎","🦋"], PAIR_N=4, PAIR_TIME=20, PAIR_PEEK=200;
+const PAIR_FACES=["⚡","🔥","💧","🌱","❄️","🌙","🍄","🐉","🌈","🎵","🍎","🦋"], PAIR_N=4, PAIR_TIME=20, PAIR_PEEK=500;
+// 카드 그림: 도감 1~3세대(1~386번) 포켓몬 중 무작위 4마리 (그림을 못 받으면 이모지로)
+const POKE_IMG=no=>`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${no}.png`;
+const loadImg=(src,ms)=>new Promise(r=>{ const im=new Image(); let ok=false; im.onload=()=>{ ok=true; r(true); }; im.onerror=()=>r(false); im.referrerPolicy="no-referrer"; im.src=src; setTimeout(()=>{ if(!ok) r(false); }, ms); });
 function pairs(opts){
   ac(); addCss();
   const pw=(opts&&opts.power)||10, IDLE=5000;
-  const pick=[...PAIR_FACES].sort(()=>Math.random()-.5).slice(0,PAIR_N);
-  const faces=[...pick, ...pick, "⭐"].sort(()=>Math.random()-.5);
+  const dex=(window.POKEDEX||[]).filter(p=>p[3]>=1 && p[3]<=386);
+  const pick= dex.length>=PAIR_N? [...dex].sort(()=>Math.random()-.5).slice(0,PAIR_N).map(p=>({k:String(p[3]), name:p[0], emo:p[1], img:POKE_IMG(p[3])}))
+    : [...PAIR_FACES].sort(()=>Math.random()-.5).slice(0,PAIR_N).map(e=>({k:e, name:e, emo:e, img:""}));
+  const byK=Object.fromEntries(pick.map(p=>[p.k,p]));
+  const faces=[...pick.map(p=>p.k), ...pick.map(p=>p.k), "⭐"].sort(()=>Math.random()-.5);
+  const faceHTML=k=>{ const p=byK[k]; if(!p) return "⭐";
+    return p.img? `<img src="${p.img}" alt="${p.name}" referrerpolicy="no-referrer" draggable="false" onerror="this.remove()"><span class="pc-emo">${p.emo}</span><small class="pc-name">${p.name}</small>` : p.emo; };
   const el=document.createElement("div");
   el.className="tap-stage mem-stage pair-stage";
   el.dataset.faces=faces.join(",");                                   // 테스트용
   el.innerHTML=`<div class="tp-shake"><p class="tp-label">${opts.label||""} · 🃏 카드 짝 맞추기</p><p class="tp-who">${opts.who||""}</p>
-    <p class="mem-say">0.2초만 보여 줘요! 잘 봐!</p>
-    <div class="pair-grid">${faces.map((f,i)=>`<button class="pair-card" data-i="${i}"><span class="pc-back">🎴</span><span class="pc-face">${f}</span></button>`).join("")}</div>
+    <p class="mem-say">포켓몬 카드를 섞는 중…</p>
+    <div class="pair-grid">${faces.map((f,i)=>`<button class="pair-card" data-i="${i}"><span class="pc-back">🎴</span><span class="pc-face">${faceHTML(f)}</span></button>`).join("")}</div>
     <p class="tp-score">⚡${pw} × 🃏0 = 0점</p><div class="tp-bar"><i></i></div>
     <p class="tp-hint">${("ontouchstart" in window)||navigator.maxTouchPoints>0? "👆 카드 두 장씩 뒤집어 짝을 찾아요 · 틀리면 끝!" : "🖱️ 클릭 또는 숫자 1~9 · 틀리면 끝!"}</p></div>`;
   document.body.appendChild(el);
@@ -446,9 +457,10 @@ function pairs(opts){
     const onKey=e=>{ const i=KEYPAD[e.code]; if(i==null) return; e.preventDefault(); if(e.repeat) return; flip(i); };
     cards.forEach(c=>c.addEventListener("pointerdown", e=>{ e.preventDefault(); flip(+c.dataset.i); }));
     window.addEventListener("keydown", onKey, true);
-    await wait(reduce? 60 : 900);
+    await Promise.all([wait(reduce? 60 : 900), ...pick.filter(p=>p.img).map(p=>loadImg(p.img, 2500))]);   // 그림을 먼저 받아 둬요
+    say.textContent="👀 0.5초만 보여 줘요! 잘 봐!"; await wait(reduce? 60 : 500);
     cards.forEach(c=>c.classList.add("open","peek")); sfx("whoosh");
-    await wait(PAIR_PEEK);                                                // 👀 0.2초!
+    await wait(PAIR_PEEK);                                                // 👀 0.5초!
     cards.forEach(c=>c.classList.remove("open","peek"));
     say.textContent="👉 짝을 찾아! 틀리면 끝!"; live=true; t0=performance.now(); idle(); paint(false);
     const D=PAIR_TIME*1000, tick=()=>{ if(done) return; const p=Math.min(1,(performance.now()-t0)/D); bar.style.transform=`scaleX(${1-p})`; if(p>=1) return finish("time"); raf=requestAnimationFrame(tick); };
