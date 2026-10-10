@@ -131,19 +131,69 @@ function addCss(){
 /* 🔊 타격음 (Web Audio로 바로 만들어요 — 파일 없이) */
 let actx=null;
 function ac(){ try{ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); }catch(_){ actx=null; } return actx; }
+/* 🥊 타격음: 실제 펀치처럼 세 겹 — ① 묵직한 '쿵'(낮은 음이 확 떨어짐 + 살짝 찌그러뜨려 펀치감)
+   ② 살에 맞는 '착'(가운데 음역 잡음) ③ 맨 앞의 '딱'(아주 짧은 높은 잡음). 칠 때마다 조금씩 달라서 기계음 같지 않아요.
+   빠르게 칠수록 · 10번마다 더 세게. 모든 소리는 압축기를 거쳐 크게 들려도 찢어지지 않아요 */
+let NOISE=null, BUS=null, CLIP=null;
+function bus(c){
+  if(BUS && BUS.context===c) return BUS;
+  const comp=c.createDynamicsCompressor();
+  comp.threshold.value=-14; comp.knee.value=8; comp.ratio.value=5; comp.attack.value=.002; comp.release.value=.12;
+  const out=c.createGain(); out.gain.value=.9; comp.connect(out).connect(c.destination);
+  BUS=comp; return comp;
+}
+function noiseBuf(c){
+  if(NOISE && NOISE.sampleRate===c.sampleRate) return NOISE;
+  const len=Math.floor(c.sampleRate*.4), b=c.createBuffer(1,len,c.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+  return NOISE=b;
+}
+function clipCurve(){
+  if(CLIP) return CLIP;
+  const n=1024; CLIP=new Float32Array(n);
+  for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; CLIP[i]=Math.tanh(x*2.4)/Math.tanh(2.4); }
+  return CLIP;
+}
+const jit=(a=.08)=>1+(Math.random()*2-1)*a;
+function noiseHit(c, dest, t, {type, f, q, gain, dur, off}){
+  const src=c.createBufferSource(), fl=c.createBiquadFilter(), g=c.createGain();
+  src.buffer=noiseBuf(c); fl.type=type; fl.frequency.value=f; if(q) fl.Q.value=q;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t+.0015); g.gain.exponentialRampToValueAtTime(.0008, t+dur);
+  src.connect(fl).connect(g).connect(dest); src.start(t, off!=null? off : Math.random()*.3, dur+.02);
+}
+// 한 번 치는 소리 (c: 오디오, dest: 보낼 곳, t: 시각, k: 세기 0.6~1.4)
+function punch(c, dest, t, k){
+  // ① 쿵: 사인파가 150Hz쯤에서 45Hz로 뚝 떨어지며 사라져요 (+ 살짝 찌그러뜨림)
+  const o=c.createOscillator(), og=c.createGain(), sh=c.createWaveShaper();
+  sh.curve=clipCurve(); o.type="sine";
+  const f0=150*jit(.1);
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0*.3, t+.12);
+  og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(1.1*k, t+.002); og.gain.exponentialRampToValueAtTime(.001, t+.24);
+  o.connect(sh).connect(og).connect(dest); o.start(t); o.stop(t+.26);
+  // ①' 몸통 울림: 조금 높은 음 하나 더 (주먹이 꽉 찬 느낌)
+  const o2=c.createOscillator(), g2=c.createGain();
+  o2.type="triangle"; o2.frequency.setValueAtTime(f0*2.1, t); o2.frequency.exponentialRampToValueAtTime(f0*.9, t+.06);
+  g2.gain.setValueAtTime(0, t); g2.gain.linearRampToValueAtTime(.35*k, t+.002); g2.gain.exponentialRampToValueAtTime(.001, t+.09);
+  o2.connect(g2).connect(dest); o2.start(t); o2.stop(t+.1);
+  // ② 착: 가운데 음역 잡음 (살에 맞는 소리) + 낮은 '퍽'
+  noiseHit(c, dest, t, {type:"bandpass", f:1700*jit(.2), q:1.1, gain:.9*k, dur:.07});
+  noiseHit(c, dest, t, {type:"lowpass", f:700*jit(.15), gain:.7*k, dur:.11});
+  // ③ 딱: 아주 짧은 높은 잡음 (맞는 순간)
+  noiseHit(c, dest, t, {type:"highpass", f:3800, gain:.45*k, dur:.012});
+}
 function thump(n, speed){
   const c=ac(); if(!c) return;
-  const t=c.currentTime, g=c.createGain(), o=c.createOscillator();
-  const f0=150+Math.min(n,80)*3+speed*6;                           // 누를수록 · 빠를수록 조금씩 높아져요
-  o.type="triangle"; o.frequency.setValueAtTime(f0*2.2, t); o.frequency.exponentialRampToValueAtTime(f0*.55, t+.09);
-  g.gain.setValueAtTime(.32, t); g.gain.exponentialRampToValueAtTime(.001, t+.12);
-  o.connect(g).connect(c.destination); o.start(t); o.stop(t+.13);
-  // 짧은 '탁' 소리 (잡음)
-  const len=Math.floor(c.sampleRate*.04), buf=c.createBuffer(1,len,c.sampleRate), d=buf.getChannelData(0);
-  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3);
-  const src=c.createBufferSource(), ng=c.createGain(), hp=c.createBiquadFilter();
-  hp.type="highpass"; hp.frequency.value=1200; ng.gain.value=.22;
-  src.buffer=buf; src.connect(hp).connect(ng).connect(c.destination); src.start(t);
+  const k=Math.min(1.4, .72+Math.min(speed,10)*.05+(n%10===0? .25 : 0));
+  punch(c, bus(c), c.currentTime+.001, k);
+}
+// 미리 듣기용: 오프라인으로 펀치 소리를 만들어요 (테스트 · 확인용)
+function renderPunches(times, ks){
+  const Ctx=window.OfflineAudioContext||window.webkitOfflineAudioContext, end=times[times.length-1]+.5;
+  const c=new Ctx(1, Math.ceil(44100*end), 44100);
+  const comp=c.createDynamicsCompressor(); comp.threshold.value=-14; comp.knee.value=8; comp.ratio.value=5; comp.attack.value=.002; comp.release.value=.12;
+  const out=c.createGain(); out.gain.value=.9; comp.connect(out).connect(c.destination);
+  NOISE=null; times.forEach((t,i)=>punch(c, comp, t, ks[i]));
+  return c.startRendering().then(b=>{ NOISE=null; return b; });
 }
 function ding(n){
   const c=ac(); if(!c) return;
@@ -221,5 +271,5 @@ async function banner(html, kind){
   document.body.appendChild(el); requestAnimationFrame(()=>el.classList.add("show"));
   await wait(reduce? 80 : 1800); el.classList.remove("show"); await wait(250); el.remove();
 }
-window.TapBattle={SECONDS, MAX_TAPS, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
+window.TapBattle={renderPunches, SECONDS, MAX_TAPS, PARTNER, power, basePower, resolve, addTaps, startFields, play, banner, clampTaps, cardPoke, partners, botPartner, partnerTag, rootOf};
 })();
