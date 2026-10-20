@@ -135,9 +135,9 @@ window.SFX = (() => {
     star: () => { [C6, E6, G6, C7].forEach((f, i) => bell(f, { gain: 0.06, delay: i * 0.07, decay: 1.1 })); noise(0.8, { type: 'highpass', from: 7000, to: 9000, gain: 0.04, delay: 0.1, attack: 0.1 }); },
     /* 휙 */
     whoosh: () => noise(0.45, { type: 'bandpass', from: 300, to: 3200, q: 1.5, gain: 0.55, attack: 0.15, reverb: 0.4 }),
-    /* 몬스터볼 던지기: 휙 + 빙글빙글 */
+    /* 던지기: 휙 + 빙글빙글 */
     throw: () => { noise(0.55, { type: 'bandpass', from: 250, to: 2600, q: 2, gain: 0.8, attack: 0.12, reverb: 0.4 }); for (let i = 0; i < 4; i++) noise(0.06, { type: 'bandpass', from: 1400, to: 900, q: 4, gain: 0.2, delay: 0.12 + i * 0.1, reverb: 0 }); },
-    /* 볼이 포켓몬에 맞음: 퐁 + 빛 */
+    /* 맞음: 퐁 + 빛 */
     hit: () => { note(700, { glide: 1400, glideTime: 0.12, gain: 0.14, decay: 0.2 }); noise(0.35, { type: 'highpass', from: 4000, to: 8000, gain: 0.07, attack: 0.02 }); },
     /* 흔들흔들: 플라스틱 볼이 바닥에서 덜컥 */
     wobble: () => { noise(0.05, { type: 'bandpass', from: 900, to: 700, q: 3, gain: 0.22, attack: 0.002, reverb: 0.3 }); note(140, { gain: 0.12, decay: 0.08, reverb: 0.2 }); noise(0.04, { type: 'bandpass', from: 1300, to: 1100, q: 3, gain: 0.12, attack: 0.002, delay: 0.14, reverb: 0.3 }); },
@@ -156,9 +156,9 @@ window.SFX = (() => {
     miss: () => { note(300, { glide: 120, glideTime: 0.2, gain: 0.15, decay: 0.25 }); noise(0.5, { type: 'bandpass', from: 2400, to: 300, q: 1.5, gain: 0.25, delay: 0.15, attack: 0.05 }); },
     /* 풀숲 바스락 */
     rustle: () => { crackle(0.9, { from: 2500, to: 6500, gain: 0.22, bits: 22 }); noise(0.9, { type: 'bandpass', from: 1500, to: 3500, q: 0.8, gain: 0.06, attack: 0.2 }); },
-    /* 카드팩 찢기: 비닐 부스럭 */
+    /* 비닐 부스럭 */
     crinkle: () => crackle(0.25, { from: 3000, to: 8000, gain: 0.2, bits: 10 }),
-    /* 카드팩 쫙 */
+    /* 쫙 찢기 */
     tear: () => { crackle(0.35, { from: 2000, to: 7000, gain: 0.3, bits: 26 }); noise(0.35, { type: 'bandpass', from: 1500, to: 5000, q: 0.7, gain: 0.2, attack: 0.02, reverb: 0.3 }); },
     /* 진화: 신비롭게 올라가는 소리 */
     /* 🎲 손 안에서 달그락달그락 */
