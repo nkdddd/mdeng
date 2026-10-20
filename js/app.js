@@ -1154,18 +1154,18 @@ SCREENS.char = () => {
   const rule = !ch ? '고른 뒤에는 <b>한 번만</b> 바꿀 수 있어요.' : maxed ? '🏆 전설! <b>새 캐릭터</b>를 골라 0일부터 키울 수 있어요. 지금 캐릭터는 컬렉션에 남아요.'
     : canChange ? '속성은 <b>한 번만</b> 바꿀 수 있어요 (지킨 날은 그대로). 다른 친구는 10단계까지 키우면 만나요.' : '바꾸기를 이미 썼어요. <b>10단계(전설)</b>까지 키우면 새 친구를 고를 수 있어요.';
   const elBtn = (e) => {
-    const d = done.find((x) => x.el === e.id), mine = ch && e.id === ch.el, lit = mine || !!d || !ch;
+    const d = done.find((x) => x.el === e.id), mine = ch && e.id === ch.el, lit = mine || !!d; /* 아직 얻지 않은 캐릭터는 고르기 전에도 그림자 */
     const can = pickable(e.id) || (mine && preview);
-    return `<button role="radio" aria-checked="${e.id === el}" class="${lit ? '' : 'shadow'}" ${can ? `data-el="${e.id}"` : 'disabled'} style="--cc:${e.c}"><img src="${charImg(e.id, mine ? c.stage : d ? CHAR_MAX : 0)}" alt=""><span>${lit ? `${e.emo} ${e.name}` : '？'}${d ? ' 🏆' : ''}</span></button>`;
+    return `<button role="radio" aria-checked="${e.id === el}" class="${lit ? '' : 'shadow'}" ${can ? `data-el="${e.id}"` : 'disabled'} style="--cc:${e.c}"><img src="${charImg(e.id, mine ? c.stage : d ? CHAR_MAX : 0)}" alt=""><span>${lit || !ch ? `${e.emo} ${e.name}` : '？'}${d ? ' 🏆' : ''}</span></button>`;
   };
   const btn = !ch ? '이 친구로 정했어!' : preview && maxed ? '🐣 이 친구 새로 키우기' : preview ? '이 친구로 바꾸기 (한 번만)' : '이름 저장';
   app.innerHTML = `
     <h2 class="h">🐣 내 캐릭터 <small class="h-note">${esc(STORE.current().name)} · 66일 공부 도전</small></h2>
-    <div class="char-hero${preview ? ' is-shadow' : ''}" style="--cc:${E.c}">
+    <div class="char-hero${preview || !ch ? ' is-shadow' : ''}" style="--cc:${E.c}">
       <img src="${charImg(el, preview || !ch ? 0 : c.stage)}" alt="">
-      <b class="ch-name">${preview ? (maxed ? `${E.emo} 새 친구` : '？？？') : esc((ch && ch.name) || E.name)}</b>
-      <span class="ch-lv">${preview ? (maxed ? 'Lv1부터 새로 시작해요' : '바꾸면 어떤 모습일까?') : `Lv${c.stage + 1} · ${CHAR_STAGE[c.stage]} · 지킨 날 ${c.pts}/66일`}</span>
-      ${preview ? '' : `<span class="cc-bar big"><i style="width:${c.pct}%"></i></span><small>${c.next ? `다음 모습까지 ${c.toNext}일` : '66일을 지켜 전설이 됐어요!'}</small>`}
+      <b class="ch-name">${!ch ? `${E.emo} ${E.name}` : preview ? (maxed ? `${E.emo} 새 친구` : '？？？') : esc((ch && ch.name) || E.name)}</b>
+      <span class="ch-lv">${!ch ? '어떤 친구가 태어날까? 고르면 모습이 보여요' : preview ? (maxed ? 'Lv1부터 새로 시작해요' : '바꾸면 어떤 모습일까?') : `Lv${c.stage + 1} · ${CHAR_STAGE[c.stage]} · 지킨 날 ${c.pts}/66일`}</span>
+      ${preview || !ch ? '' : `<span class="cc-bar big"><i style="width:${c.pct}%"></i></span><small>${c.next ? `다음 모습까지 ${c.toNext}일` : '66일을 지켜 전설이 됐어요!'}</small>`}
     </div>
     ${bubble(line, 'tight')}
     <h3 class="h3">캐릭터</h3>
