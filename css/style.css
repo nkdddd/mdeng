@@ -1932,3 +1932,21 @@ body.scene-open { overflow: hidden; }
 @keyframes growNew { 0% { opacity: 0; transform: scale(.6); } 100% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .grow-pic .old { animation: none; opacity: 0; } .grow-pic .new { animation: none; opacity: 1; } }
 @media (max-width: 420px) { .char-hero img { width: 150px; height: 150px; } .char-els button img { width: 42px; height: 42px; } .char-els button { font-size: 12px; } }
+/* 🐣 내 것이 아닌 캐릭터는 그림자 · 다 키운 친구 · 부모님 확인 */
+.char-els button.shadow img { filter: brightness(0); opacity: .5; }
+.char-els button.shadow { background: var(--grid-soft); }
+.char-els button:disabled { cursor: default; }
+.char-hero.is-shadow img { filter: brightness(0); opacity: .55; }
+.cgal.lock img { filter: brightness(0); opacity: .45; }
+:root[data-theme="dark"] .cgal.lock img, :root[data-theme="dark"] .char-els button.shadow img, :root[data-theme="dark"] .char-hero.is-shadow img { filter: brightness(0) invert(1); opacity: .3; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cgal.lock img, :root:not([data-theme="light"]) .char-els button.shadow img, :root:not([data-theme="light"]) .char-hero.is-shadow img { filter: brightness(0) invert(1); opacity: .3; } }
+.char-done { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.char-done span { display: flex; flex-direction: column; align-items: center; border: 2px solid var(--sun); border-radius: 16px; padding: 6px; background: var(--sun-soft); }
+.char-done img { width: 64px; height: 64px; object-fit: contain; }
+.char-done b { font-size: 13px; }
+.kp-list { list-style: none; padding: 0; margin: 8px 0; }
+.kp-row { display: flex; align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px dashed var(--grid-soft); }
+.kp-row.on .kp-d { color: var(--ok); }
+.kp-d { width: 64px; font-weight: 700; }
+.kp-d small { color: var(--ink-soft); font-weight: 400; }
+.kp-i { flex: 1; color: var(--ink-soft); font-size: 14px; font-variant-numeric: tabular-nums; }
