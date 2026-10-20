@@ -26,7 +26,6 @@ const VOICE = (() => {
     const totals = new Set([...Object.values(QUIZ_SIZE), ...DICTATION.map((d) => Math.min(DICT_SIZE, d.items.length)), ...SCHOOL.map((d) => d.items.length), DICT_SIZE]);
     Object.values(DIFF_INFO).forEach((d) => add(LINES.perfect(d.bonus)));
     totals.forEach((t) => { for (let s = 0; s <= t; s++) add(LINES.score(t, s)); });
-    BADGES.forEach(([b]) => add(LINES.badge(b)));
     DICTATION.forEach((d) => d.items.forEach((q) => add(q.t)));
     SCHOOL.forEach((d) => d.items.forEach((q) => add(q.t)));
     GRADE_DICT.forEach((d) => d.items.forEach((q) => add(q.t)));
@@ -44,16 +43,6 @@ const VOICE = (() => {
     VOWELS.forEach((q) => add(q.w));
     SPACING.forEach((q) => add(q.t));
     FUNNY.forEach((f) => { add(f.a[0]); add(f.a[2]); add(f.b[0]); add(f.b[2]); });
-    POKEMON.forEach(([n, , , , genus, g]) => {
-      const subj = batchim(n) ? '이' : '가';
-      add(n);
-      add(genus);
-      add(LINES.appear(n, subj));
-      add(LINES.caught(n, batchim(n) ? '을' : '를'));
-      add(LINES.fled(n, subj));
-      if ('lms'.includes(g)) add(LINES.bigAppear({ l: '전설의', m: '신화 속', s: '비밀의' }[g], n, subj));
-    });
-    QUESTS.forEach(({ p }) => { add(LINES.piece(p)); add(LINES.ready(p, batchim(p) ? '이' : '가')); });
     NOUNS.forEach(([noun]) => {
       add(noun);
       JOSA.forEach((j) => {
