@@ -164,13 +164,10 @@ function toast(html, ms = 2200) {
   toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
 function paintStars() { $('#starCount').textContent = S.earned || 0; }
-/* 별을 모아요. 내 캐릭터가 다음 모습이 되면 결과 화면에서 보여 줘요 (S.grewTo) */
+/* 별을 모아요 (캐릭터는 지킨 날로 자라요 — 한 판이 끝날 때 charRecordRound) */
 function earnStars(n) {
-  const before = charCalc(S.earned || 0).stage;
   S.stars = (S.stars || 0) + n;
   S.earned = (S.earned || 0) + n;
-  const after = charCalc(S.earned).stage;
-  if (after > before) S.grewTo = after;
 }
 function addStar(n = 1) {
   earnStars(n);
@@ -269,6 +266,8 @@ SCREENS.exam = () => { S.dictTab = 'test'; SCREENS.dict(); };
 /* ---------- 결과 ---------- */
 function finish(key, score, total, again, extra) {
   const pct = Math.round((score / total) * 100);
+  charMigrate();
+  charRecordRound(extra && extra.stars ? extra.stars.gained : 0);   /* 🐣 오늘 기록 → 지킨 날 */
   setBest(key, pct);
   const great = pct >= 70;
   app.innerHTML = `
@@ -1026,9 +1025,15 @@ function dictQuestion(q, i, n, mark, next, opt = {}) {
   setTimeout(() => speak(q.t), 350);
 }
 
-/* ---------- 🐣 내 캐릭터: 지금까지 모은 별(earned)만큼 자라요 ----------
- * 별은 줄어들지 않아요. 하루 쉬어도 그대로, 해낸 만큼 차곡차곡 자라요.
- * 그림: img/chars/<속성><1~10>.webp · 기록: S.char { el, name } */
+/* ---------- 🐣 내 캐릭터 · 66일 공부 도전: 지킨 날 66일이면 10단계(전설) ----------
+ * 지킨 날을 어떻게 인정할지는 부모님이 ⚙️ 설정에서 정해요 (부모님 비밀번호 4자리)
+ *   trust  👍 아이를 믿어요: 한 판이라도 끝낸 날
+ *   stars  ⭐ 열심히 한 날: 그날 모은 별이 need개 이상
+ *   parent ✅ 부모님 확인: 부모님이 확인한 날만
+ * 어느 방법이든 부모님이 확인한 날은 지킨 날. 쉬어도 줄지 않아요.
+ * 속성 바꾸기는 한 번, 10단계까지 키우면 새 캐릭터(0일부터) · 다 키운 캐릭터는 컬렉션. 내 것이 아닌 캐릭터는 그림자.
+ * 그림: img/chars/<속성><1~10>.webp
+ * 기록: S.char {el, name, changes, start, floor, done:[…], v2} · S.days {날짜: {r 끝낸 판, s 별}} · S.pconf {rule, need, ok:{날짜:true}, pin} */
 const CHAR_ELS = [
   { id: 'fire', name: '불꽃', emo: '🔥', c: '#f97316' },
   { id: 'water', name: '물방울', emo: '💧', c: '#0ea5e9' },
@@ -1036,44 +1041,85 @@ const CHAR_ELS = [
   { id: 'bolt', name: '번개', emo: '⚡', c: '#eab308' },
   { id: 'shadow', name: '그림자', emo: '🌙', c: '#8b5cf6' },
 ];
-const CHAR_STARS = [0, 30, 80, 160, 300, 500, 800, 1200, 1700, 2400];
+const CHAR_DAYS = [0, 7, 14, 21, 28, 35, 44, 52, 59, 66];
+const CHAR_STARS_OLD = [0, 30, 80, 160, 300, 500, 800, 1200, 1700, 2400]; /* 예전(별) 기준 — 이미 키운 단계를 지켜 주려고 */
 const CHAR_STAGE = ['꼬물이', '아기', '꼬마', '새내기', '씩씩이', '단짝', '용사', '고수', '영웅', '전설'];
-const CHAR_MAX = CHAR_STARS.length - 1;
+const CHAR_MAX = CHAR_DAYS.length - 1;
+const KEPT_RULES = { trust: ['👍', '아이를 믿어요', '한 판이라도 끝낸 날'], stars: ['⭐', '열심히 한 날', '그날 별을 기준만큼 모은 날'], parent: ['✅', '부모님이 확인해요', '부모님이 확인한 날만'] };
 const charImg = (el, st) => `img/chars/${el}${st + 1}.webp`;
 const charEl = (id) => CHAR_ELS.find((e) => e.id === id) || CHAR_ELS[0];
 const myChar = () => (S.char && CHAR_ELS.some((e) => e.id === S.char.el) ? S.char : null);
 const charName = (ch) => (ch && ch.name) || charEl(ch && ch.el).name;
-function charCalc(pts) {
-  pts = Math.max(0, pts || 0);
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const dayStr = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const pconfOf = (st) => Object.assign({ rule: 'trust', need: 10, ok: {} }, (st || S).pconf || {});
+function keptOnFor(st, ds) {
+  const c = pconfOf(st), d = (st.days || {})[ds];
+  if (c.ok && c.ok[ds]) return true;
+  if (!d || c.rule === 'parent') return false;
+  return c.rule === 'stars' ? (d.s || 0) >= (c.need || 10) : (d.r || 0) > 0;
+}
+function keptDaysFor(st) {
+  const ch = st.char || {}, ds = new Set([...Object.keys(st.days || {}), ...Object.keys(pconfOf(st).ok || {})]);
+  return [...ds].filter((d) => (!ch.start || d >= ch.start) && keptOnFor(st, d)).length;
+}
+function charCalc(n) {
+  n = Math.max(0, n || 0);
   let stage = 0;
-  CHAR_STARS.forEach((p, i) => { if (pts >= p) stage = i; });
-  const next = stage < CHAR_MAX ? CHAR_STARS[stage + 1] : null;
-  const pct = next ? Math.min(100, Math.round(((pts - CHAR_STARS[stage]) / (next - CHAR_STARS[stage])) * 100)) : 100;
-  return { pts, stage, next, toNext: next ? next - pts : 0, pct };
+  CHAR_DAYS.forEach((p, i) => { if (n >= p) stage = i; });
+  const next = stage < CHAR_MAX ? CHAR_DAYS[stage + 1] : null;
+  const pct = next ? Math.min(100, Math.round(((n - CHAR_DAYS[stage]) / (next - CHAR_DAYS[stage])) * 100)) : 100;
+  return { pts: n, stage, next, toNext: next ? next - n : 0, pct };
+}
+/* 기준이 바뀌어도 이미 키운 단계는 내려가지 않아요 (floor) */
+function charNowFor(st) {
+  const ch = st.char || {};
+  let n = keptDaysFor(st);
+  if (ch.floor && n < CHAR_DAYS[ch.floor]) n = CHAR_DAYS[ch.floor];
+  return charCalc(n);
+}
+const charNow = () => charNowFor(S);
+/* 예전(모은 별) 기준으로 키운 캐릭터 → 단계는 지키고, 오늘부터 지킨 날로 세요 (한 번만) */
+function charMigrate() {
+  if (!S.char || S.char.v2) return;
+  let floor = 0;
+  CHAR_STARS_OLD.forEach((p, i) => { if ((S.earned || 0) >= p) floor = i; });
+  S.char = { ...S.char, changes: S.char.changes || 0, start: todayStr(), floor, done: S.char.done || [], v2: 1 };
+  save();
+}
+/* 한 판을 끝낼 때마다: 오늘 기록 → 자랐으면 S.grewTo */
+function charRecordRound(stars) {
+  const before = charNow().stage, ds = todayStr();
+  S.days = S.days || {};
+  const d = S.days[ds] || { r: 0, s: 0 };
+  S.days[ds] = { r: d.r + 1, s: d.s + (stars || 0) };
+  const after = charNow().stage;
+  if (myChar() && after > before) S.grewTo = after;
+  save();
 }
 function charThumb() {
   const ch = myChar();
-  return ch ? `<img class="cc-img" src="${charImg(ch.el, charCalc(S.earned).stage)}" alt="">` : '<span class="cc-egg" aria-hidden="true">🥚</span>';
+  return ch ? `<img class="cc-img" src="${charImg(ch.el, charNow().stage)}" alt="">` : '<span class="cc-egg" aria-hidden="true">🥚</span>';
 }
 /* 🗺️ 지도 맨 위 */
 function charCard() {
-  const ch = myChar(), c = charCalc(S.earned);
-  if (!ch) return `<button class="char-card" data-go="char">${charThumb()}<span class="cc-txt"><b>내 캐릭터를 골라 봐요!</b><small>모은 별만큼 자라요 · 지금 ⭐ ${c.pts}</small></span><span class="cc-go">›</span></button>`;
+  const ch = myChar(), c = charNow();
+  if (!ch) return `<button class="char-card" data-go="char">${charThumb()}<span class="cc-txt"><b>내 캐릭터를 골라 봐요!</b><small>66일을 지키면 전설까지 자라요</small></span><span class="cc-go">›</span></button>`;
   return `<button class="char-card" data-go="char" style="--cc:${charEl(ch.el).c}">${charThumb()}
     <span class="cc-txt"><b>${esc(charName(ch))} <em>Lv${c.stage + 1} ${CHAR_STAGE[c.stage]}</em></b>
       <span class="cc-bar"><i style="width:${c.pct}%"></i></span>
-      <small>${c.next ? `다음 모습까지 ⭐ ${c.toNext}` : '최고 단계까지 자랐어요!'}</small></span><span class="cc-go">›</span></button>`;
+      <small>지킨 날 ${c.pts}/66일 · ${c.next ? `다음 모습까지 ${c.toNext}일` : '전설이 됐어요 🏆'}</small></span><span class="cc-go">›</span></button>`;
 }
-/* 결과 화면: 이번 판 별이 캐릭터를 얼마나 키웠는지 */
+/* 결과 화면 */
 function charStrip() {
-  const ch = myChar(), c = charCalc(S.earned);
-  if (!ch) return `<button class="char-card" id="finChar">${charThumb()}<span class="cc-txt"><b>🐣 내 캐릭터를 골라 봐요</b><small>모은 별 ⭐ ${c.pts}만큼 자라요</small></span><span class="cc-go">›</span></button>`;
+  const ch = myChar(), c = charNow(), kept = keptOnFor(S, todayStr());
+  if (!ch) return `<button class="char-card" id="finChar">${charThumb()}<span class="cc-txt"><b>🐣 내 캐릭터를 골라 봐요</b><small>66일을 지키면 전설까지 자라요</small></span><span class="cc-go">›</span></button>`;
+  const R = KEPT_RULES[pconfOf(S).rule] || KEPT_RULES.trust;
   return `<button class="char-card" id="finChar" style="--cc:${charEl(ch.el).c}">${charThumb()}
     <span class="cc-txt"><b>${esc(charName(ch))} <em>Lv${c.stage + 1}</em></b><span class="cc-bar"><i style="width:${c.pct}%"></i></span>
-      <small>${c.next ? `다음 모습까지 ⭐ ${c.toNext}` : '최고 단계 · 전설!'}</small></span><span class="cc-go">›</span></button>`;
+      <small>${kept ? '✅ 오늘은 지킨 날!' : pconfOf(S).rule === 'parent' ? '✅ 부모님이 확인하면 지킨 날이 돼요' : `${R[0]} 오늘 ${pconfOf(S).rule === 'stars' ? `별 ${(S.days[todayStr()] || {}).s || 0}/${pconfOf(S).need}` : ''} 조금만 더!`} · ${c.pts}/66일</small></span><span class="cc-go">›</span></button>`;
 }
 document.addEventListener('click', (e) => { if (e.target.closest('#finChar')) { sfx('pop'); go('char'); } });
-/* 다음 모습이 되면: 반짝! 하고 새 모습 */
 function charGrow(stage) {
   const ch = myChar();
   if (!ch || !stage) return;
@@ -1082,7 +1128,7 @@ function charGrow(stage) {
       <p class="inv-t"><b>${esc(nm)}${josaPick(nm, ['이', '가'])} 자랐어요!</b></p>
       <div class="grow-pic"><img class="old" src="${charImg(ch.el, stage - 1)}" alt=""><img class="new" src="${charImg(ch.el, stage)}" alt=""></div>
       <p class="grow-lv">Lv${stage + 1} · ${CHAR_STAGE[stage]}</p>
-      <p class="small-note">꾸준히 모은 별만큼 자랐어요. 스스로 해낸 거예요!</p>
+      <p class="small-note">${stage >= CHAR_MAX ? '66일을 지켜서 전설이 됐어요! 🏆 이제 새 캐릭터도 키울 수 있어요.' : `지킨 날 ${CHAR_DAYS[stage]}일! 스스로 해낸 거예요!`}</p>
       <button class="btn primary big" id="growOk">좋아요!</button></div>`, 'grow-sheet');
   sfx('victory');
   confetti();
@@ -1091,39 +1137,58 @@ function charGrow(stage) {
 }
 let charPick = '';
 SCREENS.char = () => {
-  const ch = myChar(), c = charCalc(S.earned);
-  const el = charPick || (ch && ch.el) || 'fire', E = charEl(el);
+  charMigrate();
+  const ch = myChar(), c = charNow();
+  const maxed = !!ch && c.stage >= CHAR_MAX, done = (ch && ch.done) || [];
+  const canChange = !!ch && !maxed && (ch.changes || 0) < 1;
+  const pickable = (id) => !done.some((d) => d.el === id) && (!ch || id !== ch.el) && (!ch || maxed || canChange);
+  const el = charPick && (pickable(charPick) || (ch && charPick === ch.el)) ? charPick : (ch ? ch.el : charPick || 'fire'), E = charEl(el);
+  const preview = !!ch && el !== ch.el;
+  const R = KEPT_RULES[pconfOf(S).rule] || KEPT_RULES.trust;
   const all = [...ISLANDS.filter((x) => !['dict', 'exam'].includes(x.id)), ...DICTATION.map((d) => ({ id: d.id, icon: '🎧', name: `받아쓰기 ${d.name}` })),
     ...CORE.map((d, k) => ({ id: d.id, icon: d.icon, name: `받아쓰기 ${k + 1}단계 ${d.name}` })),
     ...GRADE_DICT.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '📚', name: `${d.grade}학년 ${d.name}` })),
     ...MATH.ALL.filter((d) => S.best[d.id] != null).map((d) => ({ id: d.id, icon: '🔢', name: `수학 ${d.name}` })),
     ...SCHOOL.map((d) => ({ id: d.id, icon: '📝', name: `시험 ${d.n}급` }))];
-  const line = ch ? `${charName(ch)}${josaPick(charName(ch), ['은', '는'])} 네가 모은 별만큼 자라. 하루 쉬어도 괜찮아, 줄어들지 않아!` : '함께 자랄 친구를 골라 봐! 공부해서 모은 별만큼 자라.';
+  const line = !ch ? '함께 자랄 친구를 골라 봐! 66일을 지키면 전설이 돼.' : maxed ? '전설까지 키웠어! 이제 새 친구를 골라 처음부터 키울 수 있어.' : `${charName(ch)}${josaPick(charName(ch), ['은', '는'])} 지킨 날만큼 자라. 하루 쉬어도 괜찮아, 줄어들지 않아!`;
+  const rule = !ch ? '고른 뒤에는 <b>한 번만</b> 바꿀 수 있어요.' : maxed ? '🏆 전설! <b>새 캐릭터</b>를 골라 0일부터 키울 수 있어요. 지금 캐릭터는 컬렉션에 남아요.'
+    : canChange ? '속성은 <b>한 번만</b> 바꿀 수 있어요 (지킨 날은 그대로). 다른 친구는 10단계까지 키우면 만나요.' : '바꾸기를 이미 썼어요. <b>10단계(전설)</b>까지 키우면 새 친구를 고를 수 있어요.';
+  const elBtn = (e) => {
+    const d = done.find((x) => x.el === e.id), mine = ch && e.id === ch.el, lit = mine || !!d || !ch;
+    const can = pickable(e.id) || (mine && preview);
+    return `<button role="radio" aria-checked="${e.id === el}" class="${lit ? '' : 'shadow'}" ${can ? `data-el="${e.id}"` : 'disabled'} style="--cc:${e.c}"><img src="${charImg(e.id, mine ? c.stage : d ? CHAR_MAX : 0)}" alt=""><span>${lit ? `${e.emo} ${e.name}` : '？'}${d ? ' 🏆' : ''}</span></button>`;
+  };
+  const btn = !ch ? '이 친구로 정했어!' : preview && maxed ? '🐣 이 친구 새로 키우기' : preview ? '이 친구로 바꾸기 (한 번만)' : '이름 저장';
   app.innerHTML = `
-    <h2 class="h">🐣 내 캐릭터 <small class="h-note">${esc(STORE.current().name)} · 모은 별 ⭐ ${c.pts}</small></h2>
-    <div class="char-hero" style="--cc:${E.c}">
-      <img src="${charImg(el, c.stage)}" alt="${E.name} ${c.stage + 1}단계">
-      <b class="ch-name">${esc((ch && ch.name) || E.name)}</b>
-      <span class="ch-lv">Lv${c.stage + 1} · ${CHAR_STAGE[c.stage]}</span>
-      <span class="cc-bar big"><i style="width:${c.pct}%"></i></span>
-      <small>${c.next ? `다음 모습까지 ⭐ ${c.toNext}` : '최고 단계 · 전설이 됐어요!'}</small>
+    <h2 class="h">🐣 내 캐릭터 <small class="h-note">${esc(STORE.current().name)} · 66일 공부 도전</small></h2>
+    <div class="char-hero${preview ? ' is-shadow' : ''}" style="--cc:${E.c}">
+      <img src="${charImg(el, preview || !ch ? 0 : c.stage)}" alt="">
+      <b class="ch-name">${preview ? (maxed ? `${E.emo} 새 친구` : '？？？') : esc((ch && ch.name) || E.name)}</b>
+      <span class="ch-lv">${preview ? (maxed ? 'Lv1부터 새로 시작해요' : '바꾸면 어떤 모습일까?') : `Lv${c.stage + 1} · ${CHAR_STAGE[c.stage]} · 지킨 날 ${c.pts}/66일`}</span>
+      ${preview ? '' : `<span class="cc-bar big"><i style="width:${c.pct}%"></i></span><small>${c.next ? `다음 모습까지 ${c.toNext}일` : '66일을 지켜 전설이 됐어요!'}</small>`}
     </div>
     ${bubble(line, 'tight')}
-    <h3 class="h3">속성 고르기 <small class="h-note">바꿔도 별은 그대로</small></h3>
-    <div class="char-els" role="radiogroup" aria-label="속성">${CHAR_ELS.map((e) => `<button role="radio" aria-checked="${e.id === el}" data-el="${e.id}" style="--cc:${e.c}"><img src="${charImg(e.id, Math.min(c.stage, 2))}" alt=""><span>${e.emo} ${e.name}</span></button>`).join('')}</div>
+    <h3 class="h3">캐릭터</h3>
+    <div class="char-els" role="radiogroup" aria-label="캐릭터">${CHAR_ELS.map(elBtn).join('')}</div>
+    <p class="small-note">${rule}</p>
     <form class="char-form" id="charForm"><label for="charNm">이름</label>
-      <input id="charNm" class="typed small" maxlength="8" autocomplete="off" placeholder="${E.name}" value="${esc((ch && ch.name) || '')}">
-      <button class="btn primary">${ch ? '저장' : '이 친구로 정했어!'}</button></form>
+      <input id="charNm" class="typed small" maxlength="8" autocomplete="off" placeholder="${E.name}" value="${esc(preview ? '' : (ch && ch.name) || '')}">
+      <button class="btn primary">${btn}</button></form>
     <h3 class="h3">자라는 모습</h3>
-    <div class="char-gal">${CHAR_STARS.map((p, i) => `<span class="cgal${i <= c.stage ? '' : ' lock'}${i === c.stage ? ' now' : ''}"><img src="${charImg(el, i)}" alt="" loading="lazy"><small>${i <= c.stage ? `Lv${i + 1} ${CHAR_STAGE[i]}` : `⭐ ${p}`}</small></span>`).join('')}</div>
-    <p class="small-note">⭐ 문제를 맞히면 별을 받아요. 모은 별은 줄어들지 않고, 그만큼 캐릭터가 자라요.</p>
+    <div class="char-gal">${CHAR_DAYS.map((p, i) => { const open = !preview && ch && i <= c.stage; return `<span class="cgal${open ? '' : ' lock'}${!preview && ch && i === c.stage ? ' now' : ''}"><img src="${charImg(el, i)}" alt="" loading="lazy"><small>${open ? `Lv${i + 1} ${CHAR_STAGE[i]}` : `${p}일`}</small></span>`; }).join('')}</div>
+    ${done.length ? `<h3 class="h3">🏆 다 키운 친구</h3><div class="char-done">${done.map((d) => `<span><img src="${charImg(d.el, CHAR_MAX)}" alt=""><b>${esc(d.name || charEl(d.el).name)}</b></span>`).join('')}</div>` : ''}
+    <p class="small-note">🏅 지킨 날: <b>${R[0]} ${R[1]}</b> — ${pconfOf(S).rule === 'stars' ? `그날 별 ${pconfOf(S).need}개 이상` : R[2]} (부모님이 ⚙️ 설정에서 정해요). 7 · 14 · 21 … 66일마다 한 단계, 하루 쉬어도 줄지 않아요.</p>
     <details class="bests-box"><summary class="h3">🏆 섬마다 최고 점수</summary>
     <ul class="bests">${all.map((x) => `<li><span>${x.icon} ${x.name}</span><b>${S.best[x.id] != null ? S.best[x.id] + '점' : '—'}</b></li>`).join('')}</ul></details>`;
   speak(line);
-  $$('[data-el]', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); charPick = b.dataset.el; const nm = $('#charNm').value; SCREENS.char(); $('#charNm').value = nm; }));
+  $$('[data-el]', app).forEach((b) => b.addEventListener('click', () => { sfx('pop'); charPick = b.dataset.el; SCREENS.char(); }));
   $('#charForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    S.char = { el, name: $('#charNm').value.trim().slice(0, 8) };
+    const nm = $('#charNm').value.trim().slice(0, 8);
+    if (!ch) S.char = { el, name: nm, changes: 0, start: todayStr(), floor: 0, done: [], v2: 1 };
+    else if (preview && maxed) S.char = { el, name: nm, changes: 0, start: dayStr(-1), floor: 0, done: [...done, { el: ch.el, name: ch.name, at: todayStr() }], v2: 1 };
+    else if (preview) { if (!confirm(`${E.name}(으)로 바꿀까요? 바꾸기는 한 번만 할 수 있어요.`)) return; S.char = { ...ch, el, name: nm || ch.name, changes: (ch.changes || 0) + 1 }; }
+    else S.char = { ...ch, name: nm };
     charPick = '';
     save();
     sfx('star');
@@ -1131,6 +1196,40 @@ SCREENS.char = () => {
     SCREENS.char();
   });
 };
+
+/* ---------- ⚙️ 부모님: 지킨 날 인정 방법 · 날마다 확인 (부모님 비밀번호 4자리) ---------- */
+let parentOpen = false;
+function keptParentBox() {
+  const c = pconfOf(S), nm = esc(STORE.current().name);
+  if (!c.pin) return `<section class="setbox"><h3 class="h3">🐣 지킨 날 인정 방법 <small class="h-note">부모님</small></h3>
+    <p class="small-note">${nm}의 캐릭터가 자라는 '지킨 날'을 어떻게 인정할지 정해요. 먼저 <b>부모님 비밀번호 4자리</b>를 정해 주세요.</p>
+    <form class="rename" id="pinSet"><input class="typed small" id="pinNew" inputmode="numeric" maxlength="4" placeholder="숫자 4자리" autocomplete="off"><button class="btn small primary">정하기</button></form></section>`;
+  if (!parentOpen) return `<section class="setbox"><h3 class="h3">🐣 지킨 날 인정 방법 <small class="h-note">부모님</small></h3>
+    <p class="small-note">지금: <b>${KEPT_RULES[c.rule][0]} ${KEPT_RULES[c.rule][1]}</b>. 바꾸거나 날마다 확인하려면 부모님 비밀번호를 넣어 주세요.</p>
+    <form class="rename" id="pinIn"><input class="typed small" id="pinTry" inputmode="numeric" maxlength="4" type="password" placeholder="비밀번호" autocomplete="off"><button class="btn small primary">열기</button></form></section>`;
+  const W = '일월화수목금토';
+  const rows = Array.from({ length: 14 }, (_, i) => dayStr(i)).map((ds) => {
+    const d = (S.days || {})[ds] || { r: 0, s: 0 }, ok = !!c.ok[ds], k = keptOnFor(S, ds), dt = new Date(ds + 'T00:00');
+    return `<li class="kp-row${k ? ' on' : ''}"><span class="kp-d">${dt.getMonth() + 1}/${dt.getDate()} <small>${W[dt.getDay()]}</small></span><span class="kp-i">${d.r}판 · ⭐ ${d.s}</span>
+      <button class="btn small${ok ? ' primary' : ''}" data-ok="${ds}">${ok ? '✅ 확인함' : '확인'}</button></li>`;
+  }).join('');
+  return `<section class="setbox"><h3 class="h3">🐣 지킨 날 인정 방법 <small class="h-note">${nm}</small></h3>
+    <div class="seg" role="radiogroup">${Object.entries(KEPT_RULES).map(([k, R]) => `<button role="radio" aria-checked="${c.rule === k}" data-rule="${k}">${R[0]} ${R[1]}</button>`).join('')}</div>
+    ${c.rule === 'stars' ? `<div class="seg" style="margin-top:8px">${[5, 10, 20, 30].map((n) => `<button role="radio" aria-checked="${c.need === n}" data-need="${n}">⭐ ${n}개</button>`).join('')}</div>` : ''}
+    <p class="small-note">${c.rule === 'stars' ? `그날 별 ${c.need}개 이상 모은 날` : KEPT_RULES[c.rule][2]}을 지킨 날로 쳐요. 어느 방법이든 아래에서 확인한 날은 지킨 날이에요.</p>
+    <ul class="kp-list">${rows}</ul>
+    <button class="btn small" id="pinLock">🔒 잠그기</button></section>`;
+}
+function wireKeptParent() {
+  const c = pconfOf(S);
+  const put = (patch) => { S.pconf = { ...c, ...patch }; save(); SCREENS.voice(); };
+  $('#pinSet')?.addEventListener('submit', (e) => { e.preventDefault(); const v = $('#pinNew').value.trim(); if (!/^\d{4}$/.test(v)) { toast('숫자 4자리로 정해 주세요'); return; } parentOpen = true; put({ pin: v }); });
+  $('#pinIn')?.addEventListener('submit', (e) => { e.preventDefault(); if ($('#pinTry').value.trim() === c.pin) { parentOpen = true; SCREENS.voice(); } else toast('비밀번호가 달라요'); });
+  $('#pinLock')?.addEventListener('click', () => { parentOpen = false; SCREENS.voice(); });
+  $$('[data-rule]', app).forEach((b) => b.addEventListener('click', () => put({ rule: b.dataset.rule })));
+  $$('[data-need]', app).forEach((b) => b.addEventListener('click', () => put({ need: +b.dataset.need })));
+  $$('[data-ok]', app).forEach((b) => b.addEventListener('click', () => { const ok = { ...(c.ok || {}) }; if (ok[b.dataset.ok]) delete ok[b.dataset.ok]; else ok[b.dataset.ok] = true; put({ ok }); }));
+}
 
 /* ---------- 🔢 수학 섬 (구구단 · 덧셈 · 뺄셈 · 곱셈 · 나눗셈 · 섞어서) ---------- */
 const MATH_LINE = {
@@ -1296,6 +1395,7 @@ SCREENS.voice = () => {
     <h2 class="h">⚙️ 설정 <small class="h-note">어른용</small></h2>
     <button class="char-card set" id="toCharSet">${charThumb()}<span class="cc-txt"><b>🐣 내 캐릭터</b><small>${esc(STORE.current().name)}의 캐릭터 · 속성 · 이름 · 자라는 모습</small></span><span class="cc-go">›</span></button>
     ${familyBox()}
+    ${keptParentBox()}
     <h3 class="h3">🔊 목소리</h3>
     ${CLIPS.size ? `
       <label class="opt"><input type="checkbox" id="useClips" ${S.useClips !== false ? 'checked' : ''}>
@@ -1316,6 +1416,7 @@ SCREENS.voice = () => {
     </section>
     <p class="small-note">가장 자연스러운 목소리는 부모님 컴퓨터에서 녹음 파일을 한 번 만들어 두는 방법이에요. 방법은 README의 "자연스러운 목소리" 부분에 있어요.</p>`;
   wireFamily();
+  wireKeptParent();
   $('#toCharSet').onclick = () => { sfx('pop'); go('char'); };
   $('#useClips')?.addEventListener('change', (e) => { S.useClips = e.target.checked; save(); speak(LINES.voiceTest); });
   $$('[data-rate]', app).forEach((b) => b.addEventListener('click', () => {
@@ -1339,6 +1440,7 @@ function paintWho() {
   $('#whoName').textContent = me.name;
 }
 function switchTo(id) {
+  parentOpen = false;
   STORE.use(id);
   loadState();
   pickVoice();
@@ -1350,7 +1452,7 @@ function whoButtons() {
   return STORE.profiles().map((p) => {
     const st = STORE.load(p.id);
     return `<button class="who-btn" data-id="${p.id}"><span class="who-av">${p.avatar}</span><b>${esc(p.name)}</b>
-      <small>⭐ ${st.earned ?? st.stars ?? 0} · 🐣 Lv${charCalc(st.earned ?? st.stars ?? 0).stage + 1}</small></button>`;
+      <small>⭐ ${st.earned ?? st.stars ?? 0} · 🐣 Lv${charNowFor(st).stage + 1}</small></button>`;
   }).join('') + '<button class="who-btn add" data-add="1"><span class="who-av">＋</span><b>새 친구</b><small>&nbsp;</small></button>';
 }
 function wireWho(box, after) {
@@ -1412,7 +1514,7 @@ function familyBox() {
     return `<li class="kid-row" data-id="${p.id}">
       <span class="who-av small">${p.avatar}</span>
       <div class="kid-info"><span><b>${esc(p.name)}</b>${p.id === me ? ' <em class="rec">지금</em>' : ''}</span>
-        <small>⭐ 모은 별 ${st.earned ?? st.stars ?? 0} · 🐣 캐릭터 Lv${charCalc(st.earned ?? st.stars ?? 0).stage + 1} · 평균 최고 점수 ${avg == null ? '—' : avg + '점'}</small></div>
+        <small>⭐ 모은 별 ${st.earned ?? st.stars ?? 0} · 🐣 캐릭터 Lv${charNowFor(st).stage + 1} · 지킨 날 ${charNowFor(st).pts}일 · 평균 최고 점수 ${avg == null ? '—' : avg + '점'}</small></div>
       <div class="kid-act"><button class="btn small" data-rename="${p.id}">이름</button>${STORE.profiles().length > 1 ? `<button class="btn small" data-del="${p.id}">지우기</button>` : ''}</div>
     </li>`;
   }).join('');
